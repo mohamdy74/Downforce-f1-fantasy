@@ -41,7 +41,14 @@ export function ReminderList() {
     },
   });
 
-  if (!missing || missing.missing.length === 0) return null;
+  if (!missing || !missing.missing) {
+    return (
+      <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">
+        Couldn&apos;t load reminder list — check that predictions table is accessible.
+      </div>
+    );
+  }
+  if (missing.missing.length === 0) return null;
 
   const whatsappMsg = encodeURIComponent(
     `DOWNFORCE reminder: ${race.name} picks close at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} — lock in your predictions!`,
@@ -71,9 +78,9 @@ export function ReminderList() {
 
       <div className="mt-3 flex gap-2">
         <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
-          <a href={waLink} target="_blank" rel="noopener noreferrer">
+          <a href={waLink} target="_blank" rel="noopener noreferrer" aria-label="Open WhatsApp with reminder message (manual send)">
             <Send className="h-3.5 w-3.5" />
-            Remind on WhatsApp
+            WhatsApp reminder (manual)
           </a>
         </Button>
         <Button asChild size="sm" variant="secondary" className="h-9">
