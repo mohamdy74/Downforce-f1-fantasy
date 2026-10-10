@@ -167,6 +167,9 @@ function Predict() {
     );
   }
 
+  // In-page reminder banner — red alert when picks not submitted
+  const notSubmitted = raceLocked && (!prediction || (prediction.top10 ?? []).filter(Boolean).length < 10);
+
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
   const duplicates = usedInTop10.length !== new Set(usedInTop10).size;
   const dnfInTop10 = dnf !== EMPTY && usedInTop10.includes(dnf);
@@ -284,6 +287,32 @@ function Predict() {
       </p>
 
       <TrackStatus target={race.race_at} />
+
+      {/* Reminder banner — red when picks not submitted, shows time left */}
+      {notSubmitted && (
+        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 sm:p-4">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 rounded-full bg-destructive text-destructive-foreground h-8 w-8 flex items-center justify-center font-mono text-sm font-bold">
+              !
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-destructive">Picks not submitted</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                You haven&apos;t locked in your predictions for <strong>{race.name}</strong>.
+                {race.race_at ? ` Race starts at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} (Cairo).` : ""}
+              </p>
+              <div className="mt-2 flex items-center gap-2 font-mono text-xs font-bold text-destructive">
+                <span>Time left:</span>
+                <Countdown target={race.race_at} label="Race closes" />
+              </div>
+            </div>
+            <Button asChild size="sm" className="shrink-0 h-9 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <Link to="/predict">Submit picks →</Link>
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {race.qualifying_at && (
           <Countdown target={race.qualifying_at} label="Pole pick closes in" />

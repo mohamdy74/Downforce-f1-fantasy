@@ -15,6 +15,7 @@ import { Route as H2hRouteImport } from './routes/h2h'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as PaddockRouteImport } from './routes/paddock'
 import { Route as PredictRouteImport } from './routes/predict'
+import { Route as RemindersRouteImport } from './routes/reminders'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as SprintRouteImport } from './routes/sprint'
 import { Route as WeekendRouteImport } from './routes/weekend'
@@ -49,6 +50,11 @@ const PredictRoute = PredictRouteImport.update({
   path: '/predict',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RemindersRoute = RemindersRouteImport.update({
+  id: '/reminders',
+  path: '/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RulesRoute = RulesRouteImport.update({
   id: '/rules',
   path: '/rules',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/leaderboard': typeof LeaderboardRoute
   '/paddock': typeof PaddockRoute
   '/predict': typeof PredictRoute
+  '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
   '/weekend': typeof WeekendRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/leaderboard': typeof LeaderboardRoute
   '/paddock': typeof PaddockRoute
   '/predict': typeof PredictRoute
+  '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
   '/weekend': typeof WeekendRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/leaderboard': typeof LeaderboardRoute
   '/paddock': typeof PaddockRoute
   '/predict': typeof PredictRoute
+  '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
   '/weekend': typeof WeekendRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/paddock'
     | '/predict'
+    | '/reminders'
     | '/rules'
     | '/sprint'
     | '/weekend'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/paddock'
     | '/predict'
+    | '/reminders'
     | '/rules'
     | '/sprint'
     | '/weekend'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/paddock'
     | '/predict'
+    | '/reminders'
     | '/rules'
     | '/sprint'
     | '/weekend'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   LeaderboardRoute: typeof LeaderboardRoute
   PaddockRoute: typeof PaddockRoute
   PredictRoute: typeof PredictRoute
+  RemindersRoute: typeof RemindersRoute
   RulesRoute: typeof RulesRoute
   SprintRoute: typeof SprintRoute
   WeekendRoute: typeof WeekendRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PredictRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reminders': {
+      id: '/reminders'
+      path: '/reminders'
+      fullPath: '/reminders'
+      preLoaderRoute: typeof RemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rules': {
       id: '/rules'
       path: '/rules'
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   LeaderboardRoute: LeaderboardRoute,
   PaddockRoute: PaddockRoute,
   PredictRoute: PredictRoute,
+  RemindersRoute: RemindersRoute,
   RulesRoute: RulesRoute,
   SprintRoute: SprintRoute,
   WeekendRoute: WeekendRoute,
