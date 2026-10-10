@@ -29,40 +29,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-  // Push notifications: show notification when server sends one
-  self.addEventListener("push", (event) => {
-    let data = { title: "DOWNFORCE", body: "Picks closing soon — don't miss out!", tag: "downforce-reminder" };
-    try {
-      if (event.data) {
-        data = event.data.json();
-      }
-    } catch {
-      // ignore parse errors, use defaults
-    }
-    event.waitUntil(
-      self.registration.showNotification(data.title || "DOWNFORCE", {
-        body: data.body || "Your predictions close soon.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        tag: data.tag || "downforce-reminder",
-        data: { url: "/predict" },
-        actions: [
-          { action: "predict", title: "Make picks" },
-          { action: "dismiss", title: "Dismiss" },
-        ],
-        requireInteraction: false,
-      }),
-    );
-  });
-
-  // Handle notification click — open predict page
-  self.addEventListener("notificationclick", (event) => {
-    event.notification.close();
-    if (event.action === "predict" || !event.action) {
-      event.waitUntil(clients.openWindow("/predict"));
-    }
-  });
-
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
