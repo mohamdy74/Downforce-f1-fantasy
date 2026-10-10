@@ -47,7 +47,11 @@ export default async (req: Request): Promise<Response> => {
       url: "/predict",
     };
 
-    // 5. Send notifications (batch via Web Push protocol)
+    if (!isVapidConfigured()) {
+      return new Response(JSON.stringify({ ok: false, error: "VAPID keys not configured — set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY" }), { status: 503, headers });
+    }
+
+    // 5. Send notifications (batch via Web Push protocol — needs web-push lib in production)
     let sent = 0;
     for (const sub of subs) {
       try {
@@ -64,25 +68,57 @@ export default async (req: Request): Promise<Response> => {
   }
 };
 
-// Helper stubs — implement with your Supabase client / DB access
+import { isVapidConfigured, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } from "@/lib/push-vapid";
+import { supabase } from "@/integrations/supabase/client.server";
 async function findNextRace(): Promise<string | null> {
-  // Query races table, find race with race_at > now
-  return null; // TODO: implement
+  const { data } = await supabase
+    .from("races")
+    .select("id")
+    .gte("race_at", new Date().toISOString())
+    .order("race_at", { ascending: true })
+    .limit(1)
+    .single();
+  return data?.id ?? null;
 }
 
-async function findMissingPredictions(raceId: string, type: string): Promise<string[]> {
-  // Query predictions for race_id, return user_ids not present
-  // For pole: check pole_driver_id; for race: check top10.length === 10
-  return []; // TODO: implement
+async function findMissingPredictions(raceId: string, type: "pole" | "race"): Promise<string[]> {
+  // Get users who submitted predictions for this race with full top10
+  const { data: submitted } = await supabase
+    .from("predictions")
+    .select("user_id, top10, pole_driver_id")
+    .eq("race_id", raceId);
+
+  const submittedIds = new Set<string>();
+  for (const s of submitted ?? []) {
+    if (type === "pole" && s.pole_driver_id) submittedIds.add(s.user_id);
+    if (type === "race" && (s.top10 ?? []).filter(Boolean).length === 10) submittedIds.add(s.user_id);
+  }
+
+  // Get all profiles that are NOT in submitted set
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id")
+    .not("id", "in", `(${Array.from(submittedIds).join(",") || "00000000-0000-0000-0000-000000000000"})`);
+
+  return (profiles ?? []).map((p) => p.id);
 }
 
 async function loadSubscriptions(userIds: string[]): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> {
-  // SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ANY(userIds)
-  return []; // TODO: implement
+  if (!userIds.length) return [];
+  const { data } = await supabase
+    .from("push_subscriptions")
+    .select("endpoint, p256dh, auth")
+    .in("user_id", userIds);
+  return (data ?? []) as Array<{ endpoint: string; p256dh: string; auth: string }>;
 }
 
-async function getRaceInfo(raceId: string): Promise<{ name?: string; round?: number } | null> {
-  return null; // TODO: implement
+async function getRaceInfo(raceId: string): Promise<{ name?: string; round?: number; race_at?: string } | null> {
+  const { data } = await supabase
+    .from("races")
+    .select("name, round, race_at")
+    .eq("id", raceId)
+    .single();
+  return data ?? null;
 }
 
 // Web Push Protocol — simplified (use web-push library in production)
