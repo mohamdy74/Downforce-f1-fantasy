@@ -25,7 +25,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
   const { d, h, m, s } = parts(left);
 
   return (
-    <div className="carbon-panel rounded-md px-3 py-2">
+    <div className="carbon-panel-strong rounded-md px-3 py-2">
       <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
         {label}
       </p>

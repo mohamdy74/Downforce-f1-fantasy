@@ -51,9 +51,9 @@ function Home() {
           height={912}
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 h-full w-full object-cover opacity-45"
+          className="absolute inset-0 h-full w-full object-cover opacity-60"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/50 via-background/30 to-transparent" />
         <div className="relative mx-auto max-w-5xl px-4 py-16 sm:py-24">
           <StartLights />
           <p className="mt-6 font-mono text-xs font-semibold uppercase tracking-[0.3em] text-primary">
