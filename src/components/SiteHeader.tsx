@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Grid3x3, Home, LogOut, Moon, Sun, Swords, Trophy, Zap } from "lucide-react";
+import { CalendarDays, Grid3x3, Home, LogOut, Moon, Bell, Sun, Swords, Trophy, Zap } from "lucide-react";
 
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
+import { cn } from "@/lib/utils";
 import { racesQuery } from "@/lib/queries";
 import { sprintWeekend } from "@/lib/sprint";
 
@@ -34,9 +36,30 @@ export function SiteHeader() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const sprintOn = useSprintWeek();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
+  };
+
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const reg = await navigator.serviceWorker?.ready;
+          if (reg && reg.pushManager) {
+            // Subscribe with server-provided VAPID key via endpoint
+            // Full server-side push setup needed for production
+            setNotificationsEnabled(true);
+          }
+        }
+      } catch {
+        /* server endpoint not configured yet */
+      }
+    } else {
+      setNotificationsEnabled(false);
+    }
   };
 
   return (
@@ -81,6 +104,15 @@ export function SiteHeader() {
             className="shrink-0"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={notificationsEnabled ? "Disable reminders" : "Enable reminders"}
+            onClick={toggleNotifications}
+            className={cn("shrink-0", notificationsEnabled && "text-primary bg-primary/10")}
+          >
+            <Bell className={cn("h-4 w-4", notificationsEnabled && "fill-primary")} />
           </Button>
           {user ? (
             <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => signOut()}>
