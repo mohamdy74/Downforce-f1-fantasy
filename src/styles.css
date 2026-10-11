@@ -584,3 +584,38 @@ html {
   color: var(--gold-foreground);
   box-shadow: 0 0 14px oklch(0.42 0.185 62 / 0.35), inset 0 1px 0 oklch(1 0 0 / 0.6);
 }
+
+/* ===== Mobile polish (appended by the UX/speed pack) ===== */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+a, button, summary, select, [role="button"], [role="tab"] {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  /* A fixed, 6-layer background is repainted on every scroll frame on phones: same look, far cheaper. */
+  body {
+    background-attachment: scroll;
+    background-image:
+      radial-gradient(120% 50% at 100% 0%, oklch(0.573 0.239 28.5 / 0.14) 0%, transparent 55%),
+      linear-gradient(180deg, oklch(0.21 0.02 285) 0%, var(--color-background) 45%, oklch(0.15 0.014 280) 100%);
+  }
+  /* Blurred glass panels are expensive on mid-range GPUs: use a slightly more opaque panel instead. */
+  .carbon-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-image: linear-gradient(145deg, oklch(0.26 0.016 281 / 0.96), oklch(0.17 0.015 280 / 0.98));
+  }
+  /* iOS zooms the whole page when a field smaller than 16px gets focus. */
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-light { animation: none !important; }
+  .animate-pulse { animation: none !important; }
+}

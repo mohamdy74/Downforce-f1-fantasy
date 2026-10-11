@@ -40,7 +40,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
         <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
           <LogoHorizontal className="h-8 w-auto max-w-full sm:h-10" />
