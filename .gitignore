@@ -30,11 +30,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Environment and secrets
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-.dev.vars.*
