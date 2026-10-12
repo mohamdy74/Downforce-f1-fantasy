@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import type { Json } from "@/integrations/supabase/types";
 import { NO_SUBMISSION_PENALTY, scorePrediction, type ResultRow } from "./scoring";
@@ -50,11 +51,24 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
+// Rate limiting: in-memory store for user sync calls
+const userSyncCalls = new Map<string, number>();
+
 export const syncF1Data = createServerFn({ method: "POST" })
-  // Public endpoint: callers cannot bypass the throttle. Returns only counts, never private data.
+  .middleware([requireSupabaseAuth])
   .inputValidator((_input: unknown) => ({ force: false as boolean }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Rate limiting: 5 minutes between sync requests per user
+    const userId = context.userId;
+    const lastCall = userSyncCalls.get(userId) ?? 0;
+    const minInterval = 5 * 60_000; // 5 minutes
+
+    if (Date.now() - lastCall < minInterval) {
+      throw new Error("Rate limit: Wait 5 minutes between sync requests.");
+    }
+    userSyncCalls.set(userId, Date.now());
 
     const { data: state } = await supabaseAdmin
       .from("sync_state")
@@ -207,10 +221,13 @@ async function scoreAllRaces() {
     .eq("has_results", true);
   if (!races?.length) return;
 
-  const { data: profiles } = await supabaseAdmin.from("profiles").select("id, created_at");
-  if (!profiles?.length) return;
-
+  // Optimization: only fetch profiles who joined before the race
   for (const race of races) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, created_at")
+      .lt("created_at", race.race_at); // only users who joined before race
+    if (!profiles?.length) continue;
     const { data: results } = await supabaseAdmin
       .from("race_results")
       .select("driver_id, position, finished, fastest_lap, pole")

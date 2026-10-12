@@ -1,13 +1,23 @@
 // SUPABASE EDGE FUNCTION / NITRO API — Push Notification Sender
 // Run this at ~2h before qualifying / race via cron or external ping.
-// Requires VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars.
+// Requires VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and PUSH_API_KEY env vars.
 
 export default async (req: Request): Promise<Response> => {
-  // CORS for browser/tests
+  // Check API key authentication
+  const apiKey = req.headers.get("x-api-key");
+  if (!process.env.PUSH_API_KEY || apiKey !== process.env.PUSH_API_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // CORS restricted to allowed origin
   const headers = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN || "https://yourdomain.com",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-key",
   };
 
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });

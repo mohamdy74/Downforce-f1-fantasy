@@ -5,7 +5,7 @@ import { Send, Users, UserX, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { nextRace, racesQuery } from "@/lib/queries";
-import { supabase } from "@/integrations/supabase/client";
+import { getReminderStats } from "@/lib/reminder.functions";
 
 export function ReminderList() {
   const { data: races } = useQuery(racesQuery);
@@ -17,27 +17,9 @@ export function ReminderList() {
   const { data: missing } = useQuery({
     queryKey: ["missing-preds", race.id],
     enabled: !!race,
+    staleTime: 2 * 60_000, // 2 minutes
     queryFn: async () => {
-      // Get predictions for this race
-      const { data: preds } = await supabase
-        .from("predictions")
-        .select("user_id, top10")
-        .eq("race_id", race.id);
-      const submittedIds = new Set(
-        (preds ?? [])
-          .filter((p) => (p.top10 ?? []).filter(Boolean).length === 10)
-          .map((p) => p.user_id),
-      );
-      // Get profiles for non-submitted users
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .not("id", "in", `(${Array.from(submittedIds).join(",") || ""})`);
-      return {
-        submitted: submittedIds.size,
-        missing: profiles ?? [],
-        total: (preds ?? []).length,
-      };
+      return await getReminderStats({ data: { raceId: race.id } });
     },
   });
 
