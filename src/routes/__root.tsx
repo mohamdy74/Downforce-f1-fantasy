@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BackgroundSync } from "@/components/BackgroundSync";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader, BottomNav } from "@/components/SiteHeader";
@@ -147,6 +148,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <BackgroundSync />
+      <InstallPrompt />
       <PullToRefresh />
       <div className="flex min-h-svh flex-col">
         <SiteHeader />

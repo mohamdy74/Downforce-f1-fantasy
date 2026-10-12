@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Countdown } from "@/components/Countdown";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { LightsOut } from "@/components/LightsOut";
+import { MissingPlayers } from "@/components/MissingPlayers";
 import { SharePicks } from "@/components/SharePicks";
 import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,47 @@ function Predict() {
     setDnf(prediction.dnf_driver_id ?? EMPTY);
   }, [prediction]);
 
+  // ---- Draft autosave: a closed tab, a dead battery or an app switch never loses half-made picks ----
+  const draftKey = user && race ? `dfr:draft:${user.id}:${race.id}` : null;
+  const draftChecked = useRef(false);
+  useEffect(() => {
+    if (!draftKey || draftChecked.current || prediction === undefined) return;
+    draftChecked.current = true;
+    if ((prediction?.top10 ?? []).filter(Boolean).length === 10) return; // already locked in
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { top10?: string[]; fl?: string; dnf?: string };
+      const restored = Array.from({ length: 10 }, (_, i) => d.top10?.[i] || EMPTY);
+      if (restored.every((x) => x === EMPTY) && !d.fl && !d.dnf) return;
+      setTop10(restored);
+      if (d.fl) setFastestLap(d.fl);
+      if (d.dnf) setDnf(d.dnf);
+      toast.info("Draft restored. Press Lock in picks when you're happy.");
+    } catch {
+      /* unreadable draft: ignore */
+    }
+  }, [draftKey, prediction]);
+  useEffect(() => {
+    if (!draftKey || !draftChecked.current) return;
+    try {
+      const done = (prediction?.top10 ?? []).filter(Boolean).length === 10;
+      const empty = top10.every((x) => x === EMPTY) && fastestLap === EMPTY && dnf === EMPTY;
+      if (done || empty) window.localStorage.removeItem(draftKey);
+      else
+        window.localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            top10,
+            fl: fastestLap === EMPTY ? "" : fastestLap,
+            dnf: dnf === EMPTY ? "" : dnf,
+          }),
+        );
+    } catch {
+      /* storage unavailable: ignore */
+    }
+  }, [draftKey, top10, fastestLap, dnf, prediction]);
+
   const now = Date.now();
   const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
   const poleLocked =
@@ -233,6 +275,11 @@ function Predict() {
       return;
     }
     toast.success("Predictions locked in.");
+    try {
+      window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
+    } catch {
+      /* ignore */
+    }
     if (!poleLocked && pole !== EMPTY && pole !== savedPole) writePoleAt(user!.id, race!.id, pole);
     setEditing(false);
     navigator.vibrate?.([12, 40, 18]);
@@ -321,6 +368,8 @@ function Predict() {
         )}
         <Countdown target={race.race_at} label="Top 10 / bonus picks close in" />
       </div>
+
+      <MissingPlayers race={race} />
 
       <section
         className="carbon-panel mt-6 rounded-lg border-l-4 p-4 sm:p-5"

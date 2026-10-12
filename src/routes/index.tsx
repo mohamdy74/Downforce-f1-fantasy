@@ -4,8 +4,10 @@ import { Flag, Timer, Trophy } from "lucide-react";
 
 import heroImage from "@/assets/hero-f1.webp";
 import { Countdown } from "@/components/Countdown";
+import { MissingPlayers } from "@/components/MissingPlayers";
 import { PickStatus } from "@/components/PickStatus";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { lastRace, leaderboardQuery, nextRace, racesQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
@@ -34,7 +36,9 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { data: races } = useSuspenseQuery(racesQuery);
-  const { data: board } = useQuery(leaderboardQuery);
+  const { user } = useAuth();
+  // The league table is only readable by signed-in players; asking for it anonymously just fails.
+  const { data: board } = useQuery({ ...leaderboardQuery, enabled: !!user });
 
   const upcoming = nextRace(races);
   const previous = lastRace(races);
@@ -105,6 +109,7 @@ function Home() {
           </div>
         </div>
         {upcoming && <PickStatus race={upcoming} />}
+        {upcoming && <MissingPlayers race={upcoming} />}
         <Link to="/paddock" className="carbon-panel mt-3 flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold"><span>🔓 Group picks reveal and race debrief</span><span className="text-primary">→</span></Link>
         {upcoming ? (
           <div className="carbon-panel rounded-lg p-5">
@@ -145,7 +150,7 @@ function Home() {
           <InfoCard
             icon={<Trophy className="h-4 w-4 text-gold" />}
             label="League leader"
-            value={leader ? leader.name : "No scores yet"}
+            value={leader ? leader.name : user ? "No scores yet" : "Sign in to see"}
             sub={leader ? `${leader.points} pts${fahl ? ` · 👑 فحل الجولة: ${fahl.name}` : ""}` : "Be the first to score"}
           />
           <InfoCard

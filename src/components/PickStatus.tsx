@@ -19,9 +19,38 @@ function icsStamp(d: Date) {
   );
 }
 
+/** The next deadline that has not passed yet: pole closes at qualifying, everything else at the race. */
+function nextDeadline(race: Race): Date {
+  const q = race.qualifying_at ? new Date(race.qualifying_at) : null;
+  if (q && q.getTime() > Date.now()) return q;
+  return new Date(race.race_at);
+}
+
+function gcalStamp(d: Date) {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Android: opens Google Calendar with the event filled in (one tap, no file to download). */
+function addToGoogleCalendar(race: Race) {
+  const deadline = nextDeadline(race);
+  const start = new Date(deadline.getTime() - 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `DOWNFORCE — picks close: ${race.name}`,
+    dates: `${gcalStamp(start)}/${gcalStamp(deadline)}`,
+    details: `Lock in your picks before the deadline to avoid the −25 penalty: ${window.location.origin}/predict`,
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, "_blank");
+}
+
+function remindMe(race: Race) {
+  if (/android/i.test(navigator.userAgent)) addToGoogleCalendar(race);
+  else addToCalendar(race);
+}
+
 /** Downloads a calendar reminder one hour before picks close. */
 function addToCalendar(race: Race) {
-  const deadline = new Date(race.qualifying_at ?? race.race_at);
+  const deadline = nextDeadline(race);
   const start = new Date(deadline.getTime() - 60 * 60 * 1000);
   const end = new Date(deadline.getTime());
   const ics = [
@@ -118,7 +147,7 @@ export function PickStatus({ race }: { race: Race }) {
       </p>
       <div className="col-start-2 flex flex-wrap gap-2">
         {!locked && (
-          <Button size="sm" variant="secondary" onClick={() => addToCalendar(race)}>
+          <Button size="sm" variant="secondary" onClick={() => remindMe(race)}>
             <CalendarPlus className="mr-1 h-4 w-4" />
             Remind me
           </Button>
