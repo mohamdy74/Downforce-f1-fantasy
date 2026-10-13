@@ -148,11 +148,11 @@ export function PickStatus({ race }: { race: Race }) {
       </p>
       <div className="col-start-2 flex flex-wrap gap-2">
         {!locked && (
-          <Button size="sm" variant="secondary" onClick={() => remindMe(race)}>
+          <><Button size="sm" variant="secondary" onClick={() => remindMe(race)}>
             <CalendarPlus className="mr-1 h-4 w-4" />
             Remind me
           </Button>
-          <PushOptIn />
+          <PushOptIn /></>
         )}
         <Button asChild size="sm" variant={ok ? "secondary" : "default"}>
           <Link to="/predict">{ok ? "Review" : "Predict"}</Link>
