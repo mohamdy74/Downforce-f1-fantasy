@@ -11,7 +11,7 @@ export const Route = createFileRoute("/reminders")({
   head: () => ({
     meta: [{ title: "Reminders — DOWNFORCE" }, { name: "description", content: "Who hasn't submitted picks and reminders for the next race." }],
   }),
-  component: Reminders,
+  loader: async () => { if (typeof process !== "undefined" && process.env?.["SUPABASE_SERVICE_ROLE_KEY"]) { const { checkAndSendRaceReminders } = await import("@/lib/push.functions"); await checkAndSendRaceReminders({ data: {} }).catch(() => null); } }, component: Reminders,
 });
 
 function Reminders() {

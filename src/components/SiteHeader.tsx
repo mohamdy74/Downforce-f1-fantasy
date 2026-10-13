@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { CalendarDays, Grid3x3, Home, LogOut, Moon, Sun, Swords, Trophy, Zap } from "lucide-react";
 
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"; import { PushOptIn } from "@/components/PushOptIn";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { racesQuery } from "@/lib/queries";
@@ -93,7 +93,7 @@ export function SiteHeader() {
           )}
         </nav>
       </div>
-      <div className="kerb-strip" />
+      <div className="hidden"><PushOptIn /></div><div className="kerb-strip" />
     </header>
   );
 }
