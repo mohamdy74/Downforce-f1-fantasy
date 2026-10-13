@@ -221,12 +221,7 @@ async function scoreAllRaces() {
     .eq("has_results", true);
   if (!races?.length) return;
 
-  // Optimization: only fetch profiles who joined before the race
-  for (const race of races) {
-    const { data: profiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id, created_at")
-      .lt("created_at", race.race_at); // only users who joined before race
+  const { data: allProfiles } = await supabaseAdmin.from("profiles").select("id, created_at"); for (const race of races) { const profiles = (allProfiles ?? []).filter((p) => new Date(p.created_at) < new Date(race.race_at));
     if (!profiles?.length) continue;
     const { data: results } = await supabaseAdmin
       .from("race_results")
@@ -296,7 +291,7 @@ async function scoreAllRaces() {
 
       // A pole-only save (top 10 never completed) still counts as a missed race
       // submission — the pole points are kept on top of the penalty.
-      const poleOnly = (prediction.top10 ?? []).length < 10;
+      const poleOnly = (prediction.top10 ?? []).filter((d) => d && d !== "__none__").length < 10;
       const raceTotal = poleOnly ? NO_SUBMISSION_PENALTY + breakdown.pole : breakdown.total;
       const total = raceTotal + (sprint?.total ?? 0);
       rows.push({

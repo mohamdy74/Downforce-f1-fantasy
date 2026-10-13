@@ -12,18 +12,18 @@ export function ReminderList() {
   const { user } = useAuth();
 
   const race = races ? nextRace(races) : null;
-  if (!race || !races) return null;
+  
 
   const { data: missing } = useQuery({
-    queryKey: ["missing-preds", race.id],
-    enabled: !!race,
+    queryKey: ["missing-preds", race?.id],
+    enabled: !!race && !!user,
     staleTime: 2 * 60_000, // 2 minutes
     queryFn: async () => {
-      return await getReminderStats({ data: { raceId: race.id } });
+      return await getReminderStats({ data: { raceId: race!.id } });
     },
   });
 
-  if (!missing || !missing.missing) {
+  if (!race || !races) return null; if (!missing || !missing.missing) {
     return (
       <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">
         Couldn&apos;t load reminder list — check that predictions table is accessible.

@@ -104,7 +104,7 @@ export const leaderboardQuery = queryOptions({
       });
     }
     for (const s of scores ?? []) {
-      const entry = byUser.get(s.user_id);
+      if (!(raceRows ?? []).some((r) => r.id === s.race_id)) continue; const entry = byUser.get(s.user_id);
       if (!entry) continue;
       entry.points += s.points;
       entry.races += 1;
