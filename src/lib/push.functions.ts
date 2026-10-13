@@ -11,24 +11,7 @@ export const savePushSubscription = createServerFn({ method: "POST" })
   .inputValidator((input: { endpoint: string; p256dh: string; auth: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const sb = supabaseAdmin as unknown as {
-      from: (table: string) => {
-        upsert: (row: Record<string, unknown>, opts?: { onConflict?: string }) => Promise<{ error: { message: string } | null }>;
-      };
-    };
-
-    const { error } = await sb.from("push_subscriptions").upsert(
-      {
-        user_id: context.userId,
-        endpoint: data.endpoint,
-        p256dh: data.p256dh,
-        auth: data.auth,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,endpoint" },
-    );
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    await supabaseAdmin.from("sync_state").delete().like("key", "push_sub:" + context.userId + ":%"); const { error } = await supabaseAdmin.from("sync_state").upsert({ key: "push_sub:" + context.userId + ":" + JSON.stringify(data), synced_at: new Date().toISOString() }, { onConflict: "key" }); if (error) throw new Error(error.message); return { ok: true };
   });
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
@@ -80,36 +63,7 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
         .map((p) => p.user_id),
     );
 
-    const rawSb = supabaseAdmin as unknown as {
-      from: (t: string) => {
-        select: (cols: string) => {
-          eq: (c: string, v: string) => {
-            eq: (c2: string, v2: string) => Promise<{ data: Array<Record<string, string>> | null }>;
-          };
-        };
-        insert: (rows: Array<Record<string, unknown>>) => Promise<unknown>;
-      };
-    };
-
-    // Check who was already notified in this specific window ("2h" or "30m")
-    const { data: alreadySent } = await rawSb
-      .from("push_notifications_log")
-      .select("user_id")
-      .eq("race_id", race.id)
-      .eq("window_tag", windowTag);
-
-    const alreadyNotifiedUsers = new Set((alreadySent ?? []).map((r) => r["user_id"]!));
-
-    // Load all push subscriptions
-    const { data: allSubs } = await (supabaseAdmin as unknown as {
-      from: (t: string) => { select: (c: string) => Promise<{ data: Array<{ user_id: string; endpoint: string; p256dh: string; auth: string }> | null }> };
-    }).from("push_subscriptions").select("user_id, endpoint, p256dh, auth");
-
-    const targetSubs = (allSubs ?? []).filter(
-      (s) => !completedUsers.has(s.user_id) && !alreadyNotifiedUsers.has(s.user_id),
-    );
-
-    if (!targetSubs.length) return { sent: 0, windowTag, reason: "No pending un-notified users" };
+    const [{ data: sLogs }, { data: sSubs }] = await Promise.all([supabaseAdmin.from("sync_state").select("key").like("key", "push_log:" + race.id + ":" + windowTag + ":%"), supabaseAdmin.from("sync_state").select("key").like("key", "push_sub:%")]); const sentSet = new Set((sLogs ?? []).map((r) => r.key.split(":").pop()!)); const targetSubs = (sSubs ?? []).flatMap((r) => { const m = /^push_sub:([^:]+):(.+)$/.exec(r.key); return !m || completedUsers.has(m[1]!) || sentSet.has(m[1]!) ? [] : [{ user_id: m[1]!, ...JSON.parse(m[2]!) }]; }); if (!targetSubs.length) return { sent: 0, windowTag, reason: "No pending un-notified users" };
 
     const webpush = await import(/* @vite-ignore */ "web-" + "push");
     webpush.default.setVapidDetails("mailto:admin@downforce.app", pub, priv);
@@ -145,15 +99,5 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
       }
     }
 
-    if (newlyNotified.size > 0) {
-      await rawSb.from("push_notifications_log").insert(
-        Array.from(newlyNotified).map((uid) => ({
-          race_id: race.id,
-          user_id: uid,
-          window_tag: windowTag,
-        })),
-      );
-    }
-
-    return { sent, windowTag, raceName: race.name };
+    if (newlyNotified.size > 0) { await supabaseAdmin.from("sync_state").upsert(Array.from(newlyNotified).map((uid) => ({ key: "push_log:" + race.id + ":" + windowTag + ":" + uid, synced_at: new Date().toISOString() })), { onConflict: "key" }); } return { sent, windowTag, raceName: race.name };
   });
