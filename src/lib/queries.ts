@@ -30,6 +30,8 @@ export type Driver = {
 
 export const racesQuery = queryOptions({
   queryKey: ["races", SEASON],
+  staleTime: 15 * 60_000,
+  gcTime: 30 * 60_000,
   queryFn: async (): Promise<Race[]> => {
     const { data, error } = await supabase
       .from("races")
@@ -43,6 +45,8 @@ export const racesQuery = queryOptions({
 
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
+  staleTime: 30 * 60_000,
+  gcTime: 60 * 60_000,
   queryFn: async (): Promise<Driver[]> => {
     const { data, error } = await supabase
       .from("drivers")
@@ -68,16 +72,20 @@ export type LeaderboardEntry = {
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  queryFn: async (): Promise<LeaderboardEntry[]> => { const { data: sData } = await supabase.auth.getSession(); if (!sData.session) return [];
-    const [{ data: scores, error: sErr }, { data: profiles, error: pErr }] =
-      await Promise.all([
-        supabase.from("scores").select("user_id, race_id, points"),
-        supabase.from("profiles").select("id, display_name, avatar_url"),
-      ]);
-    const { data: raceRows } = await supabase
-      .from("races")
-      .select("id, round")
-      .eq("season", SEASON);
+  staleTime: 2 * 60_000,
+  queryFn: async (): Promise<LeaderboardEntry[]> => {
+    const { data: sData } = await supabase.auth.getSession();
+    if (!sData.session) return [];
+
+    const [
+      { data: scores, error: sErr },
+      { data: profiles, error: pErr },
+      { data: raceRows },
+    ] = await Promise.all([
+      supabase.from("scores").select("user_id, race_id, points"),
+      supabase.from("profiles").select("id, display_name, avatar_url"),
+      supabase.from("races").select("id, round").eq("season", SEASON),
+    ]);
     if (sErr) throw sErr;
     if (pErr) throw pErr;
 
