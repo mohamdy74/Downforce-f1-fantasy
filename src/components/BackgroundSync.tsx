@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 
 const MIN_GAP_MS = 10 * 60 * 1000;
@@ -17,21 +18,23 @@ export function BackgroundSync() {
     let last = 0;
     let running = false;
 
-    const run = () => {
+    const run = async () => {
       if (running || Date.now() - last < MIN_GAP_MS) return;
       running = true;
       last = Date.now();
-      import("@/integrations/supabase/client").then(({ supabase }) => supabase.auth.getSession()).then(({ data }) => (data.session ? syncF1Data({ data: {} }) : null))
-        .then(() =>
-          Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["races"] }),
-            queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
-          ]),
-        )
-        .catch(() => null)
-        .finally(() => {
-          running = false;
-        });
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return;
+        await syncF1Data({ data: {} });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["races"] }),
+          queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
+        ]);
+      } catch {
+        // ignore background sync errors
+      } finally {
+        running = false;
+      }
     };
 
     const idle = (

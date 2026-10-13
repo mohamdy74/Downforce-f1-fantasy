@@ -17,6 +17,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { error };
   }
 
+  componentDidCatch(error: Error) {
+    if (typeof window !== "undefined" && /No QueryClient set|dynamically imported module|Failed to fetch/i.test(error.message)) {
+      const key = "dfr:hmr-reload";
+      const last = Number(sessionStorage.getItem(key) ?? "0");
+      if (Date.now() - last > 5000) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.location.reload();
+      }
+    }
+  }
+
   render() {
     const { error } = this.state;
     if (error) {
@@ -25,7 +36,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="carbon-panel max-w-md rounded-lg p-6 text-center">
             <h2 className="text-xl font-bold text-destructive">Something went wrong</h2>
             <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
-            <Button onClick={() => this.setState({ error: null })} className="mt-4">
+            <Button onClick={() => window.location.reload()} className="mt-4">
               Try again
             </Button>
           </div>
