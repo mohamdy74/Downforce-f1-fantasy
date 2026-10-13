@@ -85,7 +85,7 @@ function H2H() {
         <p className="mt-6 text-sm text-muted-foreground">Need at least two players for a battle.</p>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="sticky top-[52px] z-20 -mx-4 mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur">
             <Pick v={a} set={pickA} taken={b} />
             <span className="font-display text-xl font-black italic text-primary">VS</span>
             <Pick v={b} set={pickB} taken={a} />

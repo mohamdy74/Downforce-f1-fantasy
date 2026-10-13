@@ -119,7 +119,7 @@ export function SprintGrid({
   }
 
   return (
-    <section className="carbon-panel mt-8 overflow-hidden rounded-lg">
+    <section className="carbon-panel mt-8 rounded-lg">
       <div className="kerb-strip" />
       <div className="p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2">
@@ -219,10 +219,10 @@ export function SprintGrid({
         {!locked && (
           <>
             <p className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Drivers · filling <span className="text-primary">P{active + 1}</span>
+              Drivers · filling <span className="text-primary">P{active + 1}</span> <span className="ml-1 text-foreground">({used.size}/{size})</span> <button type="button" onClick={() => document.querySelector("[data-slot=\"0\"]")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="ml-2 text-primary underline">Top</button>
             </p>
 
-            <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-1.5 overflow-x-auto bg-background/95 px-3 py-2 backdrop-blur sm:mx-0">
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}

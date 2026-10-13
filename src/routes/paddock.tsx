@@ -127,7 +127,7 @@ function Paddock() {
       </p>
 
       {locked.length > 1 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="sticky top-[52px] z-20 -mx-4 mt-4 flex gap-2 overflow-x-auto bg-background/95 px-4 py-2 backdrop-blur">
           {locked
             .slice()
             .reverse()
