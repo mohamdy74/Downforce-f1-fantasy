@@ -5,7 +5,7 @@ import { routeTree } from "./routeTree.gen";
 export const getRouter = () => {
   const queryClient = new QueryClient({
     // Reuse fresh data when moving between tabs instead of refetching every time.
-    defaultOptions: { queries: { staleTime: 30_000 } },
+    defaultOptions: { queries: { staleTime: 30_000, retry: false } },
   });
 
   const router = createRouter({

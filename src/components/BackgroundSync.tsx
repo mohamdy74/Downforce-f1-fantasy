@@ -21,7 +21,7 @@ export function BackgroundSync() {
       if (running || Date.now() - last < MIN_GAP_MS) return;
       running = true;
       last = Date.now();
-      syncF1Data({ data: {} })
+      import("@/integrations/supabase/client").then(({ supabase }) => supabase.auth.getSession()).then(({ data }) => (data.session ? syncF1Data({ data: {} }) : null))
         .then(() =>
           Promise.all([
             queryClient.invalidateQueries({ queryKey: ["races"] }),

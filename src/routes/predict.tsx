@@ -142,7 +142,7 @@ function Predict() {
 
     const newDnf = prediction.dnf_driver_id ?? EMPTY;
     if (dnf !== newDnf) setDnf(newDnf);
-  }, [prediction, pole, top10, fastestLap, dnf]);
+  }, [prediction]);
 
   // ---- Draft autosave: a closed tab, a dead battery or an app switch never loses half-made picks ----
   const draftKey = user && race ? `dfr:draft:${user.id}:${race.id}` : null;
@@ -287,7 +287,7 @@ function Predict() {
     if (upd.error) {
       error = upd.error;
     } else if (!upd.data?.length) {
-      if (!upd.error) {
+      if (prediction?.id) {
         // Optimistic lock conflict: someone else modified this prediction
         toast.error("Someone else modified this prediction. Reloading...");
         queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });

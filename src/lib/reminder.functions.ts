@@ -3,14 +3,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const getReminderStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { raceId: string }) => input)
+  .inputValidator((input: { raceId: string }) => input)
   .handler(async ({ data: { raceId }, context }) => {
     const normalizedRaceId = typeof raceId === "string" ? raceId.trim() : "";
     if (!normalizedRaceId) {
       return { submitted: 0, missing: [], total: 0 };
     }
 
-    const { supabase } = context;
+    const { supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server");
 
     // Use the authenticated user's Supabase client so RLS remains in force.
     // We intentionally avoid the service-role client here.

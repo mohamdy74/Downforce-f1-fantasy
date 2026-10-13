@@ -204,7 +204,7 @@ function Sprint() {
     if (upd.error) {
       error = upd.error;
     } else if (!upd.data?.length) {
-      if (!upd.error) {
+      if (prediction?.id) {
         // Optimistic lock conflict
         toast.error("Someone else modified this prediction. Reloading...");
         queryClient.invalidateQueries({ queryKey: ["sprint-prediction", race!.id, user!.id] });

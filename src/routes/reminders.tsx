@@ -21,7 +21,7 @@ function Reminders() {
   // Server-style query: only counts + names, NO prediction contents exposed
   const { data, isLoading } = useQuery({
     queryKey: ["submission-status", races?.[0]?.id],
-    enabled: !!races && races.length > 0,
+    enabled: !!races && races.length > 0 && !!user,
     queryFn: async () => {
       const race = nextRace(races!);
       if (!race) return null;

@@ -68,7 +68,7 @@ export type LeaderboardEntry = {
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  queryFn: async (): Promise<LeaderboardEntry[]> => {
+  queryFn: async (): Promise<LeaderboardEntry[]> => { const { data: sData } = await supabase.auth.getSession(); if (!sData.session) return [];
     const [{ data: scores, error: sErr }, { data: profiles, error: pErr }] =
       await Promise.all([
         supabase.from("scores").select("user_id, race_id, points"),

@@ -106,7 +106,7 @@ export default async (req: Request): Promise<Response> => {
 };
 
 import { isVapidConfigured, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } from "@/lib/push-vapid";
-import { supabase } from "@/integrations/supabase/client.server";
+import { supabaseAdmin as supabase } from "@/integrations/supabase/client.server";
 async function findNextRace(): Promise<string | null> {
   const { data } = await supabase
     .from("races")
