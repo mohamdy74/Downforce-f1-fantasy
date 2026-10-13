@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CalendarPlus, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PushOptIn } from "@/components/PushOptIn";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Race } from "@/lib/queries";
@@ -151,6 +152,7 @@ export function PickStatus({ race }: { race: Race }) {
             <CalendarPlus className="mr-1 h-4 w-4" />
             Remind me
           </Button>
+          <PushOptIn />
         )}
         <Button asChild size="sm" variant={ok ? "secondary" : "default"}>
           <Link to="/predict">{ok ? "Review" : "Predict"}</Link>

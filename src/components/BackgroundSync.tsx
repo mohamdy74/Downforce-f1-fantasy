@@ -3,14 +3,10 @@ import { useEffect } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { checkAndSendRaceReminders } from "@/lib/push.functions";
 
 const MIN_GAP_MS = 10 * 60 * 1000;
 
-/**
- * Runs the (server-throttled) race data sync in the background, after the page is
- * already on screen, so navigating never waits for it. When it finishes, the
- * cached races and standings are refreshed quietly.
- */
 export function BackgroundSync() {
   const queryClient = useQueryClient();
 
@@ -25,7 +21,10 @@ export function BackgroundSync() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) return;
-        await syncF1Data({ data: {} });
+        await Promise.allSettled([
+          syncF1Data({ data: {} }),
+          checkAndSendRaceReminders({ data: {} }),
+        ]);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["races"] }),
           queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
