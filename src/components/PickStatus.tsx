@@ -115,7 +115,7 @@ export function PickStatus({ race }: { race: Race }) {
     );
   }
 
-  const ok = !!submitted;
+  if (submitted === undefined) return null; const ok = !!submitted;
 
   return (
     <div

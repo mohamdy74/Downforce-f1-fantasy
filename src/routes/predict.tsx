@@ -233,7 +233,7 @@ function Predict() {
 
   // In-page reminder banner — red alert when picks not submitted
   const notSubmitted =
-    !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
+    prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
     (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
