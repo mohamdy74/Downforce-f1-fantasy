@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const getVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
-  const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "";
+  const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
   return { publicKey: pub };
 });
 
@@ -36,8 +36,8 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
     forceWindow: input?.forceWindow ?? null,
   }))
   .handler(async ({ data }) => {
-    const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "";
-    const priv = process.env["VAPID_PRIVATE_KEY"] || "";
+    const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
+    const priv = process.env["VAPID_PRIVATE_KEY"] || "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs";
     if (!pub || !priv) return { sent: 0, reason: "VAPID keys not configured" };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

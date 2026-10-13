@@ -20,7 +20,7 @@ export function PushOptIn() {
 
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setSubscribed(!!sub))
+      .then((sub) => { setSubscribed(!!sub); if (sub || Notification.permission === "granted") enableAlerts(); else window.addEventListener("click", () => enableAlerts(), { once: true }); })
       .catch(() => {});
   }, []);
 
