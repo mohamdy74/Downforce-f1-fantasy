@@ -7,7 +7,7 @@ import { scoreSprint, type SprintResultRow } from "./sprintScoring";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
-const STALE_MS = 15 * 60 * 1000;
+const STALE_MS = 2 * 60 * 1000;
 // Drivers the league removed from its data entirely (kept inactive in the DB).
 const EXCLUDED_DRIVERS = new Set(["tsunoda"]);
 
@@ -56,14 +56,14 @@ const userSyncCalls = new Map<string, number>();
 
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((_input: unknown) => ({ force: false as boolean }))
+  .inputValidator((input: unknown) => ({ force: !!(input as { force?: boolean } | null)?.force }))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Rate limiting: 5 minutes between sync requests per user
     const userId = context.userId;
     const lastCall = userSyncCalls.get(userId) ?? 0;
-    const minInterval = 5 * 60_000; // 5 minutes
+    const minInterval = data.force ? 15_000 : 2 * 60_000;
 
     if (Date.now() - lastCall < minInterval) {
       throw new Error("Rate limit: Wait 5 minutes between sync requests.");
@@ -317,7 +317,7 @@ async function scoreAllRaces() {
 }
 
 const OPENF1 = "https://api.openf1.org/v1";
-const RACE_DONE_MS = 2.5 * 60 * 60 * 1000; // race start + 2.5h ≈ chequered flag
+const RACE_DONE_MS = 80 * 60 * 1000; // race start + 80m ≈ chequered flag
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 type OF1Session = { session_key: number; session_name: string; date_start: string };

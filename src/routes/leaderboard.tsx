@@ -1,11 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-
-import { leaderboardQuery, racesQuery } from "@/lib/queries";
-import { useAuth } from "@/hooks/useAuth";
-import { cn } from "@/lib/utils";
-import { FahlBadge } from "@/components/SiteHeader";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+
+import { FahlBadge } from "@/components/SiteHeader";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { syncF1Data } from "@/lib/f1-sync.functions";
+import { leaderboardQuery, racesQuery } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
@@ -28,19 +32,78 @@ export const Route = createFileRoute("/leaderboard")({
 });
 
 function Leaderboard() {
-  const { data: board, isLoading } = useQuery(leaderboardQuery);
+  const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: board, isLoading } = useQuery({
+    ...leaderboardQuery,
+    enabled: !!user,
+  });
   const { data: races } = useQuery(racesQuery);
-  const { user } = useAuth();
 
   const [open, setOpen] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const scored = races?.filter((r) => r.has_results).length ?? 0;
+
+  async function handleForceSync() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      await syncF1Data({ data: { force: true } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["races"] }),
+        queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
+      ]);
+      toast.success("Standings and race results synced!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not sync right now.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <p className="text-sm text-muted-foreground">Loading standings…</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-16">
+        <h1 className="text-3xl">Sign in to view standings</h1>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Join the league to see player rankings and round-by-round points.
+        </p>
+        <Button asChild className="mt-6">
+          <Link to="/auth">Continue with Google</Link>
+        </Button>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-3xl">League standings</h1>
-      <p className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {scored} race{scored === 1 ? "" : "s"} scored
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl">League standings</h1>
+          <p className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            {scored} race{scored === 1 ? "" : "s"} scored
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={syncing}
+          onClick={handleForceSync}
+          className="shrink-0 gap-1.5"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+          {syncing ? "Syncing…" : "Sync results"}
+        </Button>
+      </div>
 
       {board && board.length > 0 && (
         <div className="mt-8 grid grid-cols-3 items-end gap-2">
@@ -75,57 +138,57 @@ function Leaderboard() {
         )}
         {board?.map((entry, index) => (
           <div key={entry.userId}>
-          <button
-            type="button"
-            onClick={() => setOpen(open === entry.userId ? null : entry.userId)}
-            className={cn(
-              "tower-row flex w-full text-left items-center gap-3 rounded-md px-3 py-3",
-              index === 0 && "border-l-gold",
-              index > 0 && index < 3 && "border-l-primary",
-              entry.userId === user?.id && "ring-1 ring-primary/60",
-            )}
-          >
-            <span
+            <button
+              type="button"
+              onClick={() => setOpen(open === entry.userId ? null : entry.userId)}
               className={cn(
-                "w-8 shrink-0 text-center font-mono text-lg font-bold tabular-nums",
-                index === 0 && "text-gold",
+                "tower-row flex w-full text-left items-center gap-3 rounded-md px-3 py-3",
+                index === 0 && "border-l-gold",
+                index > 0 && index < 3 && "border-l-primary",
+                entry.userId === user?.id && "ring-1 ring-primary/60",
               )}
             >
-              {index + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate font-display text-sm font-extrabold italic uppercase">
-                  {entry.name}
-                </p>
-                {entry.fahl && <FahlBadge />}
-              </div>
-              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                {entry.races} scored · best {entry.best ?? 0}
-              </p>
-            </div>
-            {entry.change != null && entry.change !== 0 && (
               <span
                 className={cn(
-                  "font-mono text-xs font-bold",
-                  entry.change > 0 ? "text-gold" : "text-primary",
+                  "w-8 shrink-0 text-center font-mono text-lg font-bold tabular-nums",
+                  index === 0 && "text-gold",
                 )}
               >
-                {entry.change > 0 ? `▲${entry.change}` : `▼${-entry.change}`}
+                {index + 1}
               </span>
-            )}
-            <span className="font-mono text-xl font-bold tabular-nums">{entry.points}</span>
-          </button>
-          {open === entry.userId && (
-            <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6">
-              {(races ?? []).filter((r) => r.has_results).map((r) => (
-                <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
-                  <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>
-                  <p className="font-mono text-sm font-bold tabular-nums">{entry.byRound[r.round] ?? "–"}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate font-display text-sm font-extrabold italic uppercase">
+                    {entry.name}
+                  </p>
+                  {entry.fahl && <FahlBadge />}
                 </div>
-              ))}
-            </div>
-          )}
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  {entry.races} scored · best {entry.best ?? 0}
+                </p>
+              </div>
+              {entry.change != null && entry.change !== 0 && (
+                <span
+                  className={cn(
+                    "font-mono text-xs font-bold",
+                    entry.change > 0 ? "text-gold" : "text-primary",
+                  )}
+                >
+                  {entry.change > 0 ? `▲${entry.change}` : `▼${-entry.change}`}
+                </span>
+              )}
+              <span className="font-mono text-xl font-bold tabular-nums">{entry.points}</span>
+            </button>
+            {open === entry.userId && (
+              <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6">
+                {(races ?? []).filter((r) => r.has_results).map((r) => (
+                  <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
+                    <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>
+                    <p className="font-mono text-sm font-bold tabular-nums">{entry.byRound[r.round] ?? "–"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
