@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { driversQuery, racesQuery } from "@/lib/queries";
-import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
+import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
 import {
   SPRINT_MAX_POINTS,
   SPRINT_SLOTS,
@@ -177,7 +177,7 @@ function Sprint() {
     .sort((a, b) => a.position! - b.position!);
   const actualPole = (results ?? []).find((r) => r.pole)?.driver_id ?? null;
 
-  async function save() {
+  async function save() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
     if (duplicates) {
       toast.error("Each driver can only appear once in your sprint top 8.");
       return;
@@ -227,7 +227,7 @@ function Sprint() {
     queryClient.invalidateQueries({ queryKey: ["sprint-prediction", race!.id, user!.id] });
   }
 
-  async function savePole() {
+  async function savePole() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint_pole" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
     if (pole === EMPTY) {
       toast.error("Choose a sprint pole driver first.");
       return;

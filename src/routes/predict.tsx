@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Countdown } from "@/components/Countdown";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { LightsOut } from "@/components/LightsOut";
-import { MissingPlayers } from "@/components/MissingPlayers";
+import { MissingPlayers } from "@/components/MissingPlayers"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
 import { SharePicks } from "@/components/SharePicks";
 import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
@@ -250,7 +250,7 @@ function Predict() {
     toast.success("Loaded your picks from the last race.");
   }
 
-  async function save() {
+  async function save() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "race" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
     if (duplicates) {
       toast.error("Each driver can only appear once in your top 10.");
       return;
@@ -319,7 +319,7 @@ function Predict() {
   }
 
   // Pole can be saved alone (before the top 10 is ready) until qualifying starts.
-  async function savePole() {
+  async function savePole() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "pole" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
     if (pole === EMPTY) {
       toast.error("Choose a pole driver first.");
       return;

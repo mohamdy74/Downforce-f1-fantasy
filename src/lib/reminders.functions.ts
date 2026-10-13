@@ -50,3 +50,5 @@ export const getPickRoster = createServerFn({ method: "POST" })
       missing: eligible.filter((p) => !complete.has(p.id)).map((p) => p.display_name),
     };
   });
+
+export const assertDeadlineOpen = createServerFn({ method: "POST" }).inputValidator((d: { raceId: string; kind: string }) => d).handler(async ({ data }) => { const { supabaseAdmin } = await import("@/integrations/supabase/client.server"); const { data: r } = await supabaseAdmin.from("races").select("race_at, qualifying_at, sprint_at, sprint_qualifying_at").eq("id", data.raceId).maybeSingle(); if (!r) throw new Error("Race not found"); const lockIso = data.kind === "pole" ? (r.qualifying_at ?? r.race_at) : data.kind === "sprint" ? (r.sprint_at ?? r.race_at) : data.kind === "sprint_pole" ? (r.sprint_qualifying_at ?? r.sprint_at ?? r.race_at) : r.race_at; if (new Date(lockIso).getTime() <= Date.now()) throw new Error("Deadline passed on server clock!"); return { ok: true }; });
