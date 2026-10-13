@@ -111,7 +111,7 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
 
     if (!targetSubs.length) return { sent: 0, windowTag, reason: "No pending un-notified users" };
 
-    const webpush = await import("web-push");
+    const webpush = await import(/* @vite-ignore */ "web-" + "push");
     webpush.default.setVapidDetails("mailto:admin@downforce.app", pub, priv);
 
     const payload = JSON.stringify({

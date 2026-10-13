@@ -1,7 +1,7 @@
 // VAPID KEY HELPER — generate with: npm install -g web-push && web-push generate-vapid-keys
 // Then add PUBLIC/PRIVATE to Supabase Edge Function secrets (Dashboard → Project Settings → Edge Functions)
-export const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "";
-export const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
+export const VAPID_PUBLIC_KEY = (typeof process !== "undefined" ? process.env : {}).VAPID_PUBLIC_KEY ?? "";
+export const VAPID_PRIVATE_KEY = (typeof process !== "undefined" ? process.env : {}).VAPID_PRIVATE_KEY ?? "";
 
 // Helper to encode VAPID public key for subscription
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
