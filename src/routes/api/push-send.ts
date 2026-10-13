@@ -1,16 +1,54 @@
 // SUPABASE EDGE FUNCTION / NITRO API — Push Notification Sender
 // Run this at ~2h before qualifying / race via cron or external ping.
-// Requires VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars.
+// Requires VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and PUSH_API_KEY env vars.
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+const recentApiCalls = new Map<string, number[]>();
+
+function applyRateLimit(apiKey: string): boolean {
+  const now = Date.now();
+  const timestamps = recentApiCalls.get(apiKey) ?? [];
+  const recent = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
+    recentApiCalls.set(apiKey, recent);
+    return false;
+  }
+  recent.push(now);
+  recentApiCalls.set(apiKey, recent);
+  return true;
+}
 
 export default async (req: Request): Promise<Response> => {
-  // CORS for browser/tests
+  const apiKey = req.headers.get("x-api-key");
+  if (!process.env.PUSH_API_KEY || apiKey !== process.env.PUSH_API_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const headers = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN || "https://downforce.app",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-key",
   };
 
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers,
+    });
+  }
+
+  if (!applyRateLimit(apiKey)) {
+    return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+      status: 429,
+      headers,
+    });
+  }
 
   try {
     const { race_id, deadline_type } = (await req.json().catch(() => ({}))) as {
@@ -18,32 +56,32 @@ export default async (req: Request): Promise<Response> => {
       deadline_type?: "pole" | "race";
     };
 
-    // Load from env — must be set in Supabase Edge Function secrets
-    const VAPID_PUBLIC = (globalThis as unknown as Record<string, string>).VAPID_PUBLIC_KEY;
-    const VAPID_PRIVATE = (globalThis as unknown as Record<string, string>).VAPID_PRIVATE_KEY;
+    const normalizedDeadlineType = deadline_type === "pole" || deadline_type === "race" ? deadline_type : "race";
+    const normalizedRaceId = typeof race_id === "string" && race_id.trim().length > 0 ? race_id.trim() : null;
+
+    if (!normalizedRaceId) {
+      return new Response(JSON.stringify({ error: "race_id is required" }), { status: 400, headers });
+    }
+
+    const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+    const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 
     if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
       return new Response(JSON.stringify({ error: "VAPID keys missing" }), { status: 500, headers });
     }
 
-    // 1. Find upcoming race if not provided
-    const raceId = race_id || await findNextRace();
-    if (!raceId) return new Response(JSON.stringify({ error: "No upcoming race" }), { status: 404, headers });
-
-    // 2. Find users who haven't submitted predictions for this race
-    const missingUsers = await findMissingPredictions(raceId, deadline_type || "race");
+    const raceId = normalizedRaceId;
+    const missingUsers = await findMissingPredictions(raceId, normalizedDeadlineType);
     if (!missingUsers.length) return new Response(JSON.stringify({ ok: true, sent: 0, reason: "All predictions submitted" }), { status: 200, headers });
 
-    // 3. Load push subscriptions for those users
     const subs = await loadSubscriptions(missingUsers);
     if (!subs.length) return new Response(JSON.stringify({ ok: true, sent: 0, reason: "No push subscriptions" }), { status: 200, headers });
 
-    // 4. Build payload from race info
     const race = await getRaceInfo(raceId);
     const payload = {
       title: `DOWNFORCE — ${race?.name || "Next Race"}`,
-      body: `Picks close ${deadline_type === "pole" ? "soon — pole pick ends" : "soon — top 10 closes"}. Don't miss out!`,
-      tag: `downforce-${raceId}-${deadline_type || "race"}`,
+      body: `Picks close ${normalizedDeadlineType === "pole" ? "soon — pole pick ends" : "soon — top 10 closes"}. Don't miss out!`,
+      tag: `downforce-${raceId}-${normalizedDeadlineType}`,
       url: "/predict",
     };
 
@@ -51,7 +89,6 @@ export default async (req: Request): Promise<Response> => {
       return new Response(JSON.stringify({ ok: false, error: "VAPID keys not configured — set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY" }), { status: 503, headers });
     }
 
-    // 5. Send notifications (batch via Web Push protocol — needs web-push lib in production)
     let sent = 0;
     for (const sub of subs) {
       try {

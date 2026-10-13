@@ -198,10 +198,19 @@ function Sprint() {
       .update(fields)
       .eq("user_id", user!.id)
       .eq("race_id", race!.id)
+      .eq("updated_at", prediction?.updated_at ?? new Date(0).toISOString()) // optimistic lock
       .select("id");
+
     if (upd.error) {
       error = upd.error;
     } else if (!upd.data?.length) {
+      if (!upd.error) {
+        // Optimistic lock conflict
+        toast.error("Someone else modified this prediction. Reloading...");
+        queryClient.invalidateQueries({ queryKey: ["sprint-prediction", race!.id, user!.id] });
+        setSaving(false);
+        return;
+      }
       const ins = await supabase
         .from("sprint_predictions")
         .insert({ user_id: user!.id, race_id: race!.id, ...fields });

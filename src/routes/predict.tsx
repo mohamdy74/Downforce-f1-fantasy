@@ -111,16 +111,38 @@ function Predict() {
   const [lightsOut, setLightsOut] = useState(false);
   const endLights = useCallback(() => setLightsOut(false), []);
 
+  // localStorage cleanup: remove old pole timestamps (run once on mount)
+  useEffect(() => {
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith("dfr:pole-at:"));
+    const cutoff = Date.now() - 90 * 24 * 3600_000; // 90 days ago
+    keys.forEach((k) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k)!);
+        if (new Date(v.at).getTime() < cutoff) localStorage.removeItem(k);
+      } catch {
+        // Invalid JSON, remove it
+        localStorage.removeItem(k);
+      }
+    });
+  }, []);
+
   useEffect(() => {
     if (!prediction) return;
     const saved = prediction.top10 ?? [];
-    setPole(prediction.pole_driver_id ?? EMPTY);
+    const newPole = prediction.pole_driver_id ?? EMPTY;
+    if (pole !== newPole) setPole(newPole);
+
     // A pole-only save has no top 10 yet — keep whatever the player is building.
     if (saved.length === 0) return;
-    setTop10(Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY));
-    setFastestLap(prediction.fastest_lap_driver_id ?? EMPTY);
-    setDnf(prediction.dnf_driver_id ?? EMPTY);
-  }, [prediction]);
+    const newTop10 = Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY);
+    if (JSON.stringify(top10) !== JSON.stringify(newTop10)) setTop10(newTop10);
+
+    const newFastestLap = prediction.fastest_lap_driver_id ?? EMPTY;
+    if (fastestLap !== newFastestLap) setFastestLap(newFastestLap);
+
+    const newDnf = prediction.dnf_driver_id ?? EMPTY;
+    if (dnf !== newDnf) setDnf(newDnf);
+  }, [prediction, pole, top10, fastestLap, dnf]);
 
   // ---- Draft autosave: a closed tab, a dead battery or an app switch never loses half-made picks ----
   const draftKey = user && race ? `dfr:draft:${user.id}:${race.id}` : null;
@@ -259,10 +281,19 @@ function Predict() {
       .update(fields)
       .eq("user_id", user!.id)
       .eq("race_id", race!.id)
+      .eq("updated_at", prediction?.updated_at ?? new Date(0).toISOString()) // optimistic lock
       .select("id");
+
     if (upd.error) {
       error = upd.error;
     } else if (!upd.data?.length) {
+      if (!upd.error) {
+        // Optimistic lock conflict: someone else modified this prediction
+        toast.error("Someone else modified this prediction. Reloading...");
+        queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
+        setSaving(false);
+        return;
+      }
       const ins = await supabase
         .from("predictions")
         .insert({ user_id: user!.id, race_id: race!.id, ...fields });
