@@ -70,7 +70,7 @@ export function SprintGrid({
       next[active] = id;
       const empty = next.findIndex((p, i) => p === EMPTY && i > active);
       const first = next.indexOf(EMPTY);
-      setActive(empty !== -1 ? empty : first !== -1 ? first : active);
+      setActive(empty !== -1 ? empty : first !== -1 ? first : active); navigator.vibrate?.(10);
       return next;
     });
   }
@@ -181,7 +181,7 @@ export function SprintGrid({
                 style={{
                   borderLeft: `5px solid ${color}`,
                   paddingLeft: "0.5rem",
-                  touchAction: d && !locked ? "none" : "auto",
+                  touchAction: "pan-y",
                   boxShadow: d
                     ? `inset 0 0 24px -8px color-mix(in oklch, ${color} 55%, transparent), 0 0 14px -6px ${color}`
                     : undefined,

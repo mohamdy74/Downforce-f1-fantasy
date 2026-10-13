@@ -2,8 +2,8 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
-const PULL_THRESHOLD = 80; // pixels to pull before triggering refresh
-const MAX_PULL = 120; // max visual pull distance
+const PULL_THRESHOLD = 80;
+const MAX_PULL = 120;
 
 export function PullToRefresh() {
   const router = useRouter();
@@ -11,83 +11,91 @@ export function PullToRefresh() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef(0);
   const isPulling = useRef(false);
+  const pullRef = useRef(0);
+  const refreshingRef = useRef(false);
 
   useEffect(() => {
-    // Only enable on touch devices
     if (!("ontouchstart" in window)) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      // Only trigger if scrolled to the top
-      if (window.scrollY > 0) return;
-
+      if (window.scrollY > 0 || refreshingRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[role=\"dialog\"], [data-slot], .overflow-y-auto")) return;
       startY.current = e.touches[0]!.clientY;
       isPulling.current = true;
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isPulling.current || isRefreshing) return;
+      if (!isPulling.current || refreshingRef.current) return;
+      if (window.scrollY > 0) {
+        isPulling.current = false;
+        if (pullRef.current > 0) {
+          pullRef.current = 0;
+          setPullDistance(0);
+        }
+        return;
+      }
 
       const currentY = e.touches[0]!.clientY;
       const distance = currentY - startY.current;
 
-      // Only pull down, not up
-      if (distance <= 0) {
-        setPullDistance(0);
+      if (distance <= 12) {
+        if (pullRef.current > 0) {
+          pullRef.current = 0;
+          setPullDistance(0);
+        }
         return;
       }
 
-      // Damping effect — gets harder to pull the further you go
-      const dampenedDistance = Math.min(
-        distance * 0.5,
-        MAX_PULL,
-      );
+      const dampened = Math.min((distance - 12) * 0.5, MAX_PULL);
+      pullRef.current = dampened;
+      setPullDistance(dampened);
 
-      setPullDistance(dampenedDistance);
-
-      // Prevent default scroll if pulling
-      if (distance > 10) {
+      if (distance > 20 && e.cancelable) {
         e.preventDefault();
       }
     };
 
     const handleTouchEnd = async () => {
       if (!isPulling.current) return;
-
       isPulling.current = false;
 
-      if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
+      if (pullRef.current >= PULL_THRESHOLD && !refreshingRef.current) {
+        refreshingRef.current = true;
         setIsRefreshing(true);
+        pullRef.current = PULL_THRESHOLD;
         setPullDistance(PULL_THRESHOLD);
 
-        // Trigger router invalidation (refetches all queries)
         await router.invalidate();
 
-        // Hold the spinner for a moment so it's visible
         setTimeout(() => {
+          refreshingRef.current = false;
           setIsRefreshing(false);
+          pullRef.current = 0;
           setPullDistance(0);
-        }, 600);
-      } else {
+        }, 500);
+      } else if (pullRef.current > 0) {
+        pullRef.current = 0;
         setPullDistance(0);
       }
     };
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
     document.addEventListener("touchmove", handleTouchMove, { passive: false });
-    document.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     return () => {
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchmove", handleTouchMove);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [pullDistance, isRefreshing, router]);
+  }, [router]);
+
+  if (pullDistance === 0) return null;
 
   const rotation = (pullDistance / PULL_THRESHOLD) * 360;
   const opacity = Math.min(pullDistance / PULL_THRESHOLD, 1);
   const scale = Math.min(pullDistance / PULL_THRESHOLD, 1);
-
-  if (pullDistance === 0) return null;
 
   return (
     <div
