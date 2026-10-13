@@ -81,7 +81,7 @@ export function SharePicks({
 
   // Live preview = exactly the image that gets shared.
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null); const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
   const key = [raceName, round, shownName, top10.join(","), pole, fastestLap, dnf, drivers.length].join("|");
   useEffect(() => {
     if (!open) return;
@@ -89,13 +89,13 @@ export function SharePicks({
     let objectUrl: string | null = null;
     renderPickCard(cardData()).then((blob) => {
       if (!blob || dead) return;
-      objectUrl = URL.createObjectURL(blob);
+      objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
       setPreview(objectUrl);
     });
     return () => {
       dead = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setPreview(null);
+      setPreview(null); setCachedBlob(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
@@ -113,7 +113,7 @@ export function SharePicks({
   }
 
   async function handleDownloadImage() {
-    const blob = await renderPickCard(cardData());
+    const blob = cachedBlob ?? (await renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -122,7 +122,7 @@ export function SharePicks({
   }
 
   async function handleShareImage() {
-    const blob = await renderPickCard(cardData());
+    const blob = cachedBlob ?? (await renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;

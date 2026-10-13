@@ -73,7 +73,7 @@ export function SharePole({
   });
 
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null); const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
   const key = [raceName, round, shownName, driver?.id, savedAt].join("|");
   useEffect(() => {
     if (!open) return;
@@ -81,13 +81,13 @@ export function SharePole({
     let objectUrl: string | null = null;
     renderPoleCard(card()).then((blob) => {
       if (!blob || dead) return;
-      objectUrl = URL.createObjectURL(blob);
+      objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
       setPreview(objectUrl);
     });
     return () => {
       dead = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setPreview(null);
+      setPreview(null); setCachedBlob(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
@@ -105,7 +105,7 @@ export function SharePole({
   }
 
   async function handleDownload() {
-    const blob = await renderPoleCard(card());
+    const blob = cachedBlob ?? (await renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -114,7 +114,7 @@ export function SharePole({
   }
 
   async function handleShareImage() {
-    const blob = await renderPoleCard(card());
+    const blob = cachedBlob ?? (await renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
