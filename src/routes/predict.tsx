@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Countdown } from "@/components/Countdown";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { LightsOut } from "@/components/LightsOut";
-import { MissingPlayers } from "@/components/MissingPlayers"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
+import { MissingPlayers } from "@/components/MissingPlayers"; import { assertDeadlineOpen, logPredAudit } from "@/lib/reminders.functions";
 import { SharePicks } from "@/components/SharePicks";
 import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
@@ -305,7 +305,7 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Predictions locked in.");
+    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
     try {
       window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
     } catch {
@@ -343,7 +343,7 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Pole pick saved.");
+    toast.success("Pole pick saved."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: "pole", changes: { pole: [prediction?.pole_driver_id ?? null, pole] } } }).catch(() => null);
     writePoleAt(user!.id, race!.id, pole);
     queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
   }
