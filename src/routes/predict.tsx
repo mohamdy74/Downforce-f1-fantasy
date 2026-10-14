@@ -529,7 +529,7 @@ function Predict() {
         </div>
       )}
 
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3">
+      <div className={viewOnly ? "mt-4" : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3"}>
         {raceLocked ? (
           <Button size="lg" className="h-12 w-full text-base" disabled>
             Picks locked — race started
@@ -608,7 +608,7 @@ function TrackStatus({ target }: { target: string }) {
         : { label: "Track open", color: "var(--track-green)" };
   return (
     <div
-      className="mt-4 flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-xs font-bold uppercase tracking-widest"
+      className="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest"
       style={{ borderColor: state.color, color: state.color }}
     >
       <span

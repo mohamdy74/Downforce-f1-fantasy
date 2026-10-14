@@ -37,7 +37,7 @@ function H2H() {
 
   const pa = board.find((e) => e.userId === a);
   const pb = board.find((e) => e.userId === b);
-  const rounds = races.filter((r) => r.has_results);
+  const rounds = races.filter((r) => r.has_results && board.some((e) => e.byRound[r.round] !== undefined)).slice().reverse();
   let wa = 0, wb = 0;
   for (const r of rounds) {
     const x = pa?.byRound[r.round] ?? 0, y = pb?.byRound[r.round] ?? 0;

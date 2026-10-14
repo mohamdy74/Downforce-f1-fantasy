@@ -151,7 +151,7 @@ function Paddock() {
       )}
 
       <div ref={padRef} className="mt-6 space-y-4">
-        {sorted.map((p) => {
+        {sorted.length > 0 && (() => { const m = (a: (string | null | undefined)[]) => { const c = new Map<string, number>(); for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1); return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]; }; const c1 = m(sorted.map((p) => p.top10?.[0])), cp = m(sorted.map((p) => p.pole_driver_id)), cd = m(sorted.map((p) => p.dnf_driver_id)); return (<div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs"><div><span className="block text-[10px] text-muted-foreground">CROWD P1</span><b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD POLE</span><b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD DNF</span><b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b></div></div>); })()}{sorted.map((p) => {
           const pts = data?.points.get(p.user_id);
           return (
             <section key={p.user_id} className="carbon-panel rounded-lg p-3">
