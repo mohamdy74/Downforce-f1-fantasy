@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import { formatCairo, renderPoleCard, type PoleCardData } from "@/lib/shareCard";
+import type { PoleCardData } from "@/lib/shareCard"; const formatCairo = (iso?: string | null) => iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }).toUpperCase() : null;
 
 /**
  * Stand-alone "pole position" share card. Works with or without a saved top 10:
@@ -79,7 +79,7 @@ export function SharePole({
     if (!open) return;
     let dead = false;
     let objectUrl: string | null = null;
-    renderPoleCard(card()).then((blob) => {
+    import("@/lib/shareCard").then((m) => m.renderPoleCard(card())).then((blob) => {
       if (!blob || dead) return;
       objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
       setPreview(objectUrl);
@@ -105,7 +105,7 @@ export function SharePole({
   }
 
   async function handleDownload() {
-    const blob = cachedBlob ?? (await renderPoleCard(card()));
+    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -114,7 +114,7 @@ export function SharePole({
   }
 
   async function handleShareImage() {
-    const blob = cachedBlob ?? (await renderPoleCard(card()));
+    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
