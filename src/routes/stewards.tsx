@@ -1,7 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shield, Bell, RefreshCw, Clock, Trophy, Users, CheckCircle2, AlertTriangle, Trash2, Edit3 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Shield,
+  Bell,
+  RefreshCw,
+  Clock,
+  Trophy,
+  Users,
+  CheckCircle2,
+  Flag,
+  Trash2,
+  Edit3,
+  ChevronDown,
+} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +41,71 @@ function toLocalInputValue(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function StewardAccordionCard({
+  id,
+  openId,
+  onToggle,
+  icon,
+  title,
+  subtitle,
+  badge,
+  children,
+}: {
+  id: string;
+  openId: string | null;
+  onToggle: (id: string) => void;
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  badge?: ReactNode;
+  children: ReactNode;
+}) {
+  const isOpen = openId === id;
+  return (
+    <section
+      className={cn(
+        "carbon-panel overflow-hidden rounded-xl border transition-colors",
+        isOpen ? "border-primary/50 shadow-lg" : "border-border/70 hover:border-border",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-secondary/20 active:bg-secondary/40"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/40">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate font-display text-base font-extrabold italic uppercase tracking-wide text-foreground sm:text-lg">
+              {title}
+            </h2>
+            <p className="truncate font-mono text-[11px] text-muted-foreground">{subtitle}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {badge}
+          <div
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-full bg-secondary/50 text-muted-foreground transition-transform duration-200",
+              isOpen && "rotate-180 bg-primary/15 text-primary",
+            )}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </div>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-border/60 bg-background/40 px-4 py-4">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StewardsPage() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
@@ -47,6 +124,11 @@ function StewardsPage() {
   });
 
   const [busy, setBusy] = useState(false);
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  const toggleSection = (id: string) => {
+    setOpenSection((prev) => (prev === id ? null : id));
+  };
 
   // Broadcast state
   const [pushTitle, setPushTitle] = useState("DOWNFORCE — Race Control");
@@ -56,7 +138,7 @@ function StewardsPage() {
   const [scoreUser, setScoreUser] = useState("");
   const [scorePts, setScorePts] = useState("0");
 
-  // Pick override state (interactive P1-P10 grid!)
+  // Pick override state
   const [pickUser, setPickUser] = useState("");
   const [pickPole, setPickPole] = useState(EMPTY);
   const [pickFl, setPickFl] = useState(EMPTY);
@@ -74,13 +156,12 @@ function StewardsPage() {
     setCustomRaceDt(toLocalInputValue(activeRace.race_at));
   }, [activeRace?.id, activeRace?.qualifying_at, activeRace?.race_at]);
 
-  // Manual results state (interactive P1-P10 grid + multi-select DNF buttons!)
+  // Manual results state
   const [resPole, setResPole] = useState(EMPTY);
   const [resFl, setResFl] = useState(EMPTY);
   const [resTop10, setResTop10] = useState<string[]>(Array(10).fill(EMPTY));
   const [resDnfList, setResDnfList] = useState<string[]>([]);
 
-  // Pre-fill manual results if race already has results
   useEffect(() => {
     if (!dash?.results?.length) return;
     const sortedFinishers = dash.results
@@ -134,18 +215,25 @@ function StewardsPage() {
   const scoreByUser = new Map((dash?.scores ?? []).map((s) => [s.user_id, s.points]));
   const sortedDrivers = sortByTeam(drivers);
 
+  const totalPlayers = dash?.profiles?.length ?? 0;
+  const lockedPlayers = (dash?.profiles ?? []).filter((p) => {
+    const pr = predByUser.get(p.id);
+    return (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length === 10;
+  }).length;
+
   function toggleDnfDriver(id: string) {
     setResDnfList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 px-4 pb-28 pt-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <main className="mx-auto w-full max-w-3xl space-y-3 overflow-x-clip px-3 pb-28 pt-6 sm:px-4">
+      {/* Compact Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
         <div>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
             FIA Stewards &amp; Race Control
           </p>
-          <h1 className="text-3xl">Stewards Room</h1>
+          <h1 className="text-2xl sm:text-3xl">Stewards Room</h1>
         </div>
         <Button
           size="sm"
@@ -166,22 +254,22 @@ function StewardsPage() {
               setBusy(false);
             }
           }}
-          className="gap-1.5"
+          className="h-9 gap-1.5 text-xs"
         >
-          <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} />
-          Force Sync &amp; Recalculate All
+          <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
+          Force Sync All
         </Button>
       </div>
 
       {/* Round selector */}
-      <div className="carbon-panel rounded-lg p-3">
+      <div className="carbon-panel rounded-xl border border-border/70 p-3">
         <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           Target Grand Prix Round
         </label>
         <select
           value={activeRace?.id ?? ""}
           onChange={(e) => setSelectedRaceId(e.target.value)}
-          className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 font-mono text-sm font-bold"
+          className="mt-1.5 h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 font-mono text-xs font-bold sm:text-sm"
         >
           {races.map((r) => (
             <option key={r.id} value={r.id}>
@@ -192,15 +280,24 @@ function StewardsPage() {
       </div>
 
       {/* 1. Live Pick Status Radar */}
-      <section className="carbon-panel rounded-lg p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-lg">
-            <CheckCircle2 className="h-5 w-5 text-gold" />
-            1. Live Pick Status Radar ({activeRace?.name})
-          </h2>
+      <StewardAccordionCard
+        id="radar"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<CheckCircle2 className="h-4 w-4 text-gold" />}
+        title="Live Pick Status Radar"
+        subtitle={`Check who locked in for ${activeRace?.name ?? "this race"}`}
+        badge={
+          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-gold">
+            {lockedPlayers}/{totalPlayers} Locked
+          </span>
+        }
+      >
+        <div className="space-y-3">
           <Button
             size="sm"
             variant="secondary"
+            className="w-full sm:w-auto"
             disabled={busy || !activeRace}
             onClick={() =>
               runAction({
@@ -212,87 +309,102 @@ function StewardsPage() {
             }
           >
             <Bell className="mr-1.5 h-3.5 w-3.5 text-gold" />
-            Push Alert Missing Only
+            Send Push Alert to Missing Players Only
           </Button>
-        </div>
-        <div className="mt-3 divide-y divide-border">
-          {(dash?.profiles ?? []).map((p) => {
-            const pr = predByUser.get(p.id);
-            const hasPole = !!pr?.pole_driver_id;
-            const topCount = (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length;
-            const pts = scoreByUser.get(p.id);
-            return (
-              <div key={p.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                <span className="font-display font-bold italic uppercase">{p.display_name}</span>
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className={cn("rounded px-2 py-0.5", hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
-                    Pole: {hasPole ? "✓" : "✗"}
-                  </span>
-                  <span className={cn("rounded px-2 py-0.5", topCount === 10 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
-                    Top 10: {topCount}/10
-                  </span>
-                  {pts != null && <span className="font-bold text-gold">{pts} pts</span>}
+
+          <div className="divide-y divide-border">
+            {(dash?.profiles ?? []).map((p) => {
+              const pr = predByUser.get(p.id);
+              const hasPole = !!pr?.pole_driver_id;
+              const topCount = (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length;
+              const pts = scoreByUser.get(p.id);
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-2 py-2 text-xs sm:text-sm">
+                  <span className="truncate font-display font-bold italic uppercase">{p.display_name}</span>
+                  <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
+                    <span className={cn("rounded px-1.5 py-0.5", hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
+                      Pole {hasPole ? "✓" : "✗"}
+                    </span>
+                    <span className={cn("rounded px-1.5 py-0.5", topCount === 10 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
+                      {topCount}/10
+                    </span>
+                    {pts != null && <span className="font-bold text-gold">{pts}p</span>}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </section>
+      </StewardAccordionCard>
 
       {/* 2. Broadcast Push Notification */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <Bell className="h-5 w-5 text-primary" />
-          2. Broadcast Push Notification (All Phones)
-        </h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <input
-            type="text"
-            value={pushTitle}
-            onChange={(e) => setPushTitle(e.target.value)}
-            placeholder="Notification Title"
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          />
-          <input
-            type="text"
-            value={pushBody}
-            onChange={(e) => setPushBody(e.target.value)}
-            placeholder="Message body (e.g. Results are out! Check Standings)"
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          />
+      <StewardAccordionCard
+        id="broadcast"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Bell className="h-4 w-4 text-primary" />}
+        title="Broadcast Push Notification"
+        subtitle="Send an instant phone alert to all league members"
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              type="text"
+              value={pushTitle}
+              onChange={(e) => setPushTitle(e.target.value)}
+              placeholder="Notification Title"
+              className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <input
+              type="text"
+              value={pushBody}
+              onChange={(e) => setPushBody(e.target.value)}
+              placeholder="Message body (e.g. Results are out!)"
+              className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                runAction({
+                  action: "broadcast_push",
+                  title: pushTitle,
+                  body: pushBody || `Check out the latest update for ${activeRace?.name}!`,
+                })
+              }
+            >
+              Send Broadcast Now
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() =>
+                runAction({
+                  action: "broadcast_push",
+                  title: `🏆 ${activeRace?.name} Results Scored!`,
+                  body: "Points & standings are live! Tap to see who won فحل الجولة 👑",
+                })
+              }
+            >
+              Preset: Results Live 🏆
+            </Button>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={busy}
-            onClick={() => runAction({ action: "broadcast_push", title: pushTitle, body: pushBody || `Check out the latest update for ${activeRace?.name}!` })}
-          >
-            Send Broadcast Now
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              runAction({
-                action: "broadcast_push",
-                title: `🏆 ${activeRace?.name} Results Scored!`,
-                body: "Points & standings are live! Tap to see who won فحل الجولة 👑",
-              })
-            }
-          >
-            Preset: Results Live 🏆
-          </Button>
-        </div>
-      </section>
+      </StewardAccordionCard>
 
-      {/* 3. Score & Penalty Override (-25 Waiver) */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <Trophy className="h-5 w-5 text-gold" />
-          3. Score &amp; Penalty Override ({activeRace?.name})
-        </h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      {/* 3. Score & Penalty Override */}
+      <StewardAccordionCard
+        id="scores"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Trophy className="h-4 w-4 text-gold" />}
+        title="Score & Penalty Override"
+        subtitle="Adjust round points or waive a −25 penalty"
+      >
+        <div className="grid gap-2 sm:grid-cols-3">
           <select
             value={scoreUser}
             onChange={(e) => {
@@ -300,7 +412,7 @@ function StewardsPage() {
               const cur = scoreByUser.get(e.target.value);
               if (cur != null) setScorePts(String(cur));
             }}
-            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm"
           >
             <option value="">Select player…</option>
             {(dash?.profiles ?? []).map((p) => (
@@ -313,7 +425,7 @@ function StewardsPage() {
             type="number"
             value={scorePts}
             onChange={(e) => setScorePts(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 font-mono text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 font-mono text-sm"
             placeholder="Points"
           />
           <div className="flex gap-2">
@@ -321,7 +433,14 @@ function StewardsPage() {
               size="sm"
               className="h-10 flex-1"
               disabled={busy || !scoreUser || !activeRace}
-              onClick={() => runAction({ action: "override_score", raceId: activeRace!.id, userId: scoreUser, points: Number(scorePts) })}
+              onClick={() =>
+                runAction({
+                  action: "override_score",
+                  raceId: activeRace!.id,
+                  userId: scoreUser,
+                  points: Number(scorePts),
+                })
+              }
             >
               Set Points
             </Button>
@@ -336,15 +455,18 @@ function StewardsPage() {
             </Button>
           </div>
         </div>
-      </section>
+      </StewardAccordionCard>
 
-      {/* 4. Stewards Pick Override (Interactive Grid + Pickers - No typing!) */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <Edit3 className="h-5 w-5 text-primary" />
-          4. Stewards Pick Override (Enter / Edit Player Picks)
-        </h2>
-        <div className="mt-3 space-y-4">
+      {/* 4. Stewards Pick Override */}
+      <StewardAccordionCard
+        id="picks"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Edit3 className="h-4 w-4 text-primary" />}
+        title="Stewards Pick Override"
+        subtitle="Enter or edit Pole, Fastest Lap, DNF & Top 10 for any player"
+      >
+        <div className="space-y-4">
           <select
             value={pickUser}
             onChange={(e) => {
@@ -357,7 +479,7 @@ function StewardsPage() {
               const saved = pr?.top10 ?? [];
               setPickTop10(Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY));
             }}
-            className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm font-bold"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm font-bold"
           >
             <option value="">Select player to enter/edit picks for…</option>
             {(dash?.profiles ?? []).map((p) => (
@@ -421,89 +543,146 @@ function StewardsPage() {
             </>
           )}
         </div>
-      </section>
+      </StewardAccordionCard>
 
-      {/* 5. Adjust Lock Deadlines (Full Date/Time Picker + Custom Minutes) */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <Clock className="h-5 w-5 text-gold" />
-          5. Adjust Lock Deadlines ({activeRace?.name})
-        </h2>
-        <p className="mt-1 font-mono text-xs text-muted-foreground">
-          Current Qualifying: {activeRace?.qualifying_at ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} · Current Race: {activeRace ? new Date(activeRace.race_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} (Cairo)
-        </p>
+      {/* 5. Adjust Lock Deadlines */}
+      <StewardAccordionCard
+        id="deadlines"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Clock className="h-4 w-4 text-gold" />}
+        title="Adjust Lock Deadlines"
+        subtitle="Set exact date & time or shift Qualifying / Race lock"
+      >
+        <div className="space-y-4">
+          <p className="font-mono text-xs text-muted-foreground">
+            Qualifying:{" "}
+            <strong className="text-foreground">
+              {activeRace?.qualifying_at
+                ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" })
+                : "N/A"}
+            </strong>{" "}
+            · Race:{" "}
+            <strong className="text-foreground">
+              {activeRace
+                ? new Date(activeRace.race_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" })
+                : "N/A"}
+            </strong>
+          </p>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-            <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
-              Set Exact Qualifying Lock Date &amp; Time
-            </label>
-            <div className="mt-2 flex gap-2">
-              <input
-                type="datetime-local"
-                value={customQualiDt}
-                onChange={(e) => setCustomQualiDt(e.target.value)}
-                className="h-10 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
-              />
-              <Button
-                size="sm"
-                className="h-10"
-                disabled={busy || !activeRace || !customQualiDt}
-                onClick={() => runAction({ action: "set_exact_deadline", raceId: activeRace!.id, target: "qualifying", isoTime: new Date(customQualiDt).toISOString() })}
-              >
-                Save
-              </Button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+              <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+                Exact Qualifying Lock Time
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="datetime-local"
+                  value={customQualiDt}
+                  onChange={(e) => setCustomQualiDt(e.target.value)}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-10 shrink-0"
+                  disabled={busy || !activeRace || !customQualiDt}
+                  onClick={() =>
+                    runAction({
+                      action: "set_exact_deadline",
+                      raceId: activeRace!.id,
+                      target: "qualifying",
+                      isoTime: new Date(customQualiDt).toISOString(),
+                    })
+                  }
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+              <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+                Exact Race Lock Time
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="datetime-local"
+                  value={customRaceDt}
+                  onChange={(e) => setCustomRaceDt(e.target.value)}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-10 shrink-0"
+                  disabled={busy || !activeRace || !customRaceDt}
+                  onClick={() =>
+                    runAction({
+                      action: "set_exact_deadline",
+                      raceId: activeRace!.id,
+                      target: "race",
+                      isoTime: new Date(customRaceDt).toISOString(),
+                    })
+                  }
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-            <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
-              Set Exact Race Lock Date &amp; Time
-            </label>
-            <div className="mt-2 flex gap-2">
-              <input
-                type="datetime-local"
-                value={customRaceDt}
-                onChange={(e) => setCustomRaceDt(e.target.value)}
-                className="h-10 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
-              />
-              <Button
-                size="sm"
-                className="h-10"
-                disabled={busy || !activeRace || !customRaceDt}
-                onClick={() => runAction({ action: "set_exact_deadline", raceId: activeRace!.id, target: "race", isoTime: new Date(customRaceDt).toISOString() })}
-              >
-                Save
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-muted-foreground">Shift by minutes:</span>
+            <input
+              type="number"
+              value={customMinutes}
+              onChange={(e) => setCustomMinutes(e.target.value)}
+              className="h-9 w-20 rounded-md border border-input bg-background px-2 font-mono text-xs"
+              placeholder="Mins"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || !activeRace}
+              onClick={() =>
+                runAction({
+                  action: "shift_deadline",
+                  raceId: activeRace!.id,
+                  target: "qualifying",
+                  minutes: Number(customMinutes),
+                })
+              }
+            >
+              Shift Quali ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || !activeRace}
+              onClick={() =>
+                runAction({
+                  action: "shift_deadline",
+                  raceId: activeRace!.id,
+                  target: "race",
+                  minutes: Number(customMinutes),
+                })
+              }
+            >
+              Shift Race ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
+            </Button>
           </div>
         </div>
+      </StewardAccordionCard>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-muted-foreground">Shift by custom minutes:</span>
-          <input
-            type="number"
-            value={customMinutes}
-            onChange={(e) => setCustomMinutes(e.target.value)}
-            className="h-9 w-24 rounded-md border border-input bg-background px-2 font-mono text-xs"
-            placeholder="Minutes"
-          />
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "qualifying", minutes: Number(customMinutes) })}>
-            Shift Quali ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "race", minutes: Number(customMinutes) })}>
-            Shift Race ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
-          </Button>
-        </div>
-      </section>
-
-      {/* 6. Manual Race Results Entry (Interactive Grid + Multi-Select DNF Chips!) */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <AlertTriangle className="h-5 w-5 text-primary" />
-          6. Manual Race Results Entry &amp; Instant Scoring ({activeRace?.name})
-        </h2>
-        <div className="mt-3 space-y-4">
+      {/* 6. Manual Race Results Entry */}
+      <StewardAccordionCard
+        id="results"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Flag className="h-4 w-4 text-primary" />}
+        title="Manual Race Results Entry"
+        subtitle="Pick P1–P10 & retired DNF drivers to score immediately"
+      >
+        <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Actual Pole Winner</span>
@@ -524,9 +703,9 @@ function StewardsPage() {
           />
 
           <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-primary">
-                Select DNF Drivers (Tap as many as retired · {resDnfList.length} selected)
+                Retired / DNF Drivers ({resDnfList.length} selected)
               </span>
               {resDnfList.length > 0 && (
                 <button
@@ -547,15 +726,15 @@ function StewardsPage() {
                     type="button"
                     onClick={() => toggleDnfDriver(d.id)}
                     className={cn(
-                      "flex items-center justify-between rounded-md border px-2.5 py-2 text-left font-mono text-xs font-bold transition",
+                      "flex min-w-0 items-center justify-between rounded-md border px-2 py-2 text-left font-mono text-xs font-bold transition",
                       isDnf
                         ? "border-destructive bg-destructive/20 text-destructive ring-1 ring-destructive"
                         : "border-border bg-background/70 text-foreground hover:border-primary/50",
                     )}
                     style={{ borderLeft: `4px solid ${teamColor(d.team)}` }}
                   >
-                    <span>{d.code ?? d.full_name}</span>
-                    {isDnf && <span className="text-[10px]">DNF</span>}
+                    <span className="truncate">{d.code ?? d.full_name}</span>
+                    {isDnf && <span className="ml-1 shrink-0 text-[9px]">DNF</span>}
                   </button>
                 );
               })}
@@ -585,15 +764,23 @@ function StewardsPage() {
             Publish Official Results &amp; Score League Now
           </Button>
         </div>
-      </section>
+      </StewardAccordionCard>
 
       {/* 7. Player Manager */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <Users className="h-5 w-5 text-gold" />
-          7. Player Manager (Rename / Remove Test Accounts)
-        </h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <StewardAccordionCard
+        id="players"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Users className="h-4 w-4 text-gold" />}
+        title="Player Manager"
+        subtitle="Rename display names or remove test accounts"
+        badge={
+          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+            {totalPlayers} Players
+          </span>
+        }
+      >
+        <div className="grid gap-2 sm:grid-cols-3">
           <select
             value={renameId}
             onChange={(e) => {
@@ -601,7 +788,7 @@ function StewardsPage() {
               const p = (dash?.profiles ?? []).find((x) => x.id === e.target.value);
               setRenameVal(p?.display_name ?? "");
             }}
-            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm"
           >
             <option value="">Select player…</option>
             {(dash?.profiles ?? []).map((p) => (
@@ -613,7 +800,7 @@ function StewardsPage() {
             value={renameVal}
             onChange={(e) => setRenameVal(e.target.value)}
             placeholder="New display name"
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
           />
           <div className="flex gap-2">
             <Button
@@ -627,7 +814,7 @@ function StewardsPage() {
             <Button
               size="sm"
               variant="destructive"
-              className="h-10"
+              className="h-10 shrink-0"
               disabled={busy || !renameId}
               onClick={() => {
                 if (window.confirm("Remove this player and their scores permanently?")) {
@@ -640,7 +827,7 @@ function StewardsPage() {
             </Button>
           </div>
         </div>
-      </section>
+      </StewardAccordionCard>
     </main>
   );
 }

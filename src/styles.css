@@ -1,4 +1,4 @@
-@import "tailwindcss" source(none);
+﻿@import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
 
@@ -119,7 +119,7 @@
 
 
 /*
- * FANTASY F1 design system — carbon black, F1 red, podium gold.
+ * FANTASY F1 design system â€” carbon black, F1 red, podium gold.
  * All colors are oklch semantic tokens. Never hardcode colors in components.
  */
 
@@ -251,7 +251,7 @@
   --team-cadillac: oklch(0.32 0.004 280);
 }
 
-/* Light theme variant — activated by .light class on <html> */
+/* Light theme variant â€” activated by .light class on <html> */
 /* All contrast ratios verified against WCAG AA (4.5:1 text, 3:1 large/UI) */
 :root.light {
   /* Core surfaces - warm off-white with subtle depth */
@@ -619,3 +619,5 @@ a, button, summary, select, [role="button"], [role="tab"] {
   .start-light { animation: none !important; }
   .animate-pulse { animation: none !important; }
 }
+html, body { overflow-x: clip; max-width: 100vw; }
+

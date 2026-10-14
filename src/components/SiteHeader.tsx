@@ -41,13 +41,13 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2">
-        <Link to="/" className="flex min-w-0 shrink-0 items-center" aria-label="DOWNFORCE home">
-          <LogoHorizontal className="h-8 w-auto sm:h-10" />
+    <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4">
+        <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
+          <LogoHorizontal className="h-7 w-auto max-w-[150px] sm:h-10 sm:max-w-none" />
         </Link>
 
-        <nav className="ml-auto flex items-center gap-1">
+        <nav className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
           {links
             .filter((l) => l.to !== "/rules")
             .map((l) => (
@@ -74,7 +74,13 @@ export function SiteHeader() {
             Rules
           </Link>
           {isSteward && (
-            <Button variant="ghost" size="icon" asChild className="shrink-0 text-gold md:hidden" aria-label="Stewards">
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              className="h-8 w-8 shrink-0 text-gold md:hidden"
+              aria-label="Stewards"
+            >
               <Link to="/stewards">
                 <Shield className="h-4 w-4" />
               </Link>
@@ -82,7 +88,7 @@ export function SiteHeader() {
           )}
           <Link
             to="/rules"
-            className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground md:hidden [&.active]:text-primary"
+            className="rounded-sm px-1.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:hidden [&.active]:text-primary"
           >
             Rules
           </Link>
@@ -91,16 +97,22 @@ export function SiteHeader() {
             size="icon"
             aria-label="Toggle theme"
             onClick={toggleTheme}
-            className="shrink-0"
+            className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
           {user ? (
-            <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => signOut()} className="shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Sign out"
+              onClick={() => signOut()}
+              className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
+            >
               <LogOut className="h-4 w-4" />
             </Button>
           ) : (
-            <Button asChild size="sm" className="ml-1">
+            <Button asChild size="sm" className="ml-1 h-8 px-2.5 text-xs">
               <Link to="/auth">Sign in</Link>
             </Button>
           )}
