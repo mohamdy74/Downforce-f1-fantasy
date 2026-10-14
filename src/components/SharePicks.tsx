@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import { renderPickCard, type CardData, type CardDriver } from "@/lib/shareCard";
+import type { CardData, CardDriver } from "@/lib/shareCard";
 
 const MEDAL = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
@@ -87,7 +87,7 @@ export function SharePicks({
     if (!open) return;
     let dead = false;
     let objectUrl: string | null = null;
-    renderPickCard(cardData()).then((blob) => {
+    import("@/lib/shareCard").then((m) => m.renderPickCard(cardData())).then((blob) => {
       if (!blob || dead) return;
       objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
       setPreview(objectUrl);
@@ -113,7 +113,7 @@ export function SharePicks({
   }
 
   async function handleDownloadImage() {
-    const blob = cachedBlob ?? (await renderPickCard(cardData()));
+    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -122,7 +122,7 @@ export function SharePicks({
   }
 
   async function handleShareImage() {
-    const blob = cachedBlob ?? (await renderPickCard(cardData()));
+    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
