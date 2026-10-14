@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Countdown } from "@/components/Countdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -120,7 +120,7 @@ function writeCache(raceId: string, type: string, payload: SessionPayload) {
 function Weekend() {
   const now = useNow();
   const { data: races, isLoading } = useQuery(racesQuery);
-  const [tab, setTab] = useState<Tab>("schedule");
+  const [tab, setTab] = useState<Tab>("schedule"); const [tabRef] = useAutoAnimate<HTMLDivElement>();
 
   if (isLoading || now === null || !races) {
     return (
@@ -173,7 +173,7 @@ function Weekend() {
         ))}
       </div>
 
-      <div className="mt-4">
+      <div ref={tabRef} className="mt-4">
         <WeekendBody race={race} now={now} tab={tab} />
       </div>
     </Shell>

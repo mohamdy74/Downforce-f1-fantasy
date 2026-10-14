@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,7 +46,7 @@ function Paddock() {
     () => (races ?? []).filter((r) => new Date(r.race_at).getTime() <= Date.now()),
     [races],
   );
-  const [raceId, setRaceId] = useState<string | null>(null);
+  const [raceId, setRaceId] = useState<string | null>(null); const [padRef] = useAutoAnimate<HTMLDivElement>();
   const race: Race | undefined =
     locked.find((r) => r.id === raceId) ?? locked[locked.length - 1];
 
@@ -150,7 +150,7 @@ function Paddock() {
         <p className="mt-8 text-sm text-muted-foreground">No one submitted picks for this race.</p>
       )}
 
-      <div className="mt-6 space-y-4">
+      <div ref={padRef} className="mt-6 space-y-4">
         {sorted.map((p) => {
           const pts = data?.points.get(p.user_id);
           return (

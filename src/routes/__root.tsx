@@ -126,7 +126,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <HeadContent />
+        <HeadContent /><style>{"html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent}::view-transition-old(root),::view-transition-new(root){animation-duration:160ms;animation-timing-function:cubic-bezier(0.22,1,0.36,1)}"}</style>
       </head>
       <body>
         {children}

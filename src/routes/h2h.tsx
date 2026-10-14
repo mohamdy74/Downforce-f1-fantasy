@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,7 +26,7 @@ function H2H() {
   const { data: races = [] } = useQuery(racesQuery);
   const { user } = useAuth();
   const [a, setA] = useState("");
-  const [b, setB] = useState("");
+  const [b, setB] = useState(""); const [h2hRef] = useAutoAnimate<HTMLDivElement>();
 
   useEffect(() => {
     if (!board.length || a) return;
@@ -99,7 +99,7 @@ function H2H() {
             <span>{pa?.fahl && <FahlBadge />}</span>
             <span>{pb?.fahl && <FahlBadge />}</span>
           </div>
-          <div className="mt-4 space-y-1.5">
+          <div ref={h2hRef} className="mt-4 space-y-1.5">
             {rounds.length === 0 && (
               <p className="text-sm text-muted-foreground">No races scored yet.</p>
             )}

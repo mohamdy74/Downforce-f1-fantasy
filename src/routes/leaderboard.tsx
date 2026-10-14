@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
 import { FahlBadge } from "@/components/SiteHeader";
@@ -40,7 +40,7 @@ function Leaderboard() {
   });
   const { data: races } = useQuery(racesQuery);
 
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null); const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [syncing, setSyncing] = useState(false);
   const scored = races?.filter((r) => r.has_results).length ?? 0;
 
@@ -129,7 +129,7 @@ function Leaderboard() {
         </div>
       )}
 
-      <div className="mt-8 space-y-2">
+      <div ref={listRef} className="mt-8 space-y-2">
         {isLoading && <p className="text-sm text-muted-foreground">Loading timing tower…</p>}
         {!isLoading && !board?.length && (
           <p className="text-sm text-muted-foreground">
