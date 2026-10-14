@@ -23,17 +23,35 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
   .inputValidator((d: { raceId: string }) => d)
   .handler(async ({ data, context }) => {
     const sb = await requireSteward(context);
-    const [{ data: profiles }, { data: preds }, { data: scores }, { data: results }] = await Promise.all([
-      sb.from("profiles").select("id, display_name, created_at").order("display_name"),
-      sb.from("predictions").select("id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at").eq("race_id", data.raceId),
-      sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
-      sb.from("race_results").select("driver_id, position, finished, fastest_lap, pole").eq("race_id", data.raceId),
-    ]);
+    const [{ data: profiles }, { data: preds }, { data: scores }, { data: results }, { data: subRows }] =
+      await Promise.all([
+        sb.from("profiles").select("id, display_name, created_at").order("display_name"),
+        sb
+          .from("predictions")
+          .select("id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at")
+          .eq("race_id", data.raceId),
+        sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
+        sb
+          .from("race_results")
+          .select("driver_id, position, finished, fastest_lap, pole")
+          .eq("race_id", data.raceId),
+        sb.from("sync_state").select("key").like("key", "push_sub:%"),
+      ]);
+
+    const pushUserIds = Array.from(
+      new Set(
+        (subRows ?? [])
+          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
+          .filter((x): x is string => !!x),
+      ),
+    );
+
     return {
       profiles: profiles ?? [],
       preds: preds ?? [],
       scores: scores ?? [],
       results: results ?? [],
+      pushUserIds,
     };
   });
 
@@ -49,7 +67,8 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       | "set_exact_deadline"
       | "override_picks"
       | "manual_results"
-      | "nudge_missing_push";
+      | "nudge_missing_push"
+      | "test_my_push";
     raceId?: string;
     userId?: string;
     points?: number;
@@ -207,18 +226,51 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       return { ok: true, msg: `Manual results saved & ${scoreRows.length} players scored!` };
     }
 
+    if (d.action === "test_my_push") {
+      const { data: subRows } = await sb
+        .from("sync_state")
+        .select("key")
+        .like("key", `push_sub:${context.userId}:%`);
+      if (!subRows?.length) {
+        return {
+          ok: false,
+          msg: "Your device is not subscribed yet! Go to Paddock and tap Enable Alerts first.",
+        };
+      }
+      let sent = 0;
+      for (const r of subRows) {
+        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
+        if (!m) continue;
+        const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+        const res = await sendNativeWebPush(sub, {
+          title: "🏎️ Stewards Test Alert",
+          body: "Push notifications are 100% working on your device!",
+          tag: "dfr-test-" + Date.now(),
+          url: "/stewards",
+        });
+        if (res.ok) sent++;
+        else if (res.status === 404 || res.status === 410) {
+          await sb.from("sync_state").delete().eq("key", r.key);
+        }
+      }
+      return { ok: true, msg: `Test push delivered to ${sent} of your device(s)!` };
+    }
+
     if (d.action === "nudge_missing_push" && d.raceId) {
-      const [{ data: subRows }, { data: preds }] = await Promise.all([
+      const [{ data: subRows }, { data: preds }, { data: profiles }] = await Promise.all([
         sb.from("sync_state").select("key").like("key", "push_sub:%"),
         sb.from("predictions").select("user_id, top10").eq("race_id", d.raceId),
+        sb.from("profiles").select("id, display_name"),
       ]);
+
+      const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
       const completedUsers = new Set(
         (preds ?? [])
           .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
           .map((p) => p.user_id),
       );
 
-      let sent = 0;
+      const missingUsers = (profiles ?? []).filter((p) => !completedUsers.has(p.id));
       const payloadObj = {
         title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
         body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
@@ -226,23 +278,47 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         url: "/predict",
       };
 
-      for (const r of subRows ?? []) {
+      const reachedUserIds = new Set<string>();
+      const deadKeys: string[] = [];
+
+      const tasks = (subRows ?? []).map(async (r) => {
         const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-        if (!m) continue;
-        if (completedUsers.has(m[1]!)) continue;
+        if (!m) return;
+        const uid = m[1]!;
+        if (completedUsers.has(uid)) return;
         try {
           const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-          const ok = await sendNativeWebPush(sub, payloadObj);
-          if (ok) sent++;
-        } catch {
-          // ignore invalid/expired subscription
-        }
+          const res = await sendNativeWebPush(sub, payloadObj);
+          if (res.ok) {
+            reachedUserIds.add(uid);
+          } else if (res.status === 404 || res.status === 410) {
+            deadKeys.push(r.key);
+          }
+        } catch {}
+      });
+
+      await Promise.allSettled(tasks);
+      if (deadKeys.length > 0) {
+        await sb.from("sync_state").delete().in("key", deadKeys);
+      }
+
+      const reachedNames = missingUsers
+        .filter((u) => reachedUserIds.has(u.id))
+        .map((u) => u.display_name || "Player");
+      const unsubscribedNames = missingUsers
+        .filter((u) => !reachedUserIds.has(u.id))
+        .map((u) => u.display_name || "Player");
+
+      const parts: string[] = [];
+      if (reachedNames.length > 0) {
+        parts.push(`Sent to: ${reachedNames.join(", ")}`);
+      }
+      if (unsubscribedNames.length > 0) {
+        parts.push(`No Push enabled on phone yet: ${unsubscribedNames.join(", ")}`);
       }
       return {
         ok: true,
-        msg: sent > 0
-          ? `Push alert sent to ${sent} missing player device(s)!`
-          : "No subscribed devices found for missing players yet (players need to tap the Bell icon once).",
+        msg: parts.join(" | ") || "All players have already locked in!",
       };
     }
 

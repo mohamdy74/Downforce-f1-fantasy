@@ -1,5 +1,3 @@
-const CACHE_NAME = "downforce-v2";
-
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -9,27 +7,36 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
-  let data = {};
-  try {
-    data = event.data.json();
-  } catch {
-    data = { title: "DOWNFORCE", body: event.data.text(), url: "/predict" };
+  let data = {
+    title: "DOWNFORCE — Race Control",
+    body: "Lock in your predictions before the deadline!",
+    tag: "downforce-alert",
+    url: "/predict",
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      data = { ...data, ...parsed };
+    } catch {
+      try {
+        data.body = event.data.text() || data.body;
+      } catch {}
+    }
   }
 
-  const title = data.title || "DOWNFORCE — Race Reminder";
   const options = {
-    body: data.body || "Lock in your picks before the race starts!",
+    body: data.body,
     icon: "/favicon.png",
     badge: "/favicon.png",
-    tag: data.tag || "downforce-reminder",
+    tag: data.tag || "downforce-alert",
     renotify: true,
-    requireInteraction: true,
+    requireInteraction: false,
     vibrate: [200, 100, 200],
     data: { url: data.url || "/predict" },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
@@ -40,13 +47,13 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ("focus" in client) {
-          client.navigate(targetUrl);
+          client.navigate(targetUrl).catch(() => {});
           return client.focus();
         }
       }
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
-    })
+    }),
   );
 });

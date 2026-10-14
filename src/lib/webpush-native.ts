@@ -162,7 +162,7 @@ async function encryptWebPushAes128Gcm(
 export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
-): Promise<boolean> {
+): Promise<{ ok: boolean; status: number }> {
   const pub = process.env["VAPID_PUBLIC_KEY"] || DEFAULT_VAPID_PUBLIC;
   const priv = process.env["VAPID_PRIVATE_KEY"] || DEFAULT_VAPID_PRIVATE;
   const payloadStr = JSON.stringify(payloadObj);
@@ -172,17 +172,25 @@ export async function sendNativeWebPush(
     encryptWebPushAes128Gcm(sub.p256dh, sub.auth, payloadStr),
   ]);
 
-  const res = await fetch(sub.endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader,
-      "Content-Encoding": "aes128gcm",
-      "Content-Type": "application/octet-stream",
-      TTL: "86400",
-      Urgency: "high",
-    },
-    body: encryptedBody as BodyInit,
-  });
-
-  return res.ok || res.status === 201;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(sub.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Encoding": "aes128gcm",
+        "Content-Type": "application/octet-stream",
+        TTL: "86400",
+        Urgency: "high",
+      },
+      body: encryptedBody as BodyInit,
+      signal: ctrl.signal,
+    });
+    return { ok: res.ok || res.status === 201, status: res.status };
+  } catch {
+    return { ok: false, status: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
 }
