@@ -123,7 +123,7 @@ export function SprintGrid({
       <div className="kerb-strip" />
       <div className="p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl">Sprint grid</h2>
+          <h2 className="text-xl">{size === 10 ? "Starting grid" : "Sprint grid"}</h2>
           <div className="flex shrink-0 gap-2">
             {!locked && onRepeat && (
               <Button size="sm" variant="secondary" onClick={onRepeat}>
