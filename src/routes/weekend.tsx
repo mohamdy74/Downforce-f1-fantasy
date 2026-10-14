@@ -56,7 +56,7 @@ const GROUPS: Record<Exclude<Tab, "schedule">, SessionType[]> = {
 
 type Status = "upcoming" | "live" | "completed";
 const MIN = 60_000;
-const STAY_MS = 3 * 24 * 60 * MIN; // keep showing a weekend until 3 days after the race starts
+const STAY_MS = 18 * 60 * MIN; // keep showing a weekend until 3 days after the race starts
 
 function statusOf(startIso: string, type: SessionType, now: number): Status {
   const start = new Date(startIso).getTime();
@@ -120,7 +120,7 @@ function writeCache(raceId: string, type: string, payload: SessionPayload) {
 function Weekend() {
   const now = useNow();
   const { data: races, isLoading } = useQuery(racesQuery);
-  const [tab, setTab] = useState<Tab>("schedule"); const [tabRef] = useAutoAnimate<HTMLDivElement>();
+  const [tab, setTab] = useState<Tab>("schedule"); const [rId, setRId] = useState<string | null>(null); const [tabRef] = useAutoAnimate<HTMLDivElement>();
 
   if (isLoading || now === null || !races) {
     return (
@@ -131,7 +131,7 @@ function Weekend() {
     );
   }
 
-  const race = currentWeekend(races, now);
+  const defRace = currentWeekend(races, now); const race = races.find((r) => r.id === rId) ?? defRace;
   if (!race) {
     return (
       <Shell>
@@ -143,7 +143,7 @@ function Weekend() {
 
   return (
     <Shell>
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">{races.filter((r) => r.has_results || r.id === defRace?.id).slice(-6).reverse().map((r) => (<button key={r.id} type="button" onClick={() => setRId(r.id)} className={cn("shrink-0 rounded-full border px-3 py-1 font-mono text-xs font-bold", r.id === race.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground")}>R{r.round}</button>))}</div><p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Round {race.round}
       </p>
       <h1 className="mt-1 text-3xl">{race.name}</h1>

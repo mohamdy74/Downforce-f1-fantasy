@@ -42,7 +42,7 @@ function Leaderboard() {
 
   const [open, setOpen] = useState<string | null>(null); const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [syncing, setSyncing] = useState(false);
-  const scored = races?.filter((r) => r.has_results).length ?? 0;
+  const scored = board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
 
   async function handleForceSync() {
     if (syncing) return;
