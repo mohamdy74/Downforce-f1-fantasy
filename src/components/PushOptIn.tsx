@@ -20,11 +20,11 @@ export function PushOptIn() {
 
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => { setSubscribed(!!sub); if (sub || Notification.permission === "granted") enableAlerts(); else window.addEventListener("click", () => enableAlerts(), { once: true }); })
+      .then((sub) => { setSubscribed(!!sub); if (!localStorage.getItem("dfr:push-ok") && (sub || Notification.permission === "granted")) enableAlerts(); else window.addEventListener("click", () => enableAlerts(), { once: true }); })
       .catch(() => {});
   }, []);
 
-  if (!user || !supported) return null;
+  return null;
 
   async function enableAlerts() {
     setBusy(true);
@@ -61,7 +61,7 @@ export function PushOptIn() {
 
       await savePushSubscription({ data: { endpoint, p256dh, auth } });
       setSubscribed(true);
-      toast.success("Race alerts enabled! You will be notified 2h and 30m before lock if you haven't picked.");
+      localStorage.setItem("dfr:push-ok", "1");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not enable notifications.");
     } finally {

@@ -25,7 +25,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
   const { d, h, m, s } = parts(left);
 
   return (
-    <div className="carbon-panel-strong rounded-md px-3 py-2">
+    <div className="carbon-panel-strong rounded-lg border border-border/80 p-3">
       <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
@@ -36,11 +36,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
           Locked
         </p>
       ) : (
-        <p className={left < 2 * 3600_000 ? "font-mono text-lg font-bold tabular-nums text-primary animate-pulse" : left < 24 * 3600_000 ? "font-mono text-lg font-bold tabular-nums text-gold" : "font-mono text-lg font-bold tabular-nums"}>
-          {d > 0 ? `${d}d ` : ""}
-          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:
-          {String(s).padStart(2, "0")}
-        </p>
+        <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">{[{v:d,u:"DAYS"},{v:h,u:"HRS"},{v:m,u:"MIN"},{v:s,u:"SEC"}].map((x)=>(<div key={x.u} className="rounded bg-secondary/80 py-1.5 border border-border/50"><span className={left<7200000?"block font-mono text-base sm:text-lg font-extrabold tabular-nums leading-none text-primary animate-pulse":"block font-mono text-base sm:text-lg font-extrabold tabular-nums leading-none text-foreground"}>{String(x.v).padStart(2,"0")}</span><span className="mt-1 block font-mono text-[9px] font-bold tracking-widest text-muted-foreground">{x.u}</span></div>))}</div>
       )}
     </div>
   );

@@ -12,7 +12,7 @@ const FOOTER_LINKS = [
 /** Site-wide footer with the "unofficial / non-profit" disclaimer. */
 export function SiteFooter() {
   // The disclaimer footer is shown on the Paddock tab (home) only.
-  const { pathname } = useLocation();
+  const { pathname } = useLocation(); if (pathname !== "/") return null;
   
 
   return (
