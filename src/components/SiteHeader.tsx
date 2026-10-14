@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Grid3x3, Home, LogOut, Moon, Sun, Swords, Trophy, Zap } from "lucide-react";
+import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, Zap } from "lucide-react";
 
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
-import { Button } from "@/components/ui/button"; import { PushOptIn } from "@/components/PushOptIn";
+import { PushOptIn } from "@/components/PushOptIn";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { racesQuery } from "@/lib/queries";
 import { sprintWeekend } from "@/lib/sprint";
+import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 
 const links = [
   { to: "/", label: "Paddock", icon: Home },
@@ -21,19 +23,18 @@ const links = [
 const DESKTOP_LINK =
   "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground md:inline [&.active]:text-primary";
 
-/** The Sprint tab exists only on sprint weekends. */
 function useSprintWeek(): boolean {
   const { data: races } = useQuery(racesQuery);
   return !!races && !!sprintWeekend(races);
 }
 
-/** Kept so any other file that still imports HelmetLogo keeps working. */
 export const HelmetLogo = LogoMark;
 
 export function SiteHeader() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const sprintOn = useSprintWeek();
+  const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -41,9 +42,9 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
-        <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
-          <LogoHorizontal className="h-8 w-auto max-w-full sm:h-10" />
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2">
+        <Link to="/" className="flex min-w-0 shrink-0 items-center" aria-label="DOWNFORCE home">
+          <LogoHorizontal className="h-8 w-auto sm:h-10" />
         </Link>
 
         <nav className="ml-auto flex items-center gap-1">
@@ -64,10 +65,22 @@ export function SiteHeader() {
               Sprint
             </Link>
           )}
-          {user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className={DESKTOP_LINK}>Stewards</Link>)}<Link to="/rules" className={DESKTOP_LINK}>
+          {isSteward && (
+            <Link to="/stewards" className={DESKTOP_LINK} style={{ color: "var(--gold)" }}>
+              Stewards
+            </Link>
+          )}
+          <Link to="/rules" className={DESKTOP_LINK}>
             Rules
           </Link>
-          {user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-gold md:hidden [&.active]:text-primary">Stewards</Link>)}{user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-gold md:hidden [&.active]:text-primary">Stewards</Link>)}<Link
+          {isSteward && (
+            <Button variant="ghost" size="icon" asChild className="shrink-0 text-gold md:hidden" aria-label="Stewards">
+              <Link to="/stewards">
+                <Shield className="h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+          <Link
             to="/rules"
             className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground md:hidden [&.active]:text-primary"
           >
@@ -83,7 +96,7 @@ export function SiteHeader() {
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
           {user ? (
-            <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => signOut()}>
+            <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => signOut()} className="shrink-0">
               <LogOut className="h-4 w-4" />
             </Button>
           ) : (
@@ -93,7 +106,8 @@ export function SiteHeader() {
           )}
         </nav>
       </div>
-      <div className="hidden"><PushOptIn /></div><div className="kerb-strip" />
+      <div className="hidden"><PushOptIn /></div>
+      <div className="kerb-strip" />
     </header>
   );
 }

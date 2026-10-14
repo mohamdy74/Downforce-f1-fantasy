@@ -1,15 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shield, Bell, RefreshCw, Clock, Trophy, Users, MessageCircle, CheckCircle2, AlertTriangle, Trash2, Edit3 } from "lucide-react";
-import { useState } from "react";
+import { Shield, Bell, RefreshCw, Clock, Trophy, Users, CheckCircle2, AlertTriangle, Trash2, Edit3 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
+import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
-import { driversQuery, leaderboardQuery, nextRace, racesQuery } from "@/lib/queries";
+import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
 import { executeStewardAction, getStewardsDashboard, STEWARD_EMAIL } from "@/lib/stewards.functions";
+import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/stewards")({
@@ -19,12 +21,19 @@ export const Route = createFileRoute("/stewards")({
   component: StewardsPage,
 });
 
+function toLocalInputValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function StewardsPage() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
   const { data: races = [] } = useQuery(racesQuery);
   const { data: drivers = [] } = useQuery(driversQuery);
-  const { data: board = [] } = useQuery({ ...leaderboardQuery, enabled: !!user });
 
   const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
   const upcoming = nextRace(races) ?? races[races.length - 1];
@@ -47,18 +56,45 @@ function StewardsPage() {
   const [scoreUser, setScoreUser] = useState("");
   const [scorePts, setScorePts] = useState("0");
 
-  // Pick override state
+  // Pick override state (interactive P1-P10 grid!)
   const [pickUser, setPickUser] = useState("");
   const [pickPole, setPickPole] = useState(EMPTY);
   const [pickFl, setPickFl] = useState(EMPTY);
   const [pickDnf, setPickDnf] = useState(EMPTY);
-  const [pickTop10Codes, setPickTop10Codes] = useState("");
+  const [pickTop10, setPickTop10] = useState<string[]>(Array(10).fill(EMPTY));
 
-  // Manual results state
+  // Deadline custom state
+  const [customQualiDt, setCustomQualiDt] = useState("");
+  const [customRaceDt, setCustomRaceDt] = useState("");
+  const [customMinutes, setCustomMinutes] = useState("15");
+
+  useEffect(() => {
+    if (!activeRace) return;
+    setCustomQualiDt(toLocalInputValue(activeRace.qualifying_at ?? activeRace.race_at));
+    setCustomRaceDt(toLocalInputValue(activeRace.race_at));
+  }, [activeRace?.id, activeRace?.qualifying_at, activeRace?.race_at]);
+
+  // Manual results state (interactive P1-P10 grid + multi-select DNF buttons!)
   const [resPole, setResPole] = useState(EMPTY);
   const [resFl, setResFl] = useState(EMPTY);
-  const [resTop10Codes, setResTop10Codes] = useState("");
-  const [resDnfCodes, setResDnfCodes] = useState("");
+  const [resTop10, setResTop10] = useState<string[]>(Array(10).fill(EMPTY));
+  const [resDnfList, setResDnfList] = useState<string[]>([]);
+
+  // Pre-fill manual results if race already has results
+  useEffect(() => {
+    if (!dash?.results?.length) return;
+    const sortedFinishers = dash.results
+      .filter((r) => r.finished && r.position != null && r.position <= 10)
+      .sort((a, b) => a.position! - b.position!);
+    if (sortedFinishers.length > 0) {
+      setResTop10(Array.from({ length: 10 }, (_, i) => sortedFinishers[i]?.driver_id ?? EMPTY));
+    }
+    const p = dash.results.find((r) => r.pole)?.driver_id;
+    const f = dash.results.find((r) => r.fastest_lap)?.driver_id;
+    setResPole(p ?? EMPTY);
+    setResFl(f ?? EMPTY);
+    setResDnfList(dash.results.filter((r) => !r.finished).map((r) => r.driver_id));
+  }, [dash?.results]);
 
   // Player rename state
   const [renameId, setRenameId] = useState("");
@@ -75,18 +111,6 @@ function StewardsPage() {
         </p>
       </main>
     );
-  }
-
-  const byCode = new Map(drivers.filter((d) => d.code).map((d) => [d.code!.toUpperCase(), d.id]));
-  const byId = new Map(drivers.map((d) => [d.id, d]));
-
-  function parseCodesToIds(raw: string): string[] {
-    return raw
-      .split(/[\s,]+/)
-      .map((s) => s.trim().toUpperCase())
-      .filter(Boolean)
-      .map((code) => byCode.get(code) ?? drivers.find((d) => d.id.toUpperCase() === code)?.id ?? "")
-      .filter(Boolean);
   }
 
   async function runAction(payload: Parameters<typeof executeStewardAction>[0]["data"]) {
@@ -108,22 +132,11 @@ function StewardsPage() {
 
   const predByUser = new Map((dash?.preds ?? []).map((p) => [p.user_id, p]));
   const scoreByUser = new Map((dash?.scores ?? []).map((s) => [s.user_id, s.points]));
+  const sortedDrivers = sortByTeam(drivers);
 
-  // WhatsApp Round Summary text
-  const fahlPlayer = board.find((e) => e.fahl);
-  const top3 = board.slice(0, 3);
-  const waSummary = [
-    `🏁 *DOWNFORCE — ${activeRace?.name ?? "Race"} Report* 🏎️`,
-    fahlPlayer ? `👑 *فحل الجولة:* ${fahlPlayer.name}` : "",
-    "",
-    `🏆 *Overall Standings:*`,
-    ...top3.map((e, i) => `${i + 1}. ${e.name} — ${e.points} pts`),
-    "",
-    `📊 Check full debrief & 1v1 battles:`,
-    typeof window !== "undefined" ? window.location.origin : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  function toggleDnfDriver(id: string) {
+    setResDnfList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 pb-28 pt-8">
@@ -156,7 +169,7 @@ function StewardsPage() {
           className="gap-1.5"
         >
           <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} />
-          7. Force Sync &amp; Recalculate All
+          Force Sync &amp; Recalculate All
         </Button>
       </div>
 
@@ -325,13 +338,13 @@ function StewardsPage() {
         </div>
       </section>
 
-      {/* 4. Admin Pick Override (Enter picks on behalf of player) */}
+      {/* 4. Stewards Pick Override (Interactive Grid + Pickers - No typing!) */}
       <section className="carbon-panel rounded-lg p-4">
         <h2 className="flex items-center gap-2 text-lg">
           <Edit3 className="h-5 w-5 text-primary" />
           4. Stewards Pick Override (Enter / Edit Player Picks)
         </h2>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-4">
           <select
             value={pickUser}
             onChange={(e) => {
@@ -341,152 +354,231 @@ function StewardsPage() {
               setPickPole(pr?.pole_driver_id ?? EMPTY);
               setPickFl(pr?.fastest_lap_driver_id ?? EMPTY);
               setPickDnf(pr?.dnf_driver_id ?? EMPTY);
-              setPickTop10Codes((pr?.top10 ?? []).map((id) => byId.get(id)?.code ?? id).join(", "));
+              const saved = pr?.top10 ?? [];
+              setPickTop10(Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY));
             }}
-            className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm font-bold"
           >
             <option value="">Select player to enter/edit picks for…</option>
             {(dash?.profiles ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.display_name}</option>
             ))}
           </select>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div>
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">Pole Pick</span>
-              <DriverPicker drivers={drivers} value={pickPole} onChange={setPickPole} />
-            </div>
-            <div>
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">Fastest Lap</span>
-              <DriverPicker drivers={drivers} value={pickFl} onChange={setPickFl} />
-            </div>
-            <div>
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">DNF Pick</span>
-              <DriverPicker drivers={drivers} value={pickDnf} onChange={setPickDnf} />
-            </div>
-          </div>
-          <div>
-            <span className="font-mono text-[10px] uppercase text-muted-foreground">
-              Top 10 Driver Codes (comma separated, e.g. VER, NOR, LEC, PIA, HAM, RUS, SAI, ALO, GAS, ALB)
-            </span>
-            <input
-              type="text"
-              value={pickTop10Codes}
-              onChange={(e) => setPickTop10Codes(e.target.value)}
-              placeholder="VER, NOR, LEC, PIA, HAM, RUS, ANT, ALO, GAS, ALB"
-              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 font-mono text-sm uppercase"
-            />
-          </div>
-          <Button
-            size="sm"
-            disabled={busy || !pickUser || !activeRace}
-            onClick={() => {
-              const ids = parseCodesToIds(pickTop10Codes);
-              if (ids.length !== 10 && ids.length !== 0) {
-                toast.error(`Resolved ${ids.length}/10 driver codes. Enter 10 valid 3-letter codes (or leave empty for pole-only).`);
-                return;
-              }
-              runAction({
-                action: "override_picks",
-                raceId: activeRace!.id,
-                userId: pickUser,
-                pole: pickPole === EMPTY ? null : pickPole,
-                fl: pickFl === EMPTY ? null : pickFl,
-                dnf: pickDnf === EMPTY ? null : pickDnf,
-                top10: ids,
-              });
-            }}
-          >
-            Save Player Picks as Steward
-          </Button>
+
+          {pickUser && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Pole Pick</span>
+                  <DriverPicker drivers={drivers} value={pickPole} onChange={setPickPole} />
+                </div>
+                <div>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Fastest Lap</span>
+                  <DriverPicker drivers={drivers} value={pickFl} onChange={setPickFl} />
+                </div>
+                <div>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">DNF Pick</span>
+                  <DriverPicker
+                    drivers={drivers.filter((d) => !/aston|cadillac/i.test(d.team ?? ""))}
+                    value={pickDnf}
+                    exclude={pickTop10.filter((x) => x !== EMPTY)}
+                    onChange={setPickDnf}
+                  />
+                </div>
+              </div>
+
+              <SprintGrid
+                size={10}
+                drivers={drivers}
+                top10={pickTop10}
+                setTop10={setPickTop10}
+                locked={false}
+              />
+
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={busy || !pickUser || !activeRace}
+                onClick={() => {
+                  const valid = pickTop10.filter((x) => x !== EMPTY);
+                  if (valid.length !== 10 && valid.length !== 0) {
+                    toast.error(`Picked ${valid.length}/10 drivers. Complete all 10 slots (or clear all for Pole-only save).`);
+                    return;
+                  }
+                  runAction({
+                    action: "override_picks",
+                    raceId: activeRace!.id,
+                    userId: pickUser,
+                    pole: pickPole === EMPTY ? null : pickPole,
+                    fl: pickFl === EMPTY ? null : pickFl,
+                    dnf: pickDnf === EMPTY ? null : pickDnf,
+                    top10: valid.length === 10 ? pickTop10 : [],
+                  });
+                }}
+              >
+                Save Player Picks as Steward
+              </Button>
+            </>
+          )}
         </div>
       </section>
 
-      {/* 5. Extend / Shift Deadlines (Rain Delay / Red Flag) */}
+      {/* 5. Adjust Lock Deadlines (Full Date/Time Picker + Custom Minutes) */}
       <section className="carbon-panel rounded-lg p-4">
         <h2 className="flex items-center gap-2 text-lg">
           <Clock className="h-5 w-5 text-gold" />
           5. Adjust Lock Deadlines ({activeRace?.name})
         </h2>
         <p className="mt-1 font-mono text-xs text-muted-foreground">
-          Qualifying: {activeRace?.qualifying_at ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} · Race: {activeRace ? new Date(activeRace.race_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} (Cairo)
+          Current Qualifying: {activeRace?.qualifying_at ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} · Current Race: {activeRace ? new Date(activeRace.race_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" }) : "N/A"} (Cairo)
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "qualifying", minutes: 30 })}>
-            Quali +30m
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+            <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+              Set Exact Qualifying Lock Date &amp; Time
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="datetime-local"
+                value={customQualiDt}
+                onChange={(e) => setCustomQualiDt(e.target.value)}
+                className="h-10 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+              />
+              <Button
+                size="sm"
+                className="h-10"
+                disabled={busy || !activeRace || !customQualiDt}
+                onClick={() => runAction({ action: "set_exact_deadline", raceId: activeRace!.id, target: "qualifying", isoTime: new Date(customQualiDt).toISOString() })}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+            <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+              Set Exact Race Lock Date &amp; Time
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="datetime-local"
+                value={customRaceDt}
+                onChange={(e) => setCustomRaceDt(e.target.value)}
+                className="h-10 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+              />
+              <Button
+                size="sm"
+                className="h-10"
+                disabled={busy || !activeRace || !customRaceDt}
+                onClick={() => runAction({ action: "set_exact_deadline", raceId: activeRace!.id, target: "race", isoTime: new Date(customRaceDt).toISOString() })}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-muted-foreground">Shift by custom minutes:</span>
+          <input
+            type="number"
+            value={customMinutes}
+            onChange={(e) => setCustomMinutes(e.target.value)}
+            className="h-9 w-24 rounded-md border border-input bg-background px-2 font-mono text-xs"
+            placeholder="Minutes"
+          />
+          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "qualifying", minutes: Number(customMinutes) })}>
+            Shift Quali ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
           </Button>
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "qualifying", minutes: -30 })}>
-            Quali −30m
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "race", minutes: 30 })}>
-            Race +30m
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "race", minutes: 60 })}>
-            Race +1h
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "race", minutes: -30 })}>
-            Race −30m
+          <Button size="sm" variant="outline" disabled={busy || !activeRace} onClick={() => runAction({ action: "shift_deadline", raceId: activeRace!.id, target: "race", minutes: Number(customMinutes) })}>
+            Shift Race ({Number(customMinutes) >= 0 ? `+${customMinutes}` : customMinutes}m)
           </Button>
         </div>
       </section>
 
-      {/* 6. Manual Race Results Entry */}
+      {/* 6. Manual Race Results Entry (Interactive Grid + Multi-Select DNF Chips!) */}
       <section className="carbon-panel rounded-lg p-4">
         <h2 className="flex items-center gap-2 text-lg">
           <AlertTriangle className="h-5 w-5 text-primary" />
           6. Manual Race Results Entry &amp; Instant Scoring ({activeRace?.name})
         </h2>
-        <div className="mt-3 space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">Actual Pole Winner</span>
+              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Actual Pole Winner</span>
               <DriverPicker drivers={drivers} value={resPole} onChange={setResPole} />
             </div>
             <div>
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">Actual Fastest Lap</span>
+              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Actual Fastest Lap</span>
               <DriverPicker drivers={drivers} value={resFl} onChange={setResFl} />
             </div>
           </div>
-          <div>
-            <span className="font-mono text-[10px] uppercase text-muted-foreground">
-              Actual Top 10 Finishing Order (10 codes: P1 to P10)
-            </span>
-            <input
-              type="text"
-              value={resTop10Codes}
-              onChange={(e) => setResTop10Codes(e.target.value)}
-              placeholder="VER, NOR, LEC, PIA, HAM, RUS, ANT, ALO, GAS, ALB"
-              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 font-mono text-sm uppercase"
-            />
+
+          <SprintGrid
+            size={10}
+            drivers={drivers}
+            top10={resTop10}
+            setTop10={setResTop10}
+            locked={false}
+          />
+
+          <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-primary">
+                Select DNF Drivers (Tap as many as retired · {resDnfList.length} selected)
+              </span>
+              {resDnfList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setResDnfList([])}
+                  className="font-mono text-[10px] uppercase text-muted-foreground underline"
+                >
+                  Clear DNFs
+                </button>
+              )}
+            </div>
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+              {sortedDrivers.map((d) => {
+                const isDnf = resDnfList.includes(d.id);
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => toggleDnfDriver(d.id)}
+                    className={cn(
+                      "flex items-center justify-between rounded-md border px-2.5 py-2 text-left font-mono text-xs font-bold transition",
+                      isDnf
+                        ? "border-destructive bg-destructive/20 text-destructive ring-1 ring-destructive"
+                        : "border-border bg-background/70 text-foreground hover:border-primary/50",
+                    )}
+                    style={{ borderLeft: `4px solid ${teamColor(d.team)}` }}
+                  >
+                    <span>{d.code ?? d.full_name}</span>
+                    {isDnf && <span className="text-[10px]">DNF</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div>
-            <span className="font-mono text-[10px] uppercase text-muted-foreground">
-              DNF Driver Codes (optional, comma separated)
-            </span>
-            <input
-              type="text"
-              value={resDnfCodes}
-              onChange={(e) => setResDnfCodes(e.target.value)}
-              placeholder="LAW, OCO"
-              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 font-mono text-sm uppercase"
-            />
-          </div>
+
           <Button
-            size="sm"
+            size="lg"
+            className="w-full"
             disabled={busy || !activeRace}
             onClick={() => {
-              const top10Ids = parseCodesToIds(resTop10Codes);
-              if (top10Ids.length !== 10) {
-                toast.error(`Resolved ${top10Ids.length}/10 drivers. Please enter 10 valid 3-letter codes.`);
+              const valid = resTop10.filter((x) => x !== EMPTY);
+              if (valid.length !== 10) {
+                toast.error(`Picked ${valid.length}/10 finishing positions. Please fill P1 through P10.`);
                 return;
               }
-              const dnfIds = parseCodesToIds(resDnfCodes);
               runAction({
                 action: "manual_results",
                 raceId: activeRace!.id,
                 pole: resPole === EMPTY ? null : resPole,
                 fl: resFl === EMPTY ? null : resFl,
-                top10: top10Ids,
-                dnfs: dnfIds,
+                top10: resTop10,
+                dnfs: resDnfList,
               });
             }}
           >
@@ -495,11 +587,11 @@ function StewardsPage() {
         </div>
       </section>
 
-      {/* 8. Player Manager */}
+      {/* 7. Player Manager */}
       <section className="carbon-panel rounded-lg p-4">
         <h2 className="flex items-center gap-2 text-lg">
           <Users className="h-5 w-5 text-gold" />
-          8. Player Manager (Rename / Remove Test Accounts)
+          7. Player Manager (Rename / Remove Test Accounts)
         </h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
           <select
@@ -547,37 +639,6 @@ function StewardsPage() {
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-      </section>
-
-      {/* 9. WhatsApp Round Report Generator */}
-      <section className="carbon-panel rounded-lg p-4">
-        <h2 className="flex items-center gap-2 text-lg">
-          <MessageCircle className="h-5 w-5 text-success" />
-          9. WhatsApp Post-Race Report Generator
-        </h2>
-        <pre className="mt-2 whitespace-pre-wrap rounded-md bg-secondary/50 p-3 font-mono text-xs">
-          {waSummary}
-        </pre>
-        <div className="mt-3 flex gap-2">
-          <Button
-            size="sm"
-            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(waSummary)}`, "_blank")}
-            className="gap-1.5"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Send to WhatsApp Group
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={async () => {
-              await navigator.clipboard.writeText(waSummary);
-              toast.success("Copied report!");
-            }}
-          >
-            Copy Text
-          </Button>
         </div>
       </section>
     </main>

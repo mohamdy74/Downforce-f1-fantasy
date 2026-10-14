@@ -22,17 +22,17 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
   .inputValidator((d: { raceId: string }) => d)
   .handler(async ({ data, context }) => {
     const sb = await requireSteward(context);
-    const [{ data: profiles }, { data: preds }, { data: scores }, { data: logs }] = await Promise.all([
+    const [{ data: profiles }, { data: preds }, { data: scores }, { data: results }] = await Promise.all([
       sb.from("profiles").select("id, display_name, created_at").order("display_name"),
       sb.from("predictions").select("id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at").eq("race_id", data.raceId),
       sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
-      sb.from("prediction_logs").select("user_id, action, changes, created_at").eq("race_id", data.raceId).order("created_at", { ascending: false }).limit(30),
+      sb.from("race_results").select("driver_id, position, finished, fastest_lap, pole").eq("race_id", data.raceId),
     ]);
     return {
       profiles: profiles ?? [],
       preds: preds ?? [],
       scores: scores ?? [],
-      logs: logs ?? [],
+      results: results ?? [],
     };
   });
 
@@ -45,6 +45,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       | "rename_player"
       | "delete_player"
       | "shift_deadline"
+      | "set_exact_deadline"
       | "override_picks"
       | "manual_results"
       | "broadcast_push"
@@ -54,6 +55,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     points?: number;
     name?: string;
     minutes?: number;
+    isoTime?: string;
     target?: "qualifying" | "race";
     pole?: string | null;
     fl?: string | null;
@@ -97,6 +99,15 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       return { ok: true, msg: "Player and associated records removed." };
     }
 
+    if (d.action === "set_exact_deadline" && d.raceId && d.isoTime) {
+      const col = d.target === "qualifying" ? "qualifying_at" : "race_at";
+      const parsed = new Date(d.isoTime);
+      if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date/time format");
+      const { error } = await sb.from("races").update({ [col]: parsed.toISOString() }).eq("id", d.raceId);
+      if (error) throw new Error(error.message);
+      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} deadline updated!` };
+    }
+
     if (d.action === "shift_deadline" && d.raceId && d.minutes != null) {
       const { data: r } = await sb.from("races").select("race_at, qualifying_at").eq("id", d.raceId).single();
       if (!r) throw new Error("Race not found");
@@ -105,7 +116,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const nextIso = new Date(new Date(cur).getTime() + d.minutes * 60_000).toISOString();
       const { error } = await sb.from("races").update({ [col]: nextIso }).eq("id", d.raceId);
       if (error) throw new Error(error.message);
-      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} deadline shifted by ${d.minutes > 0 ? "+" : ""}${d.minutes}m.` };
+      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} shifted by ${d.minutes > 0 ? "+" : ""}${d.minutes}m.` };
     }
 
     if (d.action === "override_picks" && d.userId && d.raceId) {
