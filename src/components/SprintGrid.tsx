@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Button } from "@/components/ui/button";
 import { DriverPicker } from "@/components/DriverPicker";
@@ -55,7 +55,7 @@ export function SprintGrid({
     return i === -1 ? 0 : i;
   });
   const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null);
-  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string | null>(null); const [animRef] = useAutoAnimate<HTMLDivElement>();
   const dragRef = useRef<{ from: number; x: number; y: number; moved: boolean } | null>(null);
   const byId = new Map(drivers.map((d) => [d.id, d]));
   const used = new Set(top10.filter((d) => d !== EMPTY));
@@ -260,7 +260,7 @@ export function SprintGrid({
               })}
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
+            <div ref={animRef} className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
               {deck.map((d) => {
                 const taken = used.has(d.id);
                 return (

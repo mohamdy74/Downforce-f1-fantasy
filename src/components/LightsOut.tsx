@@ -8,7 +8,7 @@ export function LightsOut({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 1; i <= 5; i++) timers.push(setTimeout(() => setLit(i), i * 280));
-    timers.push(setTimeout(() => setOut(true), 5 * 280 + 450));
+    timers.push(setTimeout(() => (setOut(true), import("canvas-confetti").then((m) => m.default({ particleCount: 70, spread: 70, origin: { y: 0.6 }, colors: ["#E10600", "#FFD230", "#FFFFFF"] }))), 5 * 280 + 450));
     timers.push(setTimeout(onDone, 5 * 280 + 2100));
     return () => timers.forEach(clearTimeout);
   }, [onDone]);
