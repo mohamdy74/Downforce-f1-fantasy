@@ -13,7 +13,7 @@ const FOOTER_LINKS = [
 export function SiteFooter() {
   // The disclaimer footer is shown on the Paddock tab (home) only.
   const { pathname } = useLocation();
-  if (pathname !== "/") return null;
+  
 
   return (
     <footer className="mt-12 border-t border-border bg-background/70">

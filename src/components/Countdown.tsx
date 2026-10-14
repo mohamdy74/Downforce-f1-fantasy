@@ -36,7 +36,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
           Locked
         </p>
       ) : (
-        <p className="font-mono text-lg font-bold tabular-nums">
+        <p className={left < 2 * 3600_000 ? "font-mono text-lg font-bold tabular-nums text-primary animate-pulse" : left < 24 * 3600_000 ? "font-mono text-lg font-bold tabular-nums text-gold" : "font-mono text-lg font-bold tabular-nums"}>
           {d > 0 ? `${d}d ` : ""}
           {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:
           {String(s).padStart(2, "0")}

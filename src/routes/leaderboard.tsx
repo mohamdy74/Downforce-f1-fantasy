@@ -164,7 +164,7 @@ function Leaderboard() {
                   {entry.fahl && <FahlBadge />}
                 </div>
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                  {entry.races} scored · best {entry.best ?? 0}
+                  {entry.races} scored · best {entry.best ?? 0} | avg {entry.races ? (entry.points / entry.races).toFixed(1) : 0}
                 </p>
               </div>
               {entry.change != null && entry.change !== 0 && (
@@ -180,7 +180,7 @@ function Leaderboard() {
               <span className="font-mono text-xl font-bold tabular-nums">{entry.points}</span>
             </button>
             {open === entry.userId && (
-              <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6">
+              <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6"><div className="col-span-full mb-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase"><span className="rounded bg-secondary px-2 py-0.5">Avg {entry.races ? (entry.points / entry.races).toFixed(1) : 0} pts</span><span className="rounded bg-secondary px-2 py-0.5">Best {entry.best ?? 0} pts</span>{index === 0 && <span className="rounded bg-gold/20 text-gold px-2 py-0.5">Leader</span>}{(entry.best ?? 0) >= 25 && <span className="rounded bg-primary/20 text-primary px-2 py-0.5">Pro Scorer</span>}</div>
                 {(races ?? []).filter((r) => r.has_results).map((r) => (
                   <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
                     <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>

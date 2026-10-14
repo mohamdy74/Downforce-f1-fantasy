@@ -124,7 +124,7 @@ export function SprintGrid({
       <div className="p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xl">{size === 10 ? "Starting grid" : "Sprint grid"}</h2>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 gap-1.5">{!locked && <><Button size="sm" variant="outline" disabled={active <= 0} onClick={() => { if (active <= 0) return; setTop10((p) => { const n = [...p]; [n[active - 1], n[active]] = [n[active]!, n[active - 1]!]; return n; }); setActive(active - 1); navigator.vibrate?.(10); }}>&#8593;</Button><Button size="sm" variant="outline" disabled={active >= size - 1} onClick={() => { if (active >= size - 1) return; setTop10((p) => { const n = [...p]; [n[active + 1], n[active]] = [n[active]!, n[active + 1]!]; return n; }); setActive(active + 1); navigator.vibrate?.(10); }}>&#8595;</Button></>}
             {!locked && onRepeat && (
               <Button size="sm" variant="secondary" onClick={onRepeat}>
                 Repeat last
