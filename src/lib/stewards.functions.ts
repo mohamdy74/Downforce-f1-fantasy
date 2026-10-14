@@ -324,3 +324,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
     return { ok: false, msg: "Unknown action" };
   });
+
+export const savePushSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const key = "push_sub:" + context.userId + ":" + JSON.stringify(data);
+    await supabaseAdmin.from("sync_state").upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
+    return { ok: true };
+  });

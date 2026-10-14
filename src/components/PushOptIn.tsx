@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { savePushSubscription } from "@/lib/f1-sync.functions";
+import { savePushSubscription } from "@/lib/stewards.functions";
 
 const PUBLIC_VAPID =
   "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
