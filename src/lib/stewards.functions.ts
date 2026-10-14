@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { scorePrediction, NO_SUBMISSION_PENALTY, type ResultRow } from "./scoring";
+import { scoreSprint, type SprintResultRow } from "./sprintScoring";
 import { sendNativeWebPush } from "./webpush-native";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
@@ -17,6 +18,37 @@ async function requireSteward(context: { userId: string; claims?: Record<string,
   }
   return supabaseAdmin;
 }
+
+export const savePushSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const prefix = `push_sub:${context.userId}:`;
+    const { data: existing } = await supabaseAdmin
+      .from("sync_state")
+      .select("key")
+      .like("key", `${prefix}%`);
+
+    const staleKeys: string[] = [];
+    for (const r of existing ?? []) {
+      try {
+        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
+        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
+      } catch {
+        staleKeys.push(r.key);
+      }
+    }
+    if (staleKeys.length > 0) {
+      await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
+    }
+
+    const key = `${prefix}${JSON.stringify(data)}`;
+    await supabaseAdmin
+      .from("sync_state")
+      .upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
+    return { ok: true };
+  });
 
 export const getStewardsDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -100,7 +132,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         { onConflict: "user_id,race_id" },
       );
       if (error) throw new Error(error.message);
-      return { ok: true, msg: `Score set to ${pts} pts.` };
+      return { ok: true, msg: `Score locked to ${pts} pts (protected from auto-sync overwrite).` };
     }
 
     if (d.action === "rename_player" && d.userId && d.name) {
@@ -124,7 +156,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date/time format");
       const { error } = await sb.from("races").update({ [col]: parsed.toISOString() }).eq("id", d.raceId);
       if (error) throw new Error(error.message);
-      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} deadline updated!` };
+      await sb
+        .from("sync_state")
+        .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
+      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} deadline updated & locked!` };
     }
 
     if (d.action === "shift_deadline" && d.raceId && d.minutes != null) {
@@ -135,7 +170,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const nextIso = new Date(new Date(cur).getTime() + d.minutes * 60_000).toISOString();
       const { error } = await sb.from("races").update({ [col]: nextIso }).eq("id", d.raceId);
       if (error) throw new Error(error.message);
-      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} shifted by ${d.minutes > 0 ? "+" : ""}${d.minutes}m.` };
+      await sb
+        .from("sync_state")
+        .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
+      return { ok: true, msg: `${d.target === "qualifying" ? "Qualifying" : "Race"} shifted by ${d.minutes > 0 ? "+" : ""}${d.minutes}m & locked.` };
     }
 
     if (d.action === "override_picks" && d.userId && d.raceId) {
@@ -188,42 +226,71 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       await sb.from("races").update({ has_results: true }).eq("id", d.raceId);
 
       const { data: raceRow } = await sb.from("races").select("race_at").eq("id", d.raceId).single();
-      const [{ data: profiles }, { data: preds }] = await Promise.all([
+      const [
+        { data: profiles },
+        { data: preds },
+        { data: sprintResults },
+        { data: sprintPreds },
+        { data: existingScores },
+      ] = await Promise.all([
         sb.from("profiles").select("id, created_at"),
         sb.from("predictions").select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id").eq("race_id", d.raceId),
+        sb.from("sprint_results").select("driver_id, position, finished, pole").eq("race_id", d.raceId),
+        sb.from("sprint_predictions").select("user_id, top8, pole_driver_id").eq("race_id", d.raceId),
+        sb.from("scores").select("user_id, breakdown").eq("race_id", d.raceId),
       ]);
+
+      const stewardLockedUsers = new Set(
+        (existingScores ?? [])
+          .filter((s) => {
+            const b = s.breakdown as Record<string, unknown> | null;
+            return b && b["stewardOverride"] === true;
+          })
+          .map((s) => s.user_id),
+      );
+
       const byU = new Map((preds ?? []).map((p) => [p.user_id, p]));
+      const sprintByU = new Map((sprintPreds ?? []).map((p) => [p.user_id, p]));
+      const sprintFor = (uid: string) =>
+        sprintResults?.length
+          ? scoreSprint(sprintByU.get(uid) ?? null, sprintResults as SprintResultRow[])
+          : null;
+
       const scoreRows = [];
       for (const p of profiles ?? []) {
+        if (stewardLockedUsers.has(p.id)) continue;
         if (raceRow?.race_at && new Date(p.created_at) > new Date(raceRow.race_at)) continue;
+
+        const sprint = sprintFor(p.id);
         const pr = byU.get(p.id);
         const validTop10 = (pr?.top10 ?? []).filter((x) => x && x !== "__none__");
         if (!pr || validTop10.length < 10) {
           const poleHit = pr?.pole_driver_id && pr.pole_driver_id === d.pole ? 3 : 0;
-          const total = NO_SUBMISSION_PENALTY + poleHit;
+          const total = NO_SUBMISSION_PENALTY + poleHit + (sprint?.total ?? 0);
           scoreRows.push({
             user_id: p.id,
             race_id: d.raceId!,
             points: total,
-            breakdown: { noSubmission: true, pole: poleHit, total },
+            breakdown: { noSubmission: true, pole: poleHit, ...(sprint ? { sprint } : {}), total },
             updated_at: new Date().toISOString(),
           });
         } else {
           const b = scorePrediction(
-            { top10: pr.top10, pole_driver_id: pr.pole_driver_id, fastest_lap_driver_id: pr.fastest_lap_driver_id, dnf_driver_id: pr.dnf_driver_id },
+            { top10: validTop10, pole_driver_id: pr.pole_driver_id, fastest_lap_driver_id: pr.fastest_lap_driver_id, dnf_driver_id: pr.dnf_driver_id },
             rows as ResultRow[],
           );
+          const total = b.total + (sprint?.total ?? 0);
           scoreRows.push({
             user_id: p.id,
             race_id: d.raceId!,
-            points: b.total,
-            breakdown: b,
+            points: total,
+            breakdown: { ...b, ...(sprint ? { sprint } : {}), total },
             updated_at: new Date().toISOString(),
           });
         }
       }
       if (scoreRows.length) await sb.from("scores").upsert(scoreRows, { onConflict: "user_id,race_id" });
-      return { ok: true, msg: `Manual results saved & ${scoreRows.length} players scored!` };
+      return { ok: true, msg: `Manual results saved & ${scoreRows.length} players scored (including Sprint)!` };
     }
 
     if (d.action === "test_my_push") {
@@ -263,7 +330,6 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         sb.from("profiles").select("id, display_name"),
       ]);
 
-      const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
       const completedUsers = new Set(
         (preds ?? [])
           .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
@@ -323,14 +389,4 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     }
 
     return { ok: false, msg: "Unknown action" };
-  });
-
-export const savePushSubscription = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const key = "push_sub:" + context.userId + ":" + JSON.stringify(data);
-    await supabaseAdmin.from("sync_state").upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
-    return { ok: true };
   });

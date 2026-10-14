@@ -35,7 +35,7 @@ export const getPickRoster = createServerFn({ method: "POST" })
 
     const complete = new Set(
       (predictions.data ?? [])
-        .filter((p) => (p.top10 ?? []).filter(Boolean).length === 10)
+        .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
         .map((p) => p.user_id),
     );
     // Same rule as the scoring: players who joined after the race started are not expected to pick.

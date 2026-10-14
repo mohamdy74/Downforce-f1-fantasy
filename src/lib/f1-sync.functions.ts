@@ -4,11 +4,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { NO_SUBMISSION_PENALTY, scorePrediction, type ResultRow } from "./scoring";
 import { scoreSprint, type SprintResultRow } from "./sprintScoring";
+import { sendNativeWebPush } from "./webpush-native";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
-const STALE_MS = 2 * 60 * 1000;
-// Drivers the league removed from its data entirely (kept inactive in the DB).
+const STALE_MS = 15 * 60 * 1000;
 const EXCLUDED_DRIVERS = new Set(["tsunoda"]);
 
 type ErgastSession = { date: string; time?: string | undefined };
@@ -51,24 +51,59 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-// Rate limiting: in-memory store for user sync calls
 const userSyncCalls = new Map<string, number>();
+
+export const savePushSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const prefix = `push_sub:${context.userId}:`;
+    const { data: existing } = await supabaseAdmin
+      .from("sync_state")
+      .select("key")
+      .like("key", `${prefix}%`);
+
+    const staleKeys: string[] = [];
+    for (const r of existing ?? []) {
+      try {
+        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
+        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
+      } catch {
+        staleKeys.push(r.key);
+      }
+    }
+    if (staleKeys.length > 0) {
+      await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
+    }
+
+    const key = `${prefix}${JSON.stringify(data)}`;
+    await supabaseAdmin
+      .from("sync_state")
+      .upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
+    return { ok: true };
+  });
 
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ({ force: !!(input as { force?: boolean } | null)?.force }))
+  .inputValidator((input: unknown) => ({
+    force: Boolean((input as { force?: boolean } | null)?.force),
+  }))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Rate limiting: 5 minutes between sync requests per user
     const userId = context.userId;
     const lastCall = userSyncCalls.get(userId) ?? 0;
-    const minInterval = data.force ? 15_000 : 2 * 60_000;
+    const minInterval = data.force ? 5_000 : 5 * 60_000;
 
     if (Date.now() - lastCall < minInterval) {
-      throw new Error("Rate limit: Wait 5 minutes between sync requests.");
+      if (!data.force) return { skipped: true as const };
+      throw new Error("Please wait a few seconds before syncing again.");
     }
     userSyncCalls.set(userId, Date.now());
+
+    // Always check if 2h / 30m push reminders need to go out
+    await checkAndSendPushReminders(supabaseAdmin).catch(() => {});
 
     const { data: state } = await supabaseAdmin
       .from("sync_state")
@@ -81,27 +116,48 @@ export const syncF1Data = createServerFn({ method: "POST" })
       if (age < STALE_MS) return { skipped: true as const };
     }
 
-    // ---- Calendar ----
+    // ---- Calendar (preserving Steward custom deadline overrides!) ----
     const calendar = await getJson<{
       MRData: { RaceTable: { Races: ErgastRace[] } };
     }>(`${API}/${SEASON}/races/?format=json&limit=40`);
     const races = calendar?.MRData.RaceTable.Races ?? [];
 
     if (races.length) {
+      const [{ data: existingRaces }, { data: overrideRows }] = await Promise.all([
+        supabaseAdmin
+          .from("races")
+          .select("id, round, race_at, qualifying_at")
+          .eq("season", SEASON),
+        supabaseAdmin
+          .from("sync_state")
+          .select("key")
+          .like("key", "deadline_override:%"),
+      ]);
+
+      const overriddenIds = new Set(
+        (overrideRows ?? []).map((r) => r.key.replace("deadline_override:", "")),
+      );
+      const existingByRound = new Map((existingRaces ?? []).map((r) => [r.round, r]));
+
       await supabaseAdmin.from("races").upsert(
-        races.map((r) => ({
-          season: Number(r.season),
-          round: Number(r.round),
-          name: r.raceName,
-          circuit: r.Circuit.circuitName,
-          country: r.Circuit.Location.country ?? null,
-          locality: r.Circuit.Location.locality ?? null,
-          race_at: toIso({ date: r.date, time: r.time })!,
-          qualifying_at: toIso(r.Qualifying),
-          has_sprint: !!r.Sprint,
-          sprint_at: toIso(r.Sprint),
-          sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
-        })),
+        races.map((r) => {
+          const rd = Number(r.round);
+          const ex = existingByRound.get(rd);
+          const keepCustomDeadline = ex && overriddenIds.has(ex.id);
+          return {
+            season: Number(r.season),
+            round: rd,
+            name: r.raceName,
+            circuit: r.Circuit.circuitName,
+            country: r.Circuit.Location.country ?? null,
+            locality: r.Circuit.Location.locality ?? null,
+            race_at: keepCustomDeadline ? ex.race_at : toIso({ date: r.date, time: r.time })!,
+            qualifying_at: keepCustomDeadline ? ex.qualifying_at : toIso(r.Qualifying),
+            has_sprint: !!r.Sprint,
+            sprint_at: toIso(r.Sprint),
+            sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
+          };
+        }),
         { onConflict: "season,round" },
       );
     }
@@ -143,7 +199,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
       );
     }
 
-    // ---- Results (the API caps each page at 100 result rows, so page through) ----
+    // ---- Results ----
     const racesWithResults: ErgastRace[] = [];
     const pageSize = 100;
     let offset = 0;
@@ -192,14 +248,9 @@ export const syncF1Data = createServerFn({ method: "POST" })
       await supabaseAdmin.from("races").update({ has_results: true }).eq("id", raceId);
     }
 
-    // ---- Sprint results ----
     await syncSprintResults(roundToId);
-
-    // ---- Fast fallback: official source still empty after the race → use live timing ----
     await openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round))));
-
     await scoreAllRaces();
-
 
     await supabaseAdmin
       .from("sync_state")
@@ -211,6 +262,99 @@ export const syncF1Data = createServerFn({ method: "POST" })
     return { skipped: false as const, races: races.length, scored: racesWithResults.length };
   });
 
+export async function checkAndSendPushReminders(
+  supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
+) {
+  const now = Date.now();
+  const { data: upcomingRaces } = await supabaseAdmin
+    .from("races")
+    .select("id, name, qualifying_at, race_at")
+    .eq("season", SEASON)
+    .gte("race_at", new Date(now - 30 * 60_000).toISOString())
+    .lte("race_at", new Date(now + 4 * 24 * 3600_000).toISOString());
+
+  if (!upcomingRaces?.length) return 0;
+
+  const { data: subRows } = await supabaseAdmin
+    .from("sync_state")
+    .select("key")
+    .like("key", "push_sub:%");
+  if (!subRows?.length) return 0;
+
+  let totalSent = 0;
+  const WINDOWS = [
+    { label: "2h", minMs: 45 * 60_000, maxMs: 135 * 60_000, text: "in ~2 hours" },
+    { label: "30m", minMs: 5 * 60_000, maxMs: 44 * 60_000, text: "in less than 30 minutes" },
+  ] as const;
+
+  for (const race of upcomingRaces) {
+    const targets: Array<{ type: "pole" | "race"; iso: string | null }> = [
+      { type: "pole", iso: race.qualifying_at },
+      { type: "race", iso: race.race_at },
+    ];
+
+    for (const t of targets) {
+      if (!t.iso) continue;
+      const diff = new Date(t.iso).getTime() - now;
+      for (const w of WINDOWS) {
+        if (diff < w.minMs || diff > w.maxMs) continue;
+        const stateKey = `reminded:${race.id}:${t.type}:${w.label}`;
+        const { data: already } = await supabaseAdmin
+          .from("sync_state")
+          .select("key")
+          .eq("key", stateKey)
+          .maybeSingle();
+        if (already) continue;
+
+        const { data: preds } = await supabaseAdmin
+          .from("predictions")
+          .select("user_id, top10, pole_driver_id")
+          .eq("race_id", race.id);
+
+        const doneUsers = new Set(
+          (preds ?? [])
+            .filter((p) =>
+              t.type === "pole"
+                ? !!p.pole_driver_id
+                : (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10,
+            )
+            .map((p) => p.user_id),
+        );
+
+        const payloadObj = {
+          title: `⏰ ${race.name} — Lock Alert!`,
+          body:
+            t.type === "pole"
+              ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
+              : `Race locks ${w.text}! Submit your Top 10 now to avoid the −25 penalty.`,
+          tag: stateKey,
+          url: "/predict",
+        };
+
+        const deadKeys: string[] = [];
+        for (const r of subRows) {
+          const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
+          if (!m) continue;
+          if (doneUsers.has(m[1]!)) continue;
+          try {
+            const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+            const res = await sendNativeWebPush(sub, payloadObj);
+            if (res.ok) totalSent++;
+            else if (res.status === 404 || res.status === 410) deadKeys.push(r.key);
+          } catch {}
+        }
+        if (deadKeys.length > 0) {
+          await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
+        }
+        await supabaseAdmin
+          .from("sync_state")
+          .upsert({ key: stateKey, synced_at: new Date().toISOString() }, { onConflict: "key" });
+      }
+    }
+  }
+  return totalSent;
+}
+
 async function scoreAllRaces() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -221,35 +365,54 @@ async function scoreAllRaces() {
     .eq("has_results", true);
   if (!races?.length) return;
 
-  const { data: allProfiles } = await supabaseAdmin.from("profiles").select("id, created_at"); for (const race of races) { const profiles = (allProfiles ?? []).filter((p) => new Date(p.created_at) < new Date(race.race_at));
-    if (!profiles?.length) continue;
-    const { data: results } = await supabaseAdmin
-      .from("race_results")
-      .select("driver_id, position, finished, fastest_lap, pole")
-      .eq("race_id", race.id);
-    if (!results?.length) continue;
+  for (const race of races) {
+    const [
+      { data: profiles },
+      { data: results },
+      { data: predictions },
+      { data: sprintResults },
+      { data: sprintPreds },
+      { data: existingScores },
+    ] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, created_at").lt("created_at", race.race_at),
+      supabaseAdmin
+        .from("race_results")
+        .select("driver_id, position, finished, fastest_lap, pole")
+        .eq("race_id", race.id),
+      supabaseAdmin
+        .from("predictions")
+        .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
+        .eq("race_id", race.id),
+      supabaseAdmin
+        .from("sprint_results")
+        .select("driver_id, position, finished, pole")
+        .eq("race_id", race.id),
+      supabaseAdmin
+        .from("sprint_predictions")
+        .select("user_id, top8, pole_driver_id")
+        .eq("race_id", race.id),
+      supabaseAdmin.from("scores").select("user_id, breakdown").eq("race_id", race.id),
+    ]);
 
-    const { data: predictions } = await supabaseAdmin
-      .from("predictions")
-      .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-      .eq("race_id", race.id);
+    if (!profiles?.length || !results?.length) continue;
+
+    // Never overwrite a score that was manually overridden or waived by FIA Stewards
+    const stewardLockedUsers = new Set(
+      (existingScores ?? [])
+        .filter((s) => {
+          const b = s.breakdown as Record<string, unknown> | null;
+          return b && b["stewardOverride"] === true;
+        })
+        .map((s) => s.user_id),
+    );
 
     const byUser = new Map((predictions ?? []).map((p) => [p.user_id, p]));
-
-    // Sprint points (top 8 + sprint pole, max 9) are added to the round once the sprint has results.
-    const { data: sprintResults } = await supabaseAdmin
-      .from("sprint_results")
-      .select("driver_id, position, finished, pole")
-      .eq("race_id", race.id);
-    const { data: sprintPreds } = await supabaseAdmin
-      .from("sprint_predictions")
-      .select("user_id, top8, pole_driver_id")
-      .eq("race_id", race.id);
     const sprintByUser = new Map((sprintPreds ?? []).map((p) => [p.user_id, p]));
     const sprintFor = (userId: string) =>
       sprintResults?.length
         ? scoreSprint(sprintByUser.get(userId) ?? null, sprintResults as SprintResultRow[])
         : null;
+
     const rows: Array<{
       user_id: string;
       race_id: string;
@@ -259,7 +422,7 @@ async function scoreAllRaces() {
     }> = [];
 
     for (const profile of profiles) {
-      // Players who joined after the race started are not penalised.
+      if (stewardLockedUsers.has(profile.id)) continue;
       if (new Date(profile.created_at) > new Date(race.race_at)) continue;
 
       const sprint = sprintFor(profile.id);
@@ -279,9 +442,10 @@ async function scoreAllRaces() {
         continue;
       }
 
+      const validTop10 = (prediction.top10 ?? []).filter((x) => x && x !== "__none__");
       const breakdown = scorePrediction(
         {
-          top10: prediction.top10 ?? [],
+          top10: validTop10,
           pole_driver_id: prediction.pole_driver_id,
           fastest_lap_driver_id: prediction.fastest_lap_driver_id,
           dnf_driver_id: prediction.dnf_driver_id,
@@ -289,9 +453,7 @@ async function scoreAllRaces() {
         results as ResultRow[],
       );
 
-      // A pole-only save (top 10 never completed) still counts as a missed race
-      // submission — the pole points are kept on top of the penalty.
-      const poleOnly = (prediction.top10 ?? []).filter((d) => d && d !== "__none__").length < 10;
+      const poleOnly = validTop10.length < 10;
       const raceTotal = poleOnly ? NO_SUBMISSION_PENALTY + breakdown.pole : breakdown.total;
       const total = raceTotal + (sprint?.total ?? 0);
       rows.push({
@@ -312,17 +474,12 @@ async function scoreAllRaces() {
 }
 
 const OPENF1 = "https://api.openf1.org/v1";
-const RACE_DONE_MS = 80 * 60 * 1000; // race start + 80m ≈ chequered flag
+const RACE_DONE_MS = 80 * 60 * 1000; // 80 minutes after lights out
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 type OF1Session = { session_key: number; session_name: string; date_start: string };
 type OF1Result = { position: number | null; driver_number: number; dnf?: boolean; dns?: boolean; dsq?: boolean };
 
-/**
- * When the official results feed hasn't published a finished race yet, fill
- * race_results from OpenF1 so scoring happens minutes after the flag. The
- * official feed overwrites these rows (same keys) once it publishes.
- */
 async function openF1Fallback(officialRounds: Set<number>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
@@ -418,7 +575,6 @@ type ErgastSprintRace = {
   }>;
 };
 
-/** Official sprint results. A grid of 1 means the driver took sprint pole. */
 async function syncSprintResults(roundToId: Map<number, string>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
