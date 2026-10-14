@@ -115,7 +115,7 @@ function Sprint() {
     // A pole-only save has no top 8 yet — keep whatever the player is building.
     if (saved.length === 0) return;
     setTop8(Array.from({ length: SPRINT_SLOTS }, (_, i) => saved[i] ?? EMPTY));
-  }, [prediction]);
+  }, [prediction?.id, prediction?.updated_at]);
 
   const hasSaved = (prediction?.top8?.length ?? 0) === SPRINT_SLOTS;
   const viewOnly = sprintLocked || (hasSaved && !editing);

@@ -35,3 +35,7 @@ dist-ssr
 *.pem
 *.key
 .dev.vars.*
+
+*.ps1
+.env
+.env.*
