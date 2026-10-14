@@ -71,34 +71,36 @@ function StewardAccordionCard({
       <button
         type="button"
         onClick={() => onToggle(id)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-secondary/20 active:bg-secondary/40"
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-3.5 text-left transition-colors hover:bg-secondary/20 active:bg-secondary/40 sm:px-4"
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/40">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/40">
             {icon}
           </div>
-          <div className="min-w-0">
-            <h2 className="truncate font-display text-base font-extrabold italic uppercase tracking-wide text-foreground sm:text-lg">
-              {title}
-            </h2>
-            <p className="truncate font-mono text-[11px] text-muted-foreground">{subtitle}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-base font-extrabold italic uppercase leading-snug tracking-wide text-foreground sm:text-lg">
+                {title}
+              </h2>
+              {badge}
+            </div>
+            <p className="mt-0.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+              {subtitle}
+            </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {badge}
-          <div
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-full bg-secondary/50 text-muted-foreground transition-transform duration-200",
-              isOpen && "rotate-180 bg-primary/15 text-primary",
-            )}
-          >
-            <ChevronDown className="h-4 w-4" />
-          </div>
+        <div
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary/50 text-muted-foreground transition-transform duration-200",
+            isOpen && "rotate-180 bg-primary/15 text-primary",
+          )}
+        >
+          <ChevronDown className="h-4 w-4" />
         </div>
       </button>
 
       {isOpen && (
-        <div className="border-t border-border/60 bg-background/40 px-4 py-4">
+        <div className="border-t border-border/60 bg-background/40 px-3.5 py-4 sm:px-4">
           {children}
         </div>
       )}
@@ -129,10 +131,6 @@ function StewardsPage() {
   const toggleSection = (id: string) => {
     setOpenSection((prev) => (prev === id ? null : id));
   };
-
-  // Broadcast state
-  const [pushTitle, setPushTitle] = useState("DOWNFORCE — Race Control");
-  const [pushBody, setPushBody] = useState("");
 
   // Score override state
   const [scoreUser, setScoreUser] = useState("");
@@ -269,11 +267,11 @@ function StewardsPage() {
         <select
           value={activeRace?.id ?? ""}
           onChange={(e) => setSelectedRaceId(e.target.value)}
-          className="mt-1.5 h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 font-mono text-xs font-bold sm:text-sm"
+          className="mt-1.5 h-10 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-xs font-bold sm:text-sm"
         >
           {races.map((r) => (
             <option key={r.id} value={r.id}>
-              R{r.round} — {r.name} {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
+              R{r.round} · {r.name.replace("Grand Prix", "GP")} {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
             </option>
           ))}
         </select>
@@ -286,7 +284,7 @@ function StewardsPage() {
         onToggle={toggleSection}
         icon={<CheckCircle2 className="h-4 w-4 text-gold" />}
         title="Live Pick Status Radar"
-        subtitle={`Check who locked in for ${activeRace?.name ?? "this race"}`}
+        subtitle={`See who locked in for ${activeRace?.name ?? "this round"} and alert missing players`}
         badge={
           <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-gold">
             {lockedPlayers}/{totalPlayers} Locked
@@ -320,7 +318,7 @@ function StewardsPage() {
               const pts = scoreByUser.get(p.id);
               return (
                 <div key={p.id} className="flex items-center justify-between gap-2 py-2 text-xs sm:text-sm">
-                  <span className="truncate font-display font-bold italic uppercase">{p.display_name}</span>
+                  <span className="font-display font-bold italic uppercase">{p.display_name}</span>
                   <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
                     <span className={cn("rounded px-1.5 py-0.5", hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
                       Pole {hasPole ? "✓" : "✗"}
@@ -337,72 +335,14 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 2. Broadcast Push Notification */}
-      <StewardAccordionCard
-        id="broadcast"
-        openId={openSection}
-        onToggle={toggleSection}
-        icon={<Bell className="h-4 w-4 text-primary" />}
-        title="Broadcast Push Notification"
-        subtitle="Send an instant phone alert to all league members"
-      >
-        <div className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              type="text"
-              value={pushTitle}
-              onChange={(e) => setPushTitle(e.target.value)}
-              placeholder="Notification Title"
-              className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
-            />
-            <input
-              type="text"
-              value={pushBody}
-              onChange={(e) => setPushBody(e.target.value)}
-              placeholder="Message body (e.g. Results are out!)"
-              className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() =>
-                runAction({
-                  action: "broadcast_push",
-                  title: pushTitle,
-                  body: pushBody || `Check out the latest update for ${activeRace?.name}!`,
-                })
-              }
-            >
-              Send Broadcast Now
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                runAction({
-                  action: "broadcast_push",
-                  title: `🏆 ${activeRace?.name} Results Scored!`,
-                  body: "Points & standings are live! Tap to see who won فحل الجولة 👑",
-                })
-              }
-            >
-              Preset: Results Live 🏆
-            </Button>
-          </div>
-        </div>
-      </StewardAccordionCard>
-
-      {/* 3. Score & Penalty Override */}
+      {/* 2. Score & Penalty Override */}
       <StewardAccordionCard
         id="scores"
         openId={openSection}
         onToggle={toggleSection}
         icon={<Trophy className="h-4 w-4 text-gold" />}
         title="Score & Penalty Override"
-        subtitle="Adjust round points or waive a −25 penalty"
+        subtitle="Adjust round points or waive a −25 missed-submission penalty"
       >
         <div className="grid gap-2 sm:grid-cols-3">
           <select
@@ -457,14 +397,14 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 4. Stewards Pick Override */}
+      {/* 3. Stewards Pick Override */}
       <StewardAccordionCard
         id="picks"
         openId={openSection}
         onToggle={toggleSection}
         icon={<Edit3 className="h-4 w-4 text-primary" />}
         title="Stewards Pick Override"
-        subtitle="Enter or edit Pole, Fastest Lap, DNF & Top 10 for any player"
+        subtitle="Enter or edit Pole, Fastest Lap, DNF & Top 10 grid for any player"
       >
         <div className="space-y-4">
           <select
@@ -545,14 +485,14 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 5. Adjust Lock Deadlines */}
+      {/* 4. Adjust Lock Deadlines */}
       <StewardAccordionCard
         id="deadlines"
         openId={openSection}
         onToggle={toggleSection}
         icon={<Clock className="h-4 w-4 text-gold" />}
         title="Adjust Lock Deadlines"
-        subtitle="Set exact date & time or shift Qualifying / Race lock"
+        subtitle="Set exact date & time or shift Qualifying and Race lock times"
       >
         <div className="space-y-4">
           <p className="font-mono text-xs text-muted-foreground">
@@ -673,14 +613,14 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 6. Manual Race Results Entry */}
+      {/* 5. Manual Race Results Entry */}
       <StewardAccordionCard
         id="results"
         openId={openSection}
         onToggle={toggleSection}
         icon={<Flag className="h-4 w-4 text-primary" />}
         title="Manual Race Results Entry"
-        subtitle="Pick P1–P10 & retired DNF drivers to score immediately"
+        subtitle="Select P1–P10 finishing order & retired DNF drivers to score immediately"
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -766,14 +706,14 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 7. Player Manager */}
+      {/* 6. Player Manager */}
       <StewardAccordionCard
         id="players"
         openId={openSection}
         onToggle={toggleSection}
         icon={<Users className="h-4 w-4 text-gold" />}
         title="Player Manager"
-        subtitle="Rename display names or remove test accounts"
+        subtitle="Rename player display names or remove test accounts"
         badge={
           <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
             {totalPlayers} Players

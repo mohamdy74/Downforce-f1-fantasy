@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { scorePrediction, NO_SUBMISSION_PENALTY, type ResultRow } from "./scoring";
+import { sendNativeWebPush } from "./webpush-native";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
 
@@ -48,7 +49,6 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       | "set_exact_deadline"
       | "override_picks"
       | "manual_results"
-      | "broadcast_push"
       | "nudge_missing_push";
     raceId?: string;
     userId?: string;
@@ -207,36 +207,43 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       return { ok: true, msg: `Manual results saved & ${scoreRows.length} players scored!` };
     }
 
-    if (d.action === "broadcast_push" || d.action === "nudge_missing_push") {
-      const { data: subRows } = await sb.from("sync_state").select("key").like("key", "push_sub:%");
-      let missingOnlySet: Set<string> | null = null;
-      if (d.action === "nudge_missing_push" && d.raceId) {
-        const { data: preds } = await sb.from("predictions").select("user_id, top10").eq("race_id", d.raceId);
-        const done = new Set((preds ?? []).filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10).map((p) => p.user_id));
-        missingOnlySet = done;
-      }
-      const wp = await import(/* @vite-ignore */ "web-" + "push");
-      const pub = process.env["VAPID_PUBLIC_KEY"] || "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-      const priv = process.env["VAPID_PRIVATE_KEY"] || "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs";
-      wp.default.setVapidDetails("mailto:admin@downforce.app", pub, priv);
+    if (d.action === "nudge_missing_push" && d.raceId) {
+      const [{ data: subRows }, { data: preds }] = await Promise.all([
+        sb.from("sync_state").select("key").like("key", "push_sub:%"),
+        sb.from("predictions").select("user_id, top10").eq("race_id", d.raceId),
+      ]);
+      const completedUsers = new Set(
+        (preds ?? [])
+          .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
+          .map((p) => p.user_id),
+      );
+
       let sent = 0;
-      const payload = JSON.stringify({
-        title: d.title || "DOWNFORCE — FIA Stewards",
-        body: d.body || "Lock in your predictions before the deadline!",
+      const payloadObj = {
+        title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
+        body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
         tag: "dfr-stewards-" + Date.now(),
         url: "/predict",
-      });
+      };
+
       for (const r of subRows ?? []) {
         const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
         if (!m) continue;
-        if (missingOnlySet && missingOnlySet.has(m[1]!)) continue;
+        if (completedUsers.has(m[1]!)) continue;
         try {
-          const s = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-          await wp.default.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload);
-          sent++;
-        } catch {}
+          const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+          const ok = await sendNativeWebPush(sub, payloadObj);
+          if (ok) sent++;
+        } catch {
+          // ignore invalid/expired subscription
+        }
       }
-      return { ok: true, msg: `Push alert sent to ${sent} subscribed device(s)!` };
+      return {
+        ok: true,
+        msg: sent > 0
+          ? `Push alert sent to ${sent} missing player device(s)!`
+          : "No subscribed devices found for missing players yet (players need to tap the Bell icon once).",
+      };
     }
 
     return { ok: false, msg: "Unknown action" };
