@@ -18,6 +18,7 @@ import { Route as PredictRouteImport } from './routes/predict'
 import { Route as RemindersRouteImport } from './routes/reminders'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as SprintRouteImport } from './routes/sprint'
+import { Route as StewardsRouteImport } from './routes/stewards'
 import { Route as WeekendRouteImport } from './routes/weekend'
 
 const IndexRoute = IndexRouteImport.update({
@@ -65,6 +66,11 @@ const SprintRoute = SprintRouteImport.update({
   path: '/sprint',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StewardsRoute = StewardsRouteImport.update({
+  id: '/stewards',
+  path: '/stewards',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WeekendRoute = WeekendRouteImport.update({
   id: '/weekend',
   path: '/weekend',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
+  '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
+  '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
   '/sprint': typeof SprintRoute
+  '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/reminders'
     | '/rules'
     | '/sprint'
+    | '/stewards'
     | '/weekend'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/reminders'
     | '/rules'
     | '/sprint'
+    | '/stewards'
     | '/weekend'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/reminders'
     | '/rules'
     | '/sprint'
+    | '/stewards'
     | '/weekend'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   RemindersRoute: typeof RemindersRoute
   RulesRoute: typeof RulesRoute
   SprintRoute: typeof SprintRoute
+  StewardsRoute: typeof StewardsRoute
   WeekendRoute: typeof WeekendRoute
 }
 
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SprintRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stewards': {
+      id: '/stewards'
+      path: '/stewards'
+      fullPath: '/stewards'
+      preLoaderRoute: typeof StewardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/weekend': {
       id: '/weekend'
       path: '/weekend'
@@ -245,6 +265,7 @@ const rootRouteChildren: RootRouteChildren = {
   RemindersRoute: RemindersRoute,
   RulesRoute: RulesRoute,
   SprintRoute: SprintRoute,
+  StewardsRoute: StewardsRoute,
   WeekendRoute: WeekendRoute,
 }
 export const routeTree = rootRouteImport

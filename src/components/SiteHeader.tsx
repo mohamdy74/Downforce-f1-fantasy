@@ -64,10 +64,10 @@ export function SiteHeader() {
               Sprint
             </Link>
           )}
-          <Link to="/rules" className={DESKTOP_LINK}>
+          {user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className={DESKTOP_LINK}>Stewards</Link>)}<Link to="/rules" className={DESKTOP_LINK}>
             Rules
           </Link>
-          <Link
+          {user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-gold md:hidden [&.active]:text-primary">Stewards</Link>)}{user?.email?.toLowerCase() === "mohamdy008@gmail.com" && (<Link to="/stewards" className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-gold md:hidden [&.active]:text-primary">Stewards</Link>)}<Link
             to="/rules"
             className="rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground md:hidden [&.active]:text-primary"
           >
