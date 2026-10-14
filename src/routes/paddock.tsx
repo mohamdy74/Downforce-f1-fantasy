@@ -54,7 +54,7 @@ function Paddock() {
     queryKey: ["paddock", race?.id, user?.id],
     enabled: !!race && !!user,
     queryFn: async () => {
-      const [preds, profiles, results, scores, logs] = await Promise.all([
+      const [preds, profiles, results, scores] = await Promise.all([
         supabase
           .from("predictions")
           .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
