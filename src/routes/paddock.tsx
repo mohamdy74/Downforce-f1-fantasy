@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,11 +21,17 @@ export const Route = createFileRoute("/paddock")({
       { property: "og:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
       { property: "og:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
       { name: "twitter:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
     ],
   }),
+  loader: async ({ context }) => {
+    await Promise.all([
+      context.queryClient.ensureQueryData(racesQuery).catch(() => null),
+      context.queryClient.ensureQueryData(driversQuery).catch(() => null),
+    ]);
+  },
   component: Paddock,
 });
 
@@ -37,6 +43,23 @@ type Pred = {
   dnf_driver_id: string | null;
 };
 
+function topPick(ids: (string | null | undefined)[]): { id: string; count: number } | null {
+  const counts = new Map<string, number>();
+  for (const id of ids) {
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  let bestId = "";
+  let bestCount = 0;
+  for (const [id, c] of counts.entries()) {
+    if (c > bestCount) {
+      bestId = id;
+      bestCount = c;
+    }
+  }
+  return bestId ? { id: bestId, count: bestCount } : null;
+}
+
 function Paddock() {
   const { user, loading } = useAuth();
   const { data: races } = useQuery(racesQuery);
@@ -46,15 +69,17 @@ function Paddock() {
     () => (races ?? []).filter((r) => new Date(r.race_at).getTime() <= Date.now()),
     [races],
   );
-  const [raceId, setRaceId] = useState<string | null>(null); const [padRef] = useAutoAnimate<HTMLDivElement>();
+  const [raceId, setRaceId] = useState<string | null>(null);
   const race: Race | undefined =
     locked.find((r) => r.id === raceId) ?? locked[locked.length - 1];
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["paddock", race?.id, user?.id],
     enabled: !!race && !!user,
+    staleTime: 45_000,
     queryFn: async () => {
-      const [preds, profiles, results, scores] = await Promise.all([
+      // Single-wave parallel query execution (all 5 tables fetched in 1 round-trip)
+      const [preds, profiles, results, scores, logs] = await Promise.all([
         supabase
           .from("predictions")
           .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
@@ -65,12 +90,12 @@ function Paddock() {
           .select("driver_id, position, finished, fastest_lap, pole")
           .eq("race_id", race!.id),
         supabase.from("scores").select("user_id, points").eq("race_id", race!.id),
+        supabase
+          .from("prediction_logs")
+          .select("user_id, action, changes, created_at")
+          .eq("race_id", race!.id)
+          .order("created_at"),
       ]);
-      const logs = await supabase
-        .from("prediction_logs")
-        .select("user_id, action, changes, created_at")
-        .eq("race_id", race!.id)
-        .order("created_at");
       const logMap = new Map<string, { action: string; changes: unknown; created_at: string }[]>();
       for (const l of logs.data ?? []) {
         const arr = logMap.get(l.user_id) ?? [];
@@ -114,6 +139,9 @@ function Paddock() {
     (a, b) => (data?.points.get(b.user_id) ?? 0) - (data?.points.get(a.user_id) ?? 0),
   );
 
+  const crowdP1 = topPick(sorted.map((p) => p.top10[0]));
+  const crowdPole = topPick(sorted.map((p) => p.pole_driver_id));
+
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-10">
       <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
@@ -127,7 +155,7 @@ function Paddock() {
       </p>
 
       {locked.length > 1 && (
-        <div className="sticky top-[52px] z-20 -mx-4 mt-4 flex gap-2 overflow-x-auto bg-background/95 px-4 py-2 backdrop-blur">
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
           {locked
             .slice()
             .reverse()
@@ -136,8 +164,8 @@ function Paddock() {
                 key={r.id}
                 onClick={() => setRaceId(r.id)}
                 className={cn(
-                  "shrink-0 rounded-full border px-3 py-1 font-mono text-xs",
-                  r.id === race?.id ? "border-primary text-primary" : "border-border text-muted-foreground",
+                  "shrink-0 rounded-full border px-3 py-1 font-mono text-xs transition-colors",
+                  r.id === race?.id ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
                 )}
               >
                 R{r.round}
@@ -146,12 +174,51 @@ function Paddock() {
         </div>
       )}
 
-      {race && sorted.length === 0 && (
+      {sorted.length > 1 && (crowdP1 || crowdPole) && (
+        <div className="carbon-panel mt-4 grid grid-cols-2 gap-2 rounded-lg border border-border/70 p-3">
+          {crowdP1 && (
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Crowd P1 Winner Pick
+              </p>
+              <p className="mt-0.5 font-display text-base font-extrabold italic uppercase text-gold">
+                {byId.get(crowdP1.id)?.code ?? crowdP1.id}{" "}
+                <span className="font-mono text-xs font-normal not-italic text-muted-foreground">
+                  ({crowdP1.count}/{sorted.length})
+                </span>
+              </p>
+            </div>
+          )}
+          {crowdPole && (
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Crowd Pole Pick
+              </p>
+              <p className="mt-0.5 font-display text-base font-extrabold italic uppercase text-foreground">
+                {byId.get(crowdPole.id)?.code ?? crowdPole.id}{" "}
+                <span className="font-mono text-xs font-normal not-italic text-muted-foreground">
+                  ({crowdPole.count}/{sorted.length})
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {race && isLoading && (
+        <div className="mt-6 space-y-4">
+          {[0, 1, 2].map((k) => (
+            <div key={k} className="carbon-panel h-48 animate-pulse rounded-lg p-4" />
+          ))}
+        </div>
+      )}
+
+      {race && !isLoading && sorted.length === 0 && (
         <p className="mt-8 text-sm text-muted-foreground">No one submitted picks for this race.</p>
       )}
 
-      <div ref={padRef} className="mt-6 space-y-4">
-        {sorted.length > 0 && (() => { const m = (a: (string | null | undefined)[]) => { const c = new Map<string, number>(); for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1); return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]; }; const c1 = m(sorted.map((p) => p.top10?.[0])), cp = m(sorted.map((p) => p.pole_driver_id)), cd = m(sorted.map((p) => p.dnf_driver_id)); return (<div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs"><div><span className="block text-[10px] text-muted-foreground">CROWD P1</span><b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD POLE</span><b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD DNF</span><b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b></div></div>); })()}{sorted.map((p) => {
+      <div className="mt-6 space-y-4">
+        {sorted.map((p) => {
           const pts = data?.points.get(p.user_id);
           return (
             <section key={p.user_id} className="carbon-panel rounded-lg p-3">

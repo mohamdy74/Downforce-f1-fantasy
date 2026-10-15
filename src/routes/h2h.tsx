@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useEffect, useState } from "react";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +18,12 @@ export const Route = createFileRoute("/h2h")({
       { name: "twitter:description", content: "Who wins the rivalry? Race-by-race 1v1 comparison." },
     ],
   }),
+  loader: async ({ context }) => {
+    await Promise.all([
+      context.queryClient.ensureQueryData(racesQuery).catch(() => null),
+      context.queryClient.ensureQueryData(leaderboardQuery).catch(() => null),
+    ]);
+  },
   component: H2H,
 });
 
@@ -26,7 +32,7 @@ function H2H() {
   const { data: races = [] } = useQuery(racesQuery);
   const { user } = useAuth();
   const [a, setA] = useState("");
-  const [b, setB] = useState(""); const [h2hRef] = useAutoAnimate<HTMLDivElement>();
+  const [b, setB] = useState("");
 
   useEffect(() => {
     if (!board.length || a) return;
@@ -37,15 +43,13 @@ function H2H() {
 
   const pa = board.find((e) => e.userId === a);
   const pb = board.find((e) => e.userId === b);
-  const rounds = races.filter((r) => r.has_results && board.some((e) => e.byRound[r.round] !== undefined)).slice().reverse();
+  const rounds = races.filter((r) => r.has_results);
   let wa = 0, wb = 0;
   for (const r of rounds) {
     const x = pa?.byRound[r.round] ?? 0, y = pb?.byRound[r.round] ?? 0;
     if (x > y) wa++; else if (y > x) wb++;
   }
 
-  // A player can never be compared with himself: picking one side moves the
-  // other side to a different player automatically.
   const other = (id: string) => board.find((e) => e.userId !== id)?.userId ?? "";
   const pickA = (id: string) => {
     setA(id);
@@ -85,7 +89,7 @@ function H2H() {
         <p className="mt-6 text-sm text-muted-foreground">Need at least two players for a battle.</p>
       ) : (
         <>
-          <div className="sticky top-[52px] z-20 -mx-4 mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur">
+          <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <Pick v={a} set={pickA} taken={b} />
             <span className="font-display text-xl font-black italic text-primary">VS</span>
             <Pick v={b} set={pickB} taken={a} />
@@ -99,7 +103,7 @@ function H2H() {
             <span>{pa?.fahl && <FahlBadge />}</span>
             <span>{pb?.fahl && <FahlBadge />}</span>
           </div>
-          <div ref={h2hRef} className="mt-4 space-y-1.5">
+          <div className="mt-4 space-y-1.5">
             {rounds.length === 0 && (
               <p className="text-sm text-muted-foreground">No races scored yet.</p>
             )}

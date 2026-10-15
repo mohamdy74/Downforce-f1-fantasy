@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 function parts(msLeft: number) {
   const total = Math.max(0, Math.floor(msLeft / 1000));
@@ -11,7 +12,6 @@ function parts(msLeft: number) {
 }
 
 export function Countdown({ target, label }: { target: string; label: string }) {
-  // null until mounted so server and browser render the same placeholder (no wrong-number flash).
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
@@ -21,14 +21,37 @@ export function Countdown({ target, label }: { target: string; label: string }) 
   }, []);
 
   const left = now == null ? 1 : new Date(target).getTime() - now;
-  const locked = left <= 0;
+  const locked = now != null && left <= 0;
+  const urgent2h = now != null && !locked && left <= 2 * 3600 * 1000;
+  const warning24h = now != null && !locked && !urgent2h && left <= 24 * 3600 * 1000;
   const { d, h, m, s } = parts(left);
 
   return (
-    <div className="carbon-panel-strong rounded-lg border border-border/80 p-3">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {label}
-      </p>
+    <div
+      className={cn(
+        "carbon-panel-strong rounded-md border px-3 py-2 transition-colors",
+        urgent2h
+          ? "border-primary/70 bg-primary/10"
+          : warning24h
+            ? "border-gold/50 bg-gold/5"
+            : "border-transparent",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {label}
+        </p>
+        {urgent2h && (
+          <span className="animate-pulse rounded bg-primary px-1.5 py-0.5 font-mono text-[9px] font-black uppercase tracking-wider text-primary-foreground">
+            Final Call
+          </span>
+        )}
+        {warning24h && (
+          <span className="rounded bg-gold/20 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-gold">
+            &lt; 24h Left
+          </span>
+        )}
+      </div>
       {now == null ? (
         <p className="font-mono text-lg font-bold tabular-nums text-muted-foreground">--:--:--</p>
       ) : locked ? (
@@ -36,7 +59,17 @@ export function Countdown({ target, label }: { target: string; label: string }) 
           Locked
         </p>
       ) : (
-        <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">{[{v:d,u:"DAYS"},{v:h,u:"HRS"},{v:m,u:"MIN"},{v:s,u:"SEC"}].map((x)=>(<div key={x.u} className="rounded bg-secondary/80 py-1.5 border border-border/50"><span className={left<7200000?"block font-mono text-base sm:text-lg font-extrabold tabular-nums leading-none text-primary animate-pulse":"block font-mono text-base sm:text-lg font-extrabold tabular-nums leading-none text-foreground"}>{String(x.v).padStart(2,"0")}</span><span className="mt-1 block font-mono text-[9px] font-bold tracking-widest text-muted-foreground">{x.u}</span></div>))}</div>
+        <p
+          className={cn(
+            "font-mono text-lg font-bold tabular-nums",
+            urgent2h && "animate-pulse text-primary",
+            warning24h && "text-gold",
+          )}
+        >
+          {d > 0 ? `${d}d ` : ""}
+          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:
+          {String(s).padStart(2, "0")}
+        </p>
       )}
     </div>
   );

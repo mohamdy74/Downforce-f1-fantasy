@@ -24,7 +24,7 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-[75vh] flex-col items-center justify-center px-4 py-16 text-center">
       <div className="carbon-panel max-w-md rounded-2xl border border-border p-8 shadow-2xl">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold/15 text-gold border border-gold/40">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-gold/40 bg-gold/15 text-gold">
           <span className="font-mono text-2xl font-black">404</span>
         </div>
         <p className="mt-4 font-mono text-xs font-bold uppercase tracking-[0.25em] text-primary">
@@ -108,9 +108,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "DOWNFORCE" },
+      { property: "og:url", content: "https://downforce.lovable.app" },
+      { property: "og:image", content: "https://downforce.lovable.app/og-banner.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "DOWNFORCE — Fantasy Racing League" },
       { name: "twitter:description", content: "Predict the top 10, pole, fastest lap and DNF of every Grand Prix. Score points and win the league." },
+      { name: "twitter:image", content: "https://downforce.lovable.app/og-banner.png" },
       { name: "theme-color", content: "#0E0E12" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
@@ -150,7 +155,6 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  // Register the service worker for PWA install + offline shell.
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -176,5 +180,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
-

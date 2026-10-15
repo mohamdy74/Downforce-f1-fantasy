@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Download, Image as ImageIcon, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import type { CardData, CardDriver } from "@/lib/shareCard";
+import { renderPickCard, type CardData, type CardDriver } from "@/lib/shareCard";
 
 const MEDAL = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
@@ -34,13 +34,16 @@ export function SharePicks({
   lockedAt?: string | null;
 }) {
   const { user } = useAuth();
-  // Use the same name the league table shows; fall back to the Google name.
   const { data: leagueName } = useQuery({
     queryKey: ["profile-name", user?.id],
     enabled: !!user,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .maybeSingle();
       return data?.display_name ?? null;
     },
   });
@@ -65,7 +68,7 @@ export function SharePicks({
 
   const ref = (id: string | null): CardDriver => {
     const d = id ? byId.get(id) : undefined;
-    return d ? { code: d.code, name: d.full_name, team: d.team } : null;
+    return d ? { code: d.code, name: d.full_name, team: d.team, number: d.number } : null;
   };
   const cardData = (): CardData => ({
     raceName,
@@ -79,26 +82,30 @@ export function SharePicks({
     lockedAt,
   });
 
-  // Live preview = exactly the image that gets shared.
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null); const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
-  const key = [raceName, round, shownName, top10.join(","), pole, fastestLap, dnf, drivers.length].join("|");
+  const [preview, setPreview] = useState<string | null>(null);
+  const cachedBlobRef = useRef<Blob | null>(null);
+  const key = [raceName, round, shownName, top10.join(","), pole, fastestLap, dnf, drivers.length, lockedAt].join("|");
+
+  // Pre-render the card in the background as soon as picks exist so opening the modal is 0ms instant
   useEffect(() => {
-    if (!open) return;
+    if (drivers.length === 0) return;
     let dead = false;
     let objectUrl: string | null = null;
-    import("@/lib/shareCard").then((m) => m.renderPickCard(cardData())).then((blob) => {
+    renderPickCard(cardData()).then((blob) => {
       if (!blob || dead) return;
-      objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
+      cachedBlobRef.current = blob;
+      objectUrl = URL.createObjectURL(blob);
       setPreview(objectUrl);
     });
     return () => {
       dead = true;
+      cachedBlobRef.current = null;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setPreview(null); setCachedBlob(null);
+      setPreview(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, key]);
+  }, [key]);
 
   function saveBlob(blob: Blob) {
     const href = URL.createObjectURL(blob);
@@ -113,7 +120,7 @@ export function SharePicks({
   }
 
   async function handleDownloadImage() {
-    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
+    const blob = cachedBlobRef.current ?? (await renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -122,7 +129,7 @@ export function SharePicks({
   }
 
   async function handleShareImage() {
-    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
+    const blob = cachedBlobRef.current ?? (await renderPickCard(cardData()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -133,10 +140,10 @@ export function SharePicks({
         await navigator.share({ files: [file], title: `DOWNFORCE — ${raceName}` });
         return;
       } catch (e) {
-        if ((e as DOMException)?.name === "AbortError") return; // user closed the share sheet
+        if ((e as DOMException)?.name === "AbortError") return;
       }
     }
-    saveBlob(blob); // browser can't share images: download instead
+    saveBlob(blob);
   }
 
   async function nativeShareText() {
