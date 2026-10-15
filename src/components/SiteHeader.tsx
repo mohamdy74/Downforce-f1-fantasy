@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, Zap } from "lucide-react";
 
+import { AccountAndOnboarding } from "@/components/AccountAndOnboarding";
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
 import { PushOptIn } from "@/components/PushOptIn";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4">
         <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
-          <LogoHorizontal className="h-7 w-auto max-w-[150px] sm:h-10 sm:max-w-none" />
+          <LogoHorizontal className="h-7 w-auto max-w-[140px] sm:h-10 sm:max-w-none" />
         </Link>
 
         <nav className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
@@ -102,15 +103,18 @@ export function SiteHeader() {
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
           {user ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Sign out"
-              onClick={() => signOut()}
-              className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <>
+              <AccountAndOnboarding />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Sign out"
+                onClick={() => signOut()}
+                className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </>
           ) : (
             <Button asChild size="sm" className="ml-1 h-8 px-2.5 text-xs">
               <Link to="/auth">Sign in</Link>

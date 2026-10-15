@@ -390,3 +390,60 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
     return { ok: false, msg: "Unknown action" };
   });
+
+
+export const updateMyProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { displayName: string }) => d)
+  .handler(async ({ data, context }) => {
+    const name = data.displayName.trim().slice(0, 40);
+    if (!name) throw new Error("Display name cannot be empty");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ display_name: name })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true, name };
+  });
+
+export const deleteMyAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const uid = context.userId;
+    await Promise.all([
+      supabaseAdmin.from("scores").delete().eq("user_id", uid),
+      supabaseAdmin.from("predictions").delete().eq("user_id", uid),
+      supabaseAdmin.from("sprint_predictions").delete().eq("user_id", uid),
+      supabaseAdmin.from("prediction_logs").delete().eq("user_id", uid),
+      supabaseAdmin.from("sync_state").delete().like("key", `push_sub:${uid}:%`),
+    ]);
+    await supabaseAdmin.from("profiles").delete().eq("id", uid);
+    await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
+    return { ok: true };
+  });
+
+export const exportLeagueBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const sb = await requireSteward(context);
+    const [profiles, races, predictions, sprintPredictions, scores, logs] = await Promise.all([
+      sb.from("profiles").select("*").order("display_name"),
+      sb.from("races").select("*").order("round"),
+      sb.from("predictions").select("*"),
+      sb.from("sprint_predictions").select("*"),
+      sb.from("scores").select("*"),
+      sb.from("prediction_logs").select("*").order("created_at", { ascending: false }).limit(500),
+    ]);
+    return {
+      exportedAt: new Date().toISOString(),
+      season: 2026,
+      profiles: profiles.data ?? [],
+      races: races.data ?? [],
+      predictions: predictions.data ?? [],
+      sprintPredictions: sprintPredictions.data ?? [],
+      scores: scores.data ?? [],
+      recentLogs: logs.data ?? [],
+    };
+  });

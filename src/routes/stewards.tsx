@@ -23,7 +23,8 @@ import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
-import { executeStewardAction, getStewardsDashboard, STEWARD_EMAIL } from "@/lib/stewards.functions";
+import { executeStewardAction, exportLeagueBackup, getStewardsDashboard, STEWARD_EMAIL } from "@/lib/stewards.functions";
+import { Download } from "lucide-react";
 import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
 
@@ -229,30 +230,59 @@ function StewardsPage() {
           </p>
           <h1 className="text-2xl sm:text-3xl">Stewards Room</h1>
         </div>
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await syncF1Data({ data: { force: true } });
-              await Promise.all([
-                refetchDash(),
-                queryClient.invalidateQueries({ queryKey: ["races"] }),
-                queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
-              ]);
-              toast.success("Full F1 sync & score recalculation complete!");
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Sync failed");
-            } finally {
-              setBusy(false);
-            }
-          }}
-          className="h-9 gap-1.5 text-xs"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
-          Force Sync All
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const backup = await exportLeagueBackup();
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `downforce-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                toast.success("Full league database backup downloaded!");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Backup failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="h-9 gap-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5 text-gold" />
+            Backup JSON
+          </Button>
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await syncF1Data({ data: { force: true } });
+                await Promise.all([
+                  refetchDash(),
+                  queryClient.invalidateQueries({ queryKey: ["races"] }),
+                  queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
+                ]);
+                toast.success("Full F1 sync & score recalculation complete!");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Sync failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="h-9 gap-1.5 text-xs"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
+            Force Sync All
+          </Button>
+        </div>
       </div>
 
       <div className="carbon-panel rounded-xl border border-border/70 p-3">
