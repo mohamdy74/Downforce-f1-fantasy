@@ -30,7 +30,8 @@ export type Driver = {
 
 export const racesQuery = queryOptions({
   queryKey: ["races", SEASON],
-  staleTime: 5 * 60_000,
+  staleTime: 15 * 60_000,
+  gcTime: 30 * 60_000,
   queryFn: async (): Promise<Race[]> => {
     const { data, error } = await supabase
       .from("races")
@@ -44,7 +45,8 @@ export const racesQuery = queryOptions({
 
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
-  staleTime: 10 * 60_000,
+  staleTime: 30 * 60_000,
+  gcTime: 60 * 60_000,
   queryFn: async (): Promise<Driver[]> => {
     const { data, error } = await supabase
       .from("drivers")
@@ -70,13 +72,15 @@ export type LeaderboardEntry = {
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  staleTime: 60_000,
+  staleTime: 2 * 60_000,
   queryFn: async (): Promise<LeaderboardEntry[]> => {
-    // Single-wave parallel fetch: scores, profiles, and races all in 1 round-trip
+    const { data: sData } = await supabase.auth.getSession();
+    if (!sData.session) return [];
+
     const [
       { data: scores, error: sErr },
       { data: profiles, error: pErr },
-      { data: raceRows, error: rErr },
+      { data: raceRows },
     ] = await Promise.all([
       supabase.from("scores").select("user_id, race_id, points"),
       supabase.from("profiles").select("id, display_name, avatar_url"),
@@ -84,7 +88,6 @@ export const leaderboardQuery = queryOptions({
     ]);
     if (sErr) throw sErr;
     if (pErr) throw pErr;
-    if (rErr) throw rErr;
 
     const byUser = new Map<string, LeaderboardEntry>();
     for (const p of profiles ?? []) {
@@ -101,7 +104,7 @@ export const leaderboardQuery = queryOptions({
       });
     }
     for (const s of scores ?? []) {
-      const entry = byUser.get(s.user_id);
+      if (!(raceRows ?? []).some((r) => r.id === s.race_id)) continue; const entry = byUser.get(s.user_id);
       if (!entry) continue;
       entry.points += s.points;
       entry.races += 1;
@@ -125,10 +128,12 @@ export const leaderboardQuery = queryOptions({
     const list = [...byUser.values()].sort(sort);
 
     // Rank movement vs. standings before the latest scored race.
-    if (lastRd > 0) {
+    const roundOf = new Map((raceRows ?? []).map((r) => [r.id, r.round]));
+    const latest = Math.max(0, ...(scores ?? []).map((s) => roundOf.get(s.race_id) ?? 0));
+    if (latest > 0) {
       const prevPts = new Map<string, number>();
       for (const s of scores ?? []) {
-        if ((rMap.get(s.race_id) ?? 0) === lastRd) continue;
+        if ((roundOf.get(s.race_id) ?? 0) === latest) continue;
         prevPts.set(s.user_id, (prevPts.get(s.user_id) ?? 0) + s.points);
       }
       const prev = [...list].sort(
