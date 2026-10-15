@@ -34,6 +34,7 @@ export const Route = createFileRoute("/predict")({
       { name: "twitter:description", content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix." },
     ],
   }),
+  loader: async ({ context }) => { await Promise.all([context.queryClient.ensureQueryData(racesQuery).catch(() => null), context.queryClient.ensureQueryData(driversQuery).catch(() => null)]); },
   component: Predict,
 });
 

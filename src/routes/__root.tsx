@@ -1,3 +1,4 @@
+import { AuthProvider } from "@/hooks/useAuth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -163,6 +164,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <BackgroundSync />
       <InstallPrompt />
       <PullToRefresh />
@@ -177,6 +179,7 @@ function RootComponent() {
       </div>
       <BottomNav />
       <Toaster />
+          </AuthProvider>
     </QueryClientProvider>
   );
 }
