@@ -478,6 +478,7 @@ export function drawPoleCard(ctx: Ctx, d: PoleCardData) {
 
 async function paint(draw: (ctx: Ctx) => void): Promise<Blob | null> {
   try {
+    if (document.fonts?.ready) await document.fonts.ready;
     await Promise.all(
       [
         "italic 900 40px Archivo",

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Download, Flag, Image as ImageIcon, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,8 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import type { PoleCardData } from "@/lib/shareCard"; const formatCairo = (iso?: string | null) => iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }).toUpperCase() : null;
+import { formatCairo, renderPoleCard, type PoleCardData } from "@/lib/shareCard";
 
-/**
- * Stand-alone "pole position" share card. Works with or without a saved top 10:
- * all it needs is the race, the player and the driver picked for pole.
- */
 export function SharePole({
   raceName,
   round,
@@ -26,22 +22,22 @@ export function SharePole({
   raceName: string;
   round: number;
   playerName: string;
-  /** the driver picked for pole (null/undefined = nothing picked yet) */
   driver: Driver | null | undefined;
-  /** ISO time the pole pick was saved; shown on the card in Cairo time */
   savedAt: string | null | undefined;
-  /** circuit / location line shown under the race name */
   circuit?: string | null | undefined;
   className?: string;
 }) {
   const { user } = useAuth();
-  // Same name the league table shows; falls back to the Google name.
   const { data: leagueName } = useQuery({
     queryKey: ["profile-name", user?.id],
     enabled: !!user,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .maybeSingle();
       return data?.display_name ?? null;
     },
   });
@@ -73,24 +69,28 @@ export function SharePole({
   });
 
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null); const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const cachedBlobRef = useRef<Blob | null>(null);
   const key = [raceName, round, shownName, driver?.id, savedAt].join("|");
+
   useEffect(() => {
-    if (!open) return;
+    if (!driver) return;
     let dead = false;
     let objectUrl: string | null = null;
-    import("@/lib/shareCard").then((m) => m.renderPoleCard(card())).then((blob) => {
+    renderPoleCard(card()).then((blob) => {
       if (!blob || dead) return;
-      objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
+      cachedBlobRef.current = blob;
+      objectUrl = URL.createObjectURL(blob);
       setPreview(objectUrl);
     });
     return () => {
       dead = true;
+      cachedBlobRef.current = null;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setPreview(null); setCachedBlob(null);
+      setPreview(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, key]);
+  }, [key]);
 
   function saveBlob(blob: Blob) {
     const href = URL.createObjectURL(blob);
@@ -105,7 +105,7 @@ export function SharePole({
   }
 
   async function handleDownload() {
-    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
+    const blob = cachedBlobRef.current ?? (await renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
@@ -114,14 +114,12 @@ export function SharePole({
   }
 
   async function handleShareImage() {
-    const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
+    const blob = cachedBlobRef.current ?? (await renderPoleCard(card()));
     if (!blob) {
       toast.error("Couldn't create the image.");
       return;
     }
     const file = new File([blob], fileName, { type: "image/png" });
-    
-
     if (navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: `DOWNFORCE — ${raceName} pole pick` });
