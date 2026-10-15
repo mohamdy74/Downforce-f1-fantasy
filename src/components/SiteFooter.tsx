@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { X } from "lucide-react";
+import { X, ShieldCheck, FileText } from "lucide-react";
 import { useState } from "react";
 
 import { LogoHorizontal } from "@/components/Logo";
@@ -18,14 +18,15 @@ export function SiteFooter() {
   if (pathname !== "/") return null;
 
   return (
-    <footer className="mt-12 border-t border-border bg-background/70">
+    <footer className="mt-12 border-t border-border bg-background/80">
       <div className="kerb-strip" />
       <div className="mx-auto max-w-5xl px-4 pb-8 pt-8">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
-          <Link to="/" aria-label="DOWNFORCE home" className="flex min-w-0 items-center opacity-90">
+          <Link to="/" aria-label="DOWNFORCE home" className="flex min-w-0 items-center opacity-95">
             <LogoHorizontal className="h-9 w-auto max-w-full" />
           </Link>
-          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+
+          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {FOOTER_LINKS.map((l) => (
               <Link
                 key={l.to}
@@ -35,20 +36,26 @@ export function SiteFooter() {
                 {l.label}
               </Link>
             ))}
-            <button
-              type="button"
-              onClick={() => setLegalModal("privacy")}
-              className="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Privacy Policy
-            </button>
-            <button
-              type="button"
-              onClick={() => setLegalModal("terms")}
-              className="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Terms of Use
-            </button>
+
+            {/* Distinctive highlighted legal pills */}
+            <div className="flex items-center gap-2 pl-1">
+              <button
+                type="button"
+                onClick={() => setLegalModal("privacy")}
+                className="inline-flex items-center gap-1 rounded-full border border-gold/50 bg-gold/15 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-gold shadow-sm transition hover:border-gold hover:bg-gold/25"
+              >
+                <ShieldCheck className="h-3 w-3" />
+                Privacy Policy
+              </button>
+              <button
+                type="button"
+                onClick={() => setLegalModal("terms")}
+                className="inline-flex items-center gap-1 rounded-full border border-primary/50 bg-primary/15 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-primary shadow-sm transition hover:border-primary hover:bg-primary/25"
+              >
+                <FileText className="h-3 w-3" />
+                Terms of Use
+              </button>
+            </div>
           </nav>
         </div>
 
@@ -65,9 +72,14 @@ export function SiteFooter() {
           </p>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span>© {new Date().getFullYear()} DOWNFORCE · Fantasy Racing League</span>
-          <span>Timing data courtesy of Jolpica and OpenF1</span>
+        {/* Distinctive styled copyright & timing credit bar */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border/60 bg-secondary/30 px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-wider">
+          <span className="font-bold text-foreground">
+            © {new Date().getFullYear()} <strong className="font-black text-primary">DOWNFORCE</strong> · <span className="font-black text-gold">Fantasy Racing League</span>
+          </span>
+          <span className="text-muted-foreground">
+            Official Timing Data: <strong className="text-foreground">Jolpica &amp; OpenF1</strong>
+          </span>
         </div>
       </div>
 

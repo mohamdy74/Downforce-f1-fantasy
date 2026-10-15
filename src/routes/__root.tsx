@@ -22,19 +22,30 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+    <div className="flex min-h-[75vh] flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="carbon-panel max-w-md rounded-2xl border border-border p-8 shadow-2xl">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold/15 text-gold border border-gold/40">
+          <span className="font-mono text-2xl font-black">404</span>
+        </div>
+        <p className="mt-4 font-mono text-xs font-bold uppercase tracking-[0.25em] text-primary">
+          Yellow Flag · Car Off Track
         </p>
-        <div className="mt-6">
+        <h1 className="mt-1 text-3xl sm:text-4xl">Gravel Trap!</h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          You went off the racing line. The corner you are looking for does not exist or has been moved.
+        </p>
+        <div className="mt-6 flex justify-center gap-3">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            Rejoin the Paddock 🏁
+          </Link>
+          <Link
+            to="/predict"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-secondary px-5 font-mono text-xs font-bold uppercase tracking-wider text-foreground transition-colors hover:bg-secondary/70"
+          >
+            Make Picks
           </Link>
         </div>
       </div>
@@ -126,7 +137,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <HeadContent /><style>{"html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent}::view-transition-old(root),::view-transition-new(root){animation-duration:160ms;animation-timing-function:cubic-bezier(0.22,1,0.36,1)}"}</style>
+        <HeadContent />
       </head>
       <body>
         {children}
@@ -165,3 +176,5 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+
+
