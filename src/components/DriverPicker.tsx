@@ -44,8 +44,8 @@ export function DriverPicker({
         drivers={drivers}
         value={value}
         onChange={onChange}
-        disabled={disabled}
-        exclude={exclude}
+        disabled={!!disabled}
+        exclude={exclude ?? []}
         placeholder={placeholder}
       />
     );

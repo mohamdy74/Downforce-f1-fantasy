@@ -154,7 +154,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const col = d.target === "qualifying" ? "qualifying_at" : "race_at";
       const parsed = new Date(d.isoTime);
       if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date/time format");
-      const { error } = await sb.from("races").update({ [col]: parsed.toISOString() }).eq("id", d.raceId);
+      const patch = d.target === "qualifying" ? { qualifying_at: parsed.toISOString() } : { race_at: parsed.toISOString() }; const { error } = await sb.from("races").update(patch).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
         .from("sync_state")
@@ -168,7 +168,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const col = d.target === "qualifying" ? "qualifying_at" : "race_at";
       const cur = (d.target === "qualifying" ? r.qualifying_at : r.race_at) ?? r.race_at;
       const nextIso = new Date(new Date(cur).getTime() + d.minutes * 60_000).toISOString();
-      const { error } = await sb.from("races").update({ [col]: nextIso }).eq("id", d.raceId);
+      const patch = d.target === "qualifying" ? { qualifying_at: nextIso } : { race_at: nextIso }; const { error } = await sb.from("races").update(patch).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
         .from("sync_state")

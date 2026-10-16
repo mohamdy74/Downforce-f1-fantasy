@@ -53,36 +53,7 @@ async function getJson<T>(url: string): Promise<T | null> {
 
 const userSyncCalls = new Map<string, number>();
 
-export const savePushSubscription = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const prefix = `push_sub:${context.userId}:`;
-    const { data: existing } = await supabaseAdmin
-      .from("sync_state")
-      .select("key")
-      .like("key", `${prefix}%`);
-
-    const staleKeys: string[] = [];
-    for (const r of existing ?? []) {
-      try {
-        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
-        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
-      } catch {
-        staleKeys.push(r.key);
-      }
-    }
-    if (staleKeys.length > 0) {
-      await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
-    }
-
-    const key = `${prefix}${JSON.stringify(data)}`;
-    await supabaseAdmin
-      .from("sync_state")
-      .upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
-    return { ok: true };
-  });
+export { savePushSubscription } from "./stewards.functions";
 
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -250,7 +221,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
     await syncSprintResults(roundToId);
     await openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round))));
-    await scoreAllRaces();
+    await scoreAllRaces(data.force);
 
     await supabaseAdmin
       .from("sync_state")
@@ -355,17 +326,26 @@ export async function checkAndSendPushReminders(
   return totalSent;
 }
 
-async function scoreAllRaces() {
+async function scoreAllRaces(forceAll = false) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: races } = await supabaseAdmin
-    .from("races")
-    .select("id, race_at")
-    .eq("season", SEASON)
-    .eq("has_results", true);
+  const [{ data: races }, { data: existingScoreRaces }] = await Promise.all([
+    supabaseAdmin
+      .from("races")
+      .select("id, race_at")
+      .eq("season", SEASON)
+      .eq("has_results", true),
+    supabaseAdmin.from("scores").select("race_id"),
+  ]);
   if (!races?.length) return;
 
-  for (const race of races) {
+  const alreadyScoredRaceIds = new Set((existingScoreRaces ?? []).map((s) => s.race_id));
+  const targetRaces = forceAll
+    ? races
+    : races.filter((r) => !alreadyScoredRaceIds.has(r.id));
+  if (!targetRaces.length) return;
+
+  for (const race of targetRaces) {
     const [
       { data: profiles },
       { data: results },
@@ -503,7 +483,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
     if (!iso) return undefined;
     const t = new Date(iso).getTime();
     return sessions.find(
-      (s) => s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 6 * 3600_000,
+      (s) => s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 3 * 3600_000,
     );
   };
 
@@ -515,7 +495,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
       getJson<Array<{ driver_number: number; name_acronym: string }>>(
         `${OPENF1}/drivers?session_key=${rs.session_key}`,
       ),
-      getJson<Array<{ driver_number: number; lap_duration: number | null }>>(
+      getJson<Array<{ driver_number: number; lap_duration: number | null; is_pit_out_lap?: boolean }>>(
         `${OPENF1}/laps?session_key=${rs.session_key}`,
       ),
     ]);
@@ -536,7 +516,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
     let flNum: number | undefined;
     let best = Infinity;
     for (const l of laps ?? []) {
-      if (l.lap_duration && l.lap_duration < best) {
+      if (!l.is_pit_out_lap && l.lap_duration && l.lap_duration > 55 && l.lap_duration < best) {
         best = l.lap_duration;
         flNum = l.driver_number;
       }
