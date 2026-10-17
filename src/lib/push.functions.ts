@@ -1,0 +1,1 @@
+﻿export { savePushSubscription } from "./stewards.functions"; export async function checkAndSendRaceReminders() { const { supabaseAdmin } = await import("@/integrations/supabase/client.server"); const { checkAndSendPushReminders } = await import("./f1-sync.functions"); const sent = await checkAndSendPushReminders(supabaseAdmin); return { sent }; }
