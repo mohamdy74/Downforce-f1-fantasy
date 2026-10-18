@@ -57,7 +57,7 @@ export { savePushSubscription } from "./stewards.functions";
 
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ({
+  .validator((input: unknown) => ({
     force: Boolean((input as { force?: boolean } | null)?.force),
   }))
   .handler(async ({ data, context }) => {

@@ -147,7 +147,7 @@ async function loadRace(admin: Admin, raceId: string): Promise<DbRace | null> {
 
 export const getWeekendSchedule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { raceId: string }) => input)
+  .validator((input: { raceId: string }) => input)
   .handler(async ({ data }): Promise<{ sessions: ScheduleItem[] }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const race = await loadRace(supabaseAdmin, data.raceId);
@@ -360,7 +360,7 @@ async function fetchClassification(
 
 export const getWeekendSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { raceId: string; sessionType: string }) => input)
+  .validator((input: { raceId: string; sessionType: string }) => input)
   .handler(async ({ data }): Promise<SessionPayload> => {
     const type = data.sessionType;
     if (!isSessionType(type) || type === "race") throw new Error("Unsupported session type");

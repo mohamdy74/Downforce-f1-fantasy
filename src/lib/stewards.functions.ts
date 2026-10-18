@@ -21,7 +21,7 @@ async function requireSteward(context: { userId: string; claims?: Record<string,
 
 export const savePushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
+  .validator((d: { endpoint: string; p256dh: string; auth: string }) => d)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const prefix = `push_sub:${context.userId}:`;
@@ -52,7 +52,7 @@ export const savePushSubscription = createServerFn({ method: "POST" })
 
 export const getStewardsDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { raceId: string }) => d)
+  .validator((d: { raceId: string }) => d)
   .handler(async ({ data, context }) => {
     const sb = await requireSteward(context);
     const [{ data: profiles }, { data: preds }, { data: scores }, { data: results }, { data: subRows }] =
@@ -89,7 +89,7 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
 
 export const executeStewardAction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: {
+  .validator((d: {
     action:
       | "override_score"
       | "remove_penalty"
@@ -394,7 +394,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
 export const updateMyProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { displayName: string }) => d)
+  .validator((d: { displayName: string }) => d)
   .handler(async ({ data, context }) => {
     const name = data.displayName.trim().slice(0, 40);
     if (!name) throw new Error("Display name cannot be empty");

@@ -1,0 +1,11 @@
+﻿=== GIT STATUS & LOG ===
+
+5863114 Restore clean push.functions wrapper for reminders route
+0ef1f99 Apply 4 core review fixes: TS strict types, incremental race scoring, OpenF1 3h window & pit-lap filter, and push fn dedup
+5c78f0e Surgical 4-axis upgrade: parallel queries, route preloaders, central AuthProvider, font readiness, OG banner, and clock skew sync
+b8cfeed Reapply "Pro architectural upgrade: parallel queries, singleton auth store, route preloaders, instant share cards with car numbers, and OG social banner"
+f84f9ab Revert "Pro architectural upgrade: parallel queries, singleton auth store, route preloaders, instant share cards with car numbers, and OG social banner"
+aff8189 Pro architectural upgrade: parallel queries, singleton auth store, route preloaders, instant share cards with car numbers, and OG social banner
+3c96fdd Style Privacy/Terms pills and copyright bar in SiteFooter, and upgrade 404 to F1 Gravel Trap theme
+4fb1380 Fix Account Settings modal clipping via Portal, auto-close on route change, and add ESC button
+

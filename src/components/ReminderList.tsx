@@ -3,37 +3,35 @@ import { Link } from "@tanstack/react-router";
 import { Send, Users, UserX, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
 import { nextRace, racesQuery } from "@/lib/queries";
-import { getReminderStats } from "@/lib/reminder.functions";
+import { getReminderStats } from "@/lib/reminders.functions";
 
 export function ReminderList() {
   const { data: races } = useQuery(racesQuery);
-  const { user } = useAuth();
 
   const race = races ? nextRace(races) : null;
-  
+  if (!race || !races) return null;
 
   const { data: missing } = useQuery({
-    queryKey: ["missing-preds", race?.id],
-    enabled: !!race && !!user,
-    staleTime: 2 * 60_000, // 2 minutes
+    queryKey: ["missing-preds", race.id],
+    enabled: !!race,
+    staleTime: 2 * 60_000,
     queryFn: async () => {
-      return await getReminderStats({ data: { raceId: race!.id } });
+      return await getReminderStats({ data: { raceId: race.id } });
     },
   });
 
-  if (!race || !races) return null; if (!missing || !missing.missing) {
+  if (!missing || !missing.missing) {
     return (
       <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">
-        Couldn&apos;t load reminder list — check that predictions table is accessible.
+        Couldn&apos;t load reminder list â€” check that predictions table is accessible.
       </div>
     );
   }
   if (missing.missing.length === 0) return null;
 
   const whatsappMsg = encodeURIComponent(
-    `DOWNFORCE reminder: ${race.name} picks close at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} — lock in your predictions!`,
+    `DOWNFORCE reminder: ${race.name} picks close at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} â€” lock in your predictions!`,
   );
   const waLink = `https://wa.me/?text=${whatsappMsg}`;
 

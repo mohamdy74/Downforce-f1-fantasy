@@ -4,6 +4,32 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const SEASON = 2026;
 
+let clockOffsetMs = 0;
+let clockSynced = false;
+
+export async function syncServerClock(): Promise<void> {
+  if (clockSynced || typeof window === "undefined") return;
+  clockSynced = true;
+  try {
+    const t0 = Date.now();
+    const res = await fetch(window.location.origin, { method: "HEAD", cache: "no-store" });
+    const dateHdr = res.headers.get("Date");
+    if (dateHdr) {
+      const serverMs = new Date(dateHdr).getTime();
+      const rtt = Date.now() - t0;
+      if (!Number.isNaN(serverMs)) {
+        clockOffsetMs = serverMs + rtt / 2 - Date.now();
+      }
+    }
+  } catch {
+    // Fallback to device clock
+  }
+}
+
+export function getTrustedNow(): number {
+  return Date.now() + clockOffsetMs;
+}
+
 export type Race = {
   id: string;
   season: number;
@@ -30,8 +56,9 @@ export type Driver = {
 
 export const racesQuery = queryOptions({
   queryKey: ["races", SEASON],
-  staleTime: 5 * 60_000,
+  staleTime: 60_000,
   queryFn: async (): Promise<Race[]> => {
+    void syncServerClock();
     const { data, error } = await supabase
       .from("races")
       .select("*")
@@ -44,7 +71,7 @@ export const racesQuery = queryOptions({
 
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
-  staleTime: 10 * 60_000,
+  staleTime: 5 * 60_000,
   queryFn: async (): Promise<Driver[]> => {
     const { data, error } = await supabase
       .from("drivers")
@@ -70,9 +97,8 @@ export type LeaderboardEntry = {
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  staleTime: 60_000,
+  staleTime: 30_000,
   queryFn: async (): Promise<LeaderboardEntry[]> => {
-    // Single-wave parallel fetch: scores, profiles, and races all in 1 round-trip
     const [
       { data: scores, error: sErr },
       { data: profiles, error: pErr },
@@ -86,6 +112,7 @@ export const leaderboardQuery = queryOptions({
     if (pErr) throw pErr;
     if (rErr) throw rErr;
 
+    const rMap = new Map((raceRows ?? []).map((r) => [r.id, r.round]));
     const byUser = new Map<string, LeaderboardEntry>();
     for (const p of profiles ?? []) {
       byUser.set(p.id, {
@@ -100,35 +127,35 @@ export const leaderboardQuery = queryOptions({
         fahl: false,
       });
     }
+
+    let latestRound = 0;
     for (const s of scores ?? []) {
       const entry = byUser.get(s.user_id);
-      if (!entry) continue;
+      const rd = rMap.get(s.race_id);
+      if (!entry || rd == null) continue;
       entry.points += s.points;
       entry.races += 1;
       entry.best = entry.best == null ? s.points : Math.max(entry.best, s.points);
+      entry.byRound[rd] = s.points;
+      if (rd > latestRound) latestRound = rd;
     }
 
-    const rMap = new Map((raceRows ?? []).map((r) => [r.id, r.round]));
-    for (const s of scores ?? []) {
-      const e = byUser.get(s.user_id);
-      const rd = rMap.get(s.race_id);
-      if (e && rd != null) e.byRound[rd] = s.points;
-    }
-    const lastRd = Math.max(0, ...(scores ?? []).map((s) => rMap.get(s.race_id) ?? 0));
-    if (lastRd > 0) {
-      const top = Math.max(...[...byUser.values()].map((e) => e.byRound[lastRd] ?? -Infinity));
-      for (const e of byUser.values()) if (e.byRound[lastRd] === top) e.fahl = true;
+    if (latestRound > 0) {
+      const top = Math.max(...[...byUser.values()].map((e) => e.byRound[latestRound] ?? -Infinity));
+      for (const e of byUser.values()) {
+        if (e.byRound[latestRound] === top) e.fahl = true;
+      }
     }
 
     const sort = (a: LeaderboardEntry, b: LeaderboardEntry) =>
       b.points - a.points || a.name.localeCompare(b.name);
     const list = [...byUser.values()].sort(sort);
 
-    // Rank movement vs. standings before the latest scored race.
-    if (lastRd > 0) {
+    if (latestRound > 0) {
       const prevPts = new Map<string, number>();
       for (const s of scores ?? []) {
-        if ((rMap.get(s.race_id) ?? 0) === lastRd) continue;
+        const rd = rMap.get(s.race_id) ?? 0;
+        if (rd === 0 || rd === latestRound) continue;
         prevPts.set(s.user_id, (prevPts.get(s.user_id) ?? 0) + s.points);
       }
       const prev = [...list].sort(
@@ -144,7 +171,7 @@ export const leaderboardQuery = queryOptions({
 });
 
 export function nextRace(races: Race[]): Race | null {
-  const now = Date.now();
+  const now = getTrustedNow();
   return races.find((r) => new Date(r.race_at).getTime() > now) ?? null;
 }
 
