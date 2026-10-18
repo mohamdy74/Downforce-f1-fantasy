@@ -8,7 +8,7 @@ import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery } from "@/lib/queries";
+import { driversQuery, racesQuery, toEpochMs } from "@/lib/queries";
 import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
 import {
   SPRINT_MAX_POINTS,
@@ -53,9 +53,9 @@ function Sprint() {
     return () => clearInterval(t);
   }, []);
 
-  const sprintLocked = !!race?.sprint_at && new Date(race.sprint_at).getTime() <= now;
+  const sprintLocked = !!race?.sprint_at && toEpochMs(race.sprint_at) <= now;
   const poleLockAt = race ? sprintPoleLockAt(race) : null;
-  const poleLocked = !!poleLockAt && new Date(poleLockAt).getTime() <= now;
+  const poleLocked = !!poleLockAt && toEpochMs(poleLockAt) <= now;
 
   const { data: prediction } = useQuery({
     queryKey: ["sprint-prediction", race?.id, user?.id],

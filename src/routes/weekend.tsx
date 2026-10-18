@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"; import { useAutoAnimate } from "@fo
 
 import { Countdown } from "@/components/Countdown";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery, type Driver, type Race } from "@/lib/queries";
+import { driversQuery, racesQuery, toEpochMs, type Driver, type Race } from "@/lib/queries";
 import { teamColor } from "@/lib/teams";
 import {
   SESSION_LABEL,
@@ -59,7 +59,7 @@ const MIN = 60_000;
 const STAY_MS = 18 * 60 * MIN; // keep showing a weekend until 3 days after the race starts
 
 function statusOf(startIso: string, type: SessionType, now: number): Status {
-  const start = new Date(startIso).getTime();
+  const start = toEpochMs(startIso);
   if (now < start) return "upcoming";
   return now < start + SESSION_MINUTES[type] * MIN ? "live" : "completed";
 }
@@ -78,7 +78,7 @@ function useNow(ms = 15_000) {
 function currentWeekend(races: Race[], now: number): Race | null {
   if (!races.length) return null;
   return (
-    races.find((r) => new Date(r.race_at).getTime() + STAY_MS >= now) ?? races[races.length - 1]!
+    races.find((r) => toEpochMs(r.race_at) + STAY_MS >= now) ?? races[races.length - 1]!
   );
 }
 
@@ -267,7 +267,7 @@ function SessionPane({
   }
 
   // Default to the most recent session that has already started.
-  const started = available.filter((s) => new Date(s.startsAt).getTime() <= now);
+  const started = available.filter((s) => toEpochMs(s.startsAt) <= now);
   const selected = available.find((s) => s.type === picked) ?? started[started.length - 1] ?? available[0]!;
 
   return (

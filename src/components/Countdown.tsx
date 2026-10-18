@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTrustedNow } from "@/lib/queries";
+import { getTrustedNow, toEpochMs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function parts(msLeft: number) {
@@ -21,7 +21,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
     return () => clearInterval(id);
   }, []);
 
-  const left = now == null ? 1 : new Date(target).getTime() - now;
+  const left = now == null ? 1 : toEpochMs(target) - now;
   const locked = now != null && left <= 0;
   const urgent2h = now != null && !locked && left <= 2 * 3600 * 1000;
   const { d, h, m, s } = parts(left);

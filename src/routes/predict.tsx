@@ -12,7 +12,7 @@ import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
+import { driversQuery, nextRace, racesQuery, toEpochMs, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
 
@@ -187,10 +187,10 @@ function Predict() {
   }, [draftKey, top10, fastestLap, dnf, prediction]);
 
   const now = Date.now();
-  const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
+  const raceLocked = !!race && toEpochMs(race.race_at) <= now;
   const poleLocked =
     raceLocked ||
-    (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
+    (!!race?.qualifying_at && toEpochMs(race.qualifying_at) <= now);
   const hasSaved = !!prediction && (prediction.top10?.length ?? 0) === 10;
   // Saved picks open in view mode so stray taps while scrolling can't change them.
   const viewOnly = raceLocked || (hasSaved && !editing);
@@ -235,7 +235,7 @@ function Predict() {
   // In-page reminder banner — red alert when picks not submitted
   const notSubmitted =
     prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
-    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
+    (!raceLocked || (race.qualifying_at && toEpochMs(race.qualifying_at) > Date.now()));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
   const duplicates = usedInTop10.length !== new Set(usedInTop10).size;
@@ -597,7 +597,7 @@ function TrackStatus({ target }: { target: string }) {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const left = new Date(target).getTime() - now;
+  const left = toEpochMs(target) - now;
   const state =
     left <= 0
       ? { label: "Locked · Formation lap", color: "var(--color-primary)" }

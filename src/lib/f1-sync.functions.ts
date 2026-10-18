@@ -88,9 +88,34 @@ export const syncF1Data = createServerFn({ method: "POST" })
     }
 
     // ---- Calendar (preserving Steward custom deadline overrides!) ----
-    const calendar = await getJson<{
-      MRData: { RaceTable: { Races: ErgastRace[] } };
-    }>(`${API}/${SEASON}/races/?format=json&limit=40`);
+    // Calendar, drivers and results are independent upstream reads — fetch them
+    // in parallel so a full sync costs one round-trip budget, not three.
+    const [calendar, standings, firstResultsPage] = await Promise.all([
+      getJson<{
+        MRData: { RaceTable: { Races: ErgastRace[] } };
+      }>(`${API}/${SEASON}/races/?format=json&limit=40`),
+      getJson<{
+        MRData: {
+          StandingsTable: {
+            StandingsLists: Array<{
+              DriverStandings: Array<{
+                Driver: {
+                  driverId: string;
+                  code?: string;
+                  permanentNumber?: string;
+                  givenName: string;
+                  familyName: string;
+                };
+                Constructors: Array<{ name: string }>;
+              }>;
+            }>;
+          };
+        };
+      }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`),
+      getJson<{
+        MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
+      }>(`${API}/${SEASON}/results/?format=json&limit=100&offset=0`),
+    ]);
     const races = calendar?.MRData.RaceTable.Races ?? [];
 
     if (races.length) {
@@ -134,25 +159,6 @@ export const syncF1Data = createServerFn({ method: "POST" })
     }
 
     // ---- Drivers ----
-    const standings = await getJson<{
-      MRData: {
-        StandingsTable: {
-          StandingsLists: Array<{
-            DriverStandings: Array<{
-              Driver: {
-                driverId: string;
-                code?: string;
-                permanentNumber?: string;
-                givenName: string;
-                familyName: string;
-              };
-              Constructors: Array<{ name: string }>;
-            }>;
-          }>;
-        };
-      };
-    }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`);
-
     const entries = (
       standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
     ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
@@ -171,22 +177,40 @@ export const syncF1Data = createServerFn({ method: "POST" })
     }
 
     // ---- Results ----
+    // Reuse the prefetched first page, then pull the remaining pages in
+    // parallel batches (the endpoint caps each response at 100 rows, so we
+    // still page until MRData.total — just concurrently instead of serially).
     const racesWithResults: ErgastRace[] = [];
-    const pageSize = 100;
-    let offset = 0;
-    let total = Infinity;
-    while (offset < total && offset < 2000) {
-      const page = await getJson<{
-        MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
-      }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${offset}`);
-      if (!page) break;
-      total = Number(page.MRData.total);
+    const mergePage = (page: {
+      MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
+    }) => {
       for (const race of page.MRData.RaceTable.Races) {
         const existing = racesWithResults.find((r) => r.round === race.round);
         if (existing) existing.Results = [...(existing.Results ?? []), ...(race.Results ?? [])];
         else racesWithResults.push(race);
       }
-      offset += pageSize;
+    };
+
+    const pageSize = 100;
+    const maxRows = 2000;
+    if (firstResultsPage) {
+      const total = Number(firstResultsPage.MRData.total);
+      mergePage(firstResultsPage);
+      const remainingOffsets: number[] = [];
+      for (let off = pageSize; off < total && off < maxRows; off += pageSize) {
+        remainingOffsets.push(off);
+      }
+      while (remainingOffsets.length) {
+        const batch = remainingOffsets.splice(0, 4);
+        const pages = await Promise.all(
+          batch.map((off) =>
+            getJson<{ MRData: { total: string; RaceTable: { Races: ErgastRace[] } } }>(
+              `${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${off}`,
+            ),
+          ),
+        );
+        for (const page of pages) if (page) mergePage(page);
+      }
     }
 
     const { data: dbRaces } = await supabaseAdmin
@@ -194,6 +218,16 @@ export const syncF1Data = createServerFn({ method: "POST" })
       .select("id, round")
       .eq("season", SEASON);
     const roundToId = new Map((dbRaces ?? []).map((r) => [r.round, r.id]));
+
+    const allResultRows: Array<{
+      race_id: string;
+      driver_id: string;
+      position: number | null;
+      status: string;
+      finished: boolean;
+      fastest_lap: boolean;
+      pole: boolean;
+    }> = [];
 
     for (const race of racesWithResults) {
       const raceId = roundToId.get(Number(race.round));
@@ -213,10 +247,22 @@ export const syncF1Data = createServerFn({ method: "POST" })
         };
       });
 
+      allResultRows.push(...rows);
+    }
+
+    // One batched upsert instead of a sequential round-trip per race.
+    if (allResultRows.length) {
       await supabaseAdmin
         .from("race_results")
-        .upsert(rows, { onConflict: "race_id,driver_id" });
-      await supabaseAdmin.from("races").update({ has_results: true }).eq("id", raceId);
+        .upsert(allResultRows, { onConflict: "race_id,driver_id" });
+    }
+
+    // Flag all scored races in a single update instead of one round-trip per race.
+    const scoredRaceIds = racesWithResults
+      .map((r) => roundToId.get(Number(r.round)))
+      .filter((id): id is string => !!id);
+    if (scoredRaceIds.length) {
+      await supabaseAdmin.from("races").update({ has_results: true }).in("id", scoredRaceIds);
     }
 
     await syncSprintResults(roundToId);
@@ -246,10 +292,13 @@ export async function checkAndSendPushReminders(
 
   if (!upcomingRaces?.length) return 0;
 
-  const { data: subRows } = await supabaseAdmin
-    .from("sync_state")
-    .select("key")
-    .like("key", "push_sub:%");
+  const [subRes, remindedRes] = await Promise.all([
+    supabaseAdmin.from("sync_state").select("key").like("key", "push_sub:%"),
+    supabaseAdmin.from("sync_state").select("key").like("key", "reminded:%"),
+  ]);
+  const subRows = subRes.data;
+  // Load all sent-reminder markers in one query instead of a per-window lookup.
+  const alreadyReminded = new Set((remindedRes.data ?? []).map((r) => r.key));
   if (!subRows?.length) return 0;
 
   let totalSent = 0;
@@ -270,12 +319,7 @@ export async function checkAndSendPushReminders(
       for (const w of WINDOWS) {
         if (diff < w.minMs || diff > w.maxMs) continue;
         const stateKey = `reminded:${race.id}:${t.type}:${w.label}`;
-        const { data: already } = await supabaseAdmin
-          .from("sync_state")
-          .select("key")
-          .eq("key", stateKey)
-          .maybeSingle();
-        if (already) continue;
+        if (alreadyReminded.has(stateKey)) continue;
 
         const { data: preds } = await supabaseAdmin
           .from("predictions")
@@ -303,16 +347,23 @@ export async function checkAndSendPushReminders(
         };
 
         const deadKeys: string[] = [];
-        for (const r of subRows) {
-          const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-          if (!m) continue;
-          if (doneUsers.has(m[1]!)) continue;
-          try {
-            const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-            const res = await sendNativeWebPush(sub, payloadObj);
-            if (res.ok) totalSent++;
-            else if (res.status === 404 || res.status === 410) deadKeys.push(r.key);
-          } catch {}
+        // Fan out push sends in small concurrent batches instead of one
+        // serial HTTPS round-trip per subscriber.
+        const targets = subRows
+          .map((r) => ({ r, m: /^push_sub:([^:]+):(.+)$/.exec(r.key) }))
+          .filter((x): x is { r: typeof x.r; m: RegExpExecArray } => !!x.m && !doneUsers.has(x.m[1]!));
+        const PUSH_CONCURRENCY = 8;
+        for (let i = 0; i < targets.length; i += PUSH_CONCURRENCY) {
+          await Promise.all(
+            targets.slice(i, i + PUSH_CONCURRENCY).map(async ({ r, m }) => {
+              try {
+                const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+                const res = await sendNativeWebPush(sub, payloadObj);
+                if (res.ok) totalSent++;
+                else if (res.status === 404 || res.status === 410) deadKeys.push(r.key);
+              } catch {}
+            }),
+          );
         }
         if (deadKeys.length > 0) {
           await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
@@ -401,9 +452,10 @@ async function scoreAllRaces(forceAll = false) {
       updated_at: string;
     }> = [];
 
+    const raceStartMs = new Date(race.race_at).getTime();
     for (const profile of profiles) {
       if (stewardLockedUsers.has(profile.id)) continue;
-      if (new Date(profile.created_at) > new Date(race.race_at)) continue;
+      if (new Date(profile.created_at).getTime() > raceStartMs) continue;
 
       const sprint = sprintFor(profile.id);
       const prediction = byUser.get(profile.id);

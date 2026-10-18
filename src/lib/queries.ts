@@ -184,12 +184,30 @@ export const leaderboardQuery = queryOptions({
   },
 });
 
+// Memoized epoch-ms conversion for race timestamps. Dates are immutable and
+// ISO strings parse deterministically, so caching is safe; this keeps hot
+// paths (per-second countdown ticks, list renders) from re-parsing the same
+// strings over and over.
+const epochCache = new Map<string, number>();
+export function toEpochMs(iso: string): number {
+  let ms = epochCache.get(iso);
+  if (ms === undefined) {
+    ms = new Date(iso).getTime();
+    if (epochCache.size < 5000) epochCache.set(iso, ms);
+  }
+  return ms;
+}
+
 export function nextRace(races: Race[]): Race | null {
   const now = getTrustedNow();
-  return races.find((r) => new Date(r.race_at).getTime() > now) ?? null;
+  return races.find((r) => toEpochMs(r.race_at) > now) ?? null;
 }
 
 export function lastRace(races: Race[]): Race | null {
-  const done = races.filter((r) => r.has_results && r.round >= LEAGUE_START_ROUND);
-  return done.length ? done[done.length - 1]! : null;
+  // Races are ordered by round, so scan backwards for the first scored race.
+  for (let i = races.length - 1; i >= 0; i--) {
+    const r = races[i]!;
+    if (r.has_results && r.round >= LEAGUE_START_ROUND) return r;
+  }
+  return null;
 }
