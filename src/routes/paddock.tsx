@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery, type Race } from "@/lib/queries";
+import { driversQuery, getTrustedNow, LEAGUE_START_ROUND, racesQuery, type Race } from "@/lib/queries";
 import { positionPoints } from "@/lib/scoring";
 import { teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -13,16 +13,16 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/paddock")({
   head: () => ({
     meta: [
-      { title: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { title: "Paddock Reveal & Race Debrief â€” DOWNFORCE" },
       {
         name: "description",
         content: "See every player's picks once the grid locks, and a colour-coded debrief of where points were won and lost.",
       },
-      { property: "og:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { property: "og:title", content: "Paddock Reveal & Race Debrief â€” DOWNFORCE" },
       { property: "og:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { name: "twitter:title", content: "Paddock Reveal & Race Debrief â€” DOWNFORCE" },
       { name: "twitter:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
     ],
   }),
@@ -46,7 +46,7 @@ type Pred = {
 function topPick(ids: (string | null | undefined)[]): { id: string; count: number } | null {
   const counts = new Map<string, number>();
   for (const id of ids) {
-    if (!id) continue;
+    if (!id || id === "__none__") continue;
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   let bestId = "";
@@ -65,8 +65,12 @@ function Paddock() {
   const { data: races } = useQuery(racesQuery);
   const { data: drivers } = useQuery(driversQuery);
 
+  // Only include rounds from R14 (Spanish GP) onwards
   const locked = useMemo(
-    () => (races ?? []).filter((r) => new Date(r.race_at).getTime() <= Date.now()),
+    () =>
+      (races ?? []).filter(
+        (r) => r.round >= LEAGUE_START_ROUND && new Date(r.race_at).getTime() <= getTrustedNow(),
+      ),
     [races],
   );
   const [raceId, setRaceId] = useState<string | null>(null);
@@ -78,7 +82,6 @@ function Paddock() {
     enabled: !!race && !!user,
     staleTime: 45_000,
     queryFn: async () => {
-      // Single-wave parallel query execution (all 5 tables fetched in 1 round-trip)
       const [preds, profiles, results, scores, logs] = await Promise.all([
         supabase
           .from("predictions")
@@ -112,7 +115,7 @@ function Paddock() {
     },
   });
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading…</main>;
+  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loadingâ€¦</main>;
   if (!user)
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
@@ -151,7 +154,7 @@ function Paddock() {
       <p className="mt-1 text-sm text-muted-foreground">
         {hasResults
           ? "Green = exact position, gold = close, red = points lost"
-          : "Picks are revealed once the grid locks — see what the group chose"}
+          : "Picks are revealed once the grid locks â€” see what the group chose"}
       </p>
 
       {locked.length > 1 && (
@@ -168,7 +171,7 @@ function Paddock() {
                   r.id === race?.id ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
                 )}
               >
-                R{r.round}
+                R{r.round} Â· {r.name.replace(" Grand Prix", " GP")}
               </button>
             ))}
         </div>
@@ -253,7 +256,7 @@ function Paddock() {
                       <span className="font-semibold">{d?.code ?? id}</span>
                       {hasResults && (
                         <span className="ml-auto font-mono text-xs">
-                          {actual ? `P${actual}` : "DNF"} · {pt > 0 ? `+${pt}` : pt}
+                          {actual ? `P${actual}` : "DNF"} Â· {pt > 0 ? `+${pt}` : pt}
                         </span>
                       )}
                     </li>
@@ -284,7 +287,7 @@ function BonusChip({ label, code, hit, pts }: { label: string; code?: string | n
         hit === false && "bg-muted/20 text-muted-foreground",
       )}
     >
-      <span className="text-muted-foreground">{label}</span> <b>{code ?? "—"}</b>
+      <span className="text-muted-foreground">{label}</span> <b>{code ?? "â€”"}</b>
       {hit && <span className="ml-1 text-success">+{pts}</span>}
     </div>
   );
@@ -312,21 +315,21 @@ function AuditTrail({
     const parts: string[] = [];
     for (const [k, label] of [["pole", "Pole"], ["fl", "FL"], ["dnf", "DNF"]] as const) {
       const v = ch[k];
-      if (Array.isArray(v)) parts.push(`${label} ${v[0] ? code(String(v[0])) : "—"}→${v[1] ? code(String(v[1])) : "—"}`);
+      if (Array.isArray(v)) parts.push(`${label} ${v[0] ? code(String(v[0])) : "â€”"}â†’${v[1] ? code(String(v[1])) : "â€”"}`);
       else if (typeof v === "string") parts.push(`${label} ${code(v)}`);
     }
     if (Array.isArray(ch["top10"]) && Array.isArray((ch["top10"] as unknown[])[0])) parts.push("top 10 changed");
-    return parts.join(" · ");
+    return parts.join(" Â· ");
   };
   return (
     <details className="mt-2 text-xs text-muted-foreground">
       <summary className="cursor-pointer">
-        {entries.length} change{entries.length > 1 ? "s" : ""} · last {fmt(entries[entries.length - 1]!.created_at)} (Cairo)
+        {entries.length} change{entries.length > 1 ? "s" : ""} Â· last {fmt(entries[entries.length - 1]!.created_at)} (Cairo)
       </summary>
       <ul className="mt-1 space-y-0.5 font-mono">
         {entries.map((e, i) => (
           <li key={i}>
-            {fmt(e.created_at)} — {ACTION_LABEL[e.action] ?? e.action} {describe(e.changes)}
+            {fmt(e.created_at)} â€” {ACTION_LABEL[e.action] ?? e.action} {describe(e.changes)}
           </li>
         ))}
       </ul>

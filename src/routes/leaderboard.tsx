@@ -4,23 +4,23 @@ import { useState } from "react";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { leaderboardQuery, racesQuery } from "@/lib/queries";
+import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
     meta: [
-      { title: "League standings — DOWNFORCE" },
+      { title: "League standings â€” DOWNFORCE" },
       {
         name: "description",
         content: "Live DOWNFORCE prediction league standings for the season.",
       },
-      { property: "og:title", content: "League standings — DOWNFORCE" },
+      { property: "og:title", content: "League standings â€” DOWNFORCE" },
       {
         property: "og:description",
         content: "See who is leading the DOWNFORCE prediction league.",
       },
-      { name: "twitter:title", content: "League standings — DOWNFORCE" },
+      { name: "twitter:title", content: "League standings â€” DOWNFORCE" },
       { name: "twitter:description", content: "See who is leading the DOWNFORCE prediction league." },
     ],
   }),
@@ -39,7 +39,12 @@ function Leaderboard() {
   const { user } = useAuth();
 
   const [open, setOpen] = useState<string | null>(null);
-  const scoredRaces = (races ?? []).filter((r) => r.has_results);
+  const scoredRaces = (races ?? []).filter(
+    (r) =>
+      r.round >= LEAGUE_START_ROUND &&
+      r.has_results &&
+      (board ?? []).some((e) => (e.byRound[r.round] ?? 0) !== 0),
+  );
   const scored = scoredRaces.length;
 
   return (
@@ -86,73 +91,61 @@ function Leaderboard() {
             No players yet. Sign in to claim P1.
           </p>
         )}
-        {board?.map((entry, index) => {
-          const avg = entry.races > 0 ? (entry.points / entry.races).toFixed(1) : "0.0";
-          return (
-            <div key={entry.userId}>
-              <button
-                type="button"
-                onClick={() => setOpen(open === entry.userId ? null : entry.userId)}
+        {board?.map((entry, index) => (
+          <div key={entry.userId}>
+            <button
+              type="button"
+              onClick={() => setOpen(open === entry.userId ? null : entry.userId)}
+              className={cn(
+                "tower-row flex w-full items-center gap-3 rounded-md px-3 py-3 text-left",
+                index === 0 && "border-l-gold",
+                index > 0 && index < 3 && "border-l-primary",
+                entry.userId === user?.id && "ring-1 ring-primary/60",
+              )}
+            >
+              <span
                 className={cn(
-                  "tower-row flex w-full items-center gap-3 rounded-md px-3 py-3 text-left",
-                  index === 0 && "border-l-gold",
-                  index > 0 && index < 3 && "border-l-primary",
-                  entry.userId === user?.id && "ring-1 ring-primary/60",
+                  "w-8 shrink-0 text-center font-mono text-lg font-bold tabular-nums",
+                  index === 0 && "text-gold",
                 )}
               >
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate font-display text-sm font-extrabold italic uppercase">
+                    {entry.name}
+                  </p>
+                  {entry.fahl && <FahlBadge />}
+                </div>
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  {entry.races} scored Â· best {entry.best ?? 0}
+                </p>
+              </div>
+              {entry.change != null && entry.change !== 0 && (
                 <span
                   className={cn(
-                    "w-8 shrink-0 text-center font-mono text-lg font-bold tabular-nums",
-                    index === 0 && "text-gold",
+                    "font-mono text-xs font-bold",
+                    entry.change > 0 ? "text-gold" : "text-primary",
                   )}
                 >
-                  {index + 1}
+                  {entry.change > 0 ? `â–²${entry.change}` : `â–¼${-entry.change}`}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate font-display text-sm font-extrabold italic uppercase">
-                      {entry.name}
-                    </p>
-                    {entry.fahl && <FahlBadge />}
-                  </div>
-                  <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                    {entry.races} scored · avg {avg} · best {entry.best ?? 0}
-                  </p>
-                </div>
-                {entry.change != null && entry.change !== 0 && (
-                  <span
-                    className={cn(
-                      "font-mono text-xs font-bold",
-                      entry.change > 0 ? "text-gold" : "text-primary",
-                    )}
-                  >
-                    {entry.change > 0 ? `▲${entry.change}` : `▼${-entry.change}`}
-                  </span>
-                )}
-                <span className="font-mono text-xl font-bold tabular-nums">{entry.points}</span>
-              </button>
-              {open === entry.userId && (
-                <div className="carbon-panel mt-1 rounded-md p-2.5">
-                  <div className="mb-2 flex flex-wrap gap-2 border-b border-border/60 pb-2 font-mono text-[11px] text-muted-foreground">
-                    <span>AVG/RACE: <strong className="text-foreground">{avg} pts</strong></span>
-                    <span>·</span>
-                    <span>BEST ROUND: <strong className="text-gold">{entry.best ?? 0} pts</strong></span>
-                    <span>·</span>
-                    <span>RACES: <strong className="text-foreground">{entry.races}</strong></span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
-                    {scoredRaces.map((r) => (
-                      <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
-                        <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>
-                        <p className="font-mono text-sm font-bold tabular-nums">{entry.byRound[r.round] ?? "–"}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               )}
-            </div>
-          );
-        })}
+              <span className="font-mono text-xl font-bold tabular-nums">{entry.points}</span>
+            </button>
+            {open === entry.userId && (
+              <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6">
+                {scoredRaces.map((r) => (
+                  <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
+                    <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>
+                    <p className="font-mono text-sm font-bold tabular-nums">{entry.byRound[r.round] ?? "â€“"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </main>
   );

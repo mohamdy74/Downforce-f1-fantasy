@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getTrustedNow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function parts(msLeft: number) {
@@ -12,64 +13,72 @@ function parts(msLeft: number) {
 }
 
 export function Countdown({ target, label }: { target: string; label: string }) {
+  // null until mounted so server and browser render the same placeholder
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    setNow(getTrustedNow());
+    const id = setInterval(() => setNow(getTrustedNow()), 1000);
     return () => clearInterval(id);
   }, []);
 
   const left = now == null ? 1 : new Date(target).getTime() - now;
   const locked = now != null && left <= 0;
   const urgent2h = now != null && !locked && left <= 2 * 3600 * 1000;
-  const warning24h = now != null && !locked && !urgent2h && left <= 24 * 3600 * 1000;
   const { d, h, m, s } = parts(left);
+
+  const cells = [
+    { value: d, unit: "DAYS" },
+    { value: h, unit: "HRS" },
+    { value: m, unit: "MIN" },
+    { value: s, unit: "SEC" },
+  ];
 
   return (
     <div
       className={cn(
-        "carbon-panel-strong rounded-md border px-3 py-2 transition-colors",
-        urgent2h
-          ? "border-primary/70 bg-primary/10"
-          : warning24h
-            ? "border-gold/50 bg-gold/5"
-            : "border-transparent",
+        "carbon-panel-strong rounded-xl border p-3.5 transition-colors",
+        urgent2h ? "border-primary/70 bg-primary/5" : "border-border/80",
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {label}
         </p>
         {urgent2h && (
           <span className="animate-pulse rounded bg-primary px-1.5 py-0.5 font-mono text-[9px] font-black uppercase tracking-wider text-primary-foreground">
-            Final Call
-          </span>
-        )}
-        {warning24h && (
-          <span className="rounded bg-gold/20 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-gold">
-            &lt; 24h Left
+            Closing Soon
           </span>
         )}
       </div>
-      {now == null ? (
-        <p className="font-mono text-lg font-bold tabular-nums text-muted-foreground">--:--:--</p>
-      ) : locked ? (
-        <p className="font-display text-lg font-extrabold italic uppercase text-primary">
-          Locked
-        </p>
+
+      {locked ? (
+        <div className="mt-2.5 flex h-[62px] items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
+          <p className="font-display text-lg font-extrabold italic uppercase tracking-wider text-primary">
+            Locked
+          </p>
+        </div>
       ) : (
-        <p
-          className={cn(
-            "font-mono text-lg font-bold tabular-nums",
-            urgent2h && "animate-pulse text-primary",
-            warning24h && "text-gold",
-          )}
-        >
-          {d > 0 ? `${d}d ` : ""}
-          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:
-          {String(s).padStart(2, "0")}
-        </p>
+        <div className="mt-2.5 grid grid-cols-4 gap-2 sm:gap-2.5">
+          {cells.map((c) => (
+            <div
+              key={c.unit}
+              className="flex flex-col items-center justify-center rounded-lg border border-white/5 bg-secondary/75 px-2 py-2.5 text-center shadow-inner"
+            >
+              <span
+                className={cn(
+                  "font-mono text-xl font-extrabold tabular-nums leading-none sm:text-2xl",
+                  urgent2h ? "text-primary" : "text-foreground",
+                )}
+              >
+                {now == null ? "--" : String(c.value).padStart(2, "0")}
+              </span>
+              <span className="mt-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground leading-none">
+                {c.unit}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

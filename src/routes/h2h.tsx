@@ -4,17 +4,17 @@ import { useEffect, useState } from "react";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { leaderboardQuery, racesQuery } from "@/lib/queries";
+import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/h2h")({
   head: () => ({
     meta: [
-      { title: "Head-to-head battles — DOWNFORCE" },
+      { title: "Head-to-head battles â€” DOWNFORCE" },
       { name: "description", content: "Compare any two players race by race in the DOWNFORCE league." },
-      { property: "og:title", content: "Head-to-head battles — DOWNFORCE" },
+      { property: "og:title", content: "Head-to-head battles â€” DOWNFORCE" },
       { property: "og:description", content: "Who wins the rivalry? Race-by-race 1v1 comparison." },
-      { name: "twitter:title", content: "Head-to-head battles — DOWNFORCE" },
+      { name: "twitter:title", content: "Head-to-head battles â€” DOWNFORCE" },
       { name: "twitter:description", content: "Who wins the rivalry? Race-by-race 1v1 comparison." },
     ],
   }),
@@ -43,11 +43,34 @@ function H2H() {
 
   const pa = board.find((e) => e.userId === a);
   const pb = board.find((e) => e.userId === b);
-  const rounds = races.filter((r) => r.has_results);
-  let wa = 0, wb = 0;
+
+  // Only show scored rounds from R14 (Spanish GP) onwards that have non-zero scores, newest first
+  const rounds = races
+    .filter(
+      (r) =>
+        r.round >= LEAGUE_START_ROUND &&
+        r.has_results &&
+        board.some((e) => (e.byRound[r.round] ?? 0) !== 0),
+    )
+    .slice()
+    .sort((x, y) => y.round - x.round);
+
+  let wa = 0;
+  let wb = 0;
+  let ptsA = 0;
+  let ptsB = 0;
+  let bestA: number | null = null;
+  let bestB: number | null = null;
+
   for (const r of rounds) {
-    const x = pa?.byRound[r.round] ?? 0, y = pb?.byRound[r.round] ?? 0;
-    if (x > y) wa++; else if (y > x) wb++;
+    const x = pa?.byRound[r.round] ?? 0;
+    const y = pb?.byRound[r.round] ?? 0;
+    ptsA += x;
+    ptsB += y;
+    bestA = bestA == null ? x : Math.max(bestA, x);
+    bestB = bestB == null ? y : Math.max(bestB, y);
+    if (x > y) wa++;
+    else if (y > x) wb++;
   }
 
   const other = (id: string) => board.find((e) => e.userId !== id)?.userId ?? "";
@@ -89,33 +112,46 @@ function H2H() {
         <p className="mt-6 text-sm text-muted-foreground">Need at least two players for a battle.</p>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <Pick v={a} set={pickA} taken={b} />
-            <span className="font-display text-xl font-black italic text-primary">VS</span>
-            <Pick v={b} set={pickB} taken={a} />
+          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 -mx-4 mt-4 border-b border-border/70 bg-background/95 px-4 py-2.5 backdrop-blur-md shadow-md">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <Pick v={a} set={pickA} taken={b} />
+              <span className="font-display text-xl font-black italic text-primary">VS</span>
+              <Pick v={b} set={pickB} taken={a} />
+            </div>
           </div>
+
           <div className="carbon-panel mt-4 grid grid-cols-3 rounded-lg p-4 text-center">
             <Stat label="Wins" l={wa} r={wb} />
-            <Stat label="Points" l={pa?.points ?? 0} r={pb?.points ?? 0} />
-            <Stat label="Best" l={pa?.best ?? 0} r={pb?.best ?? 0} />
+            <Stat label="Points" l={ptsA} r={ptsB} />
+            <Stat label="Best" l={bestA ?? 0} r={bestB ?? 0} />
           </div>
+
           <div className="mt-2 flex justify-between">
             <span>{pa?.fahl && <FahlBadge />}</span>
             <span>{pb?.fahl && <FahlBadge />}</span>
           </div>
+
           <div className="mt-4 space-y-1.5">
             {rounds.length === 0 && (
               <p className="text-sm text-muted-foreground">No races scored yet.</p>
             )}
             {rounds.map((r) => {
-              const x = pa?.byRound[r.round] ?? 0, y = pb?.byRound[r.round] ?? 0;
+              const x = pa?.byRound[r.round] ?? 0;
+              const y = pb?.byRound[r.round] ?? 0;
               return (
-                <div key={r.id} className="tower-row grid grid-cols-[3rem_1fr_3rem] items-center rounded-md px-3 py-2">
-                  <span className={cn("font-mono text-lg font-bold tabular-nums", x > y && "text-gold")}>{x}</span>
-                  <span className="truncate text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                    R{r.round} · {r.name.replace(" Grand Prix", " GP")}
+                <div
+                  key={r.id}
+                  className="tower-row grid grid-cols-[3rem_1fr_3rem] items-center rounded-md px-3 py-2.5"
+                >
+                  <span className={cn("font-mono text-lg font-bold tabular-nums", x > y && "text-gold")}>
+                    {x}
                   </span>
-                  <span className={cn("text-right font-mono text-lg font-bold tabular-nums", y > x && "text-gold")}>{y}</span>
+                  <span className="truncate text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                    R{r.round} Â· {r.name.replace(" Grand Prix", " GP")}
+                  </span>
+                  <span className={cn("text-right font-mono text-lg font-bold tabular-nums", y > x && "text-gold")}>
+                    {y}
+                  </span>
                 </div>
               );
             })}

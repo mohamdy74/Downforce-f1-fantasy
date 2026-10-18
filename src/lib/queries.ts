@@ -3,6 +3,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export const SEASON = 2026;
+/** Official league start: Round 14 (Spanish Grand Prix) */
+export const LEAGUE_START_ROUND = 14;
 
 let clockOffsetMs = 0;
 let clockSynced = false;
@@ -65,7 +67,11 @@ export const racesQuery = queryOptions({
       .eq("season", SEASON)
       .order("round");
     if (error) throw error;
-    return data as Race[];
+    return ((data ?? []) as Race[]).map((r) => ({
+      ...r,
+      // Only treat rounds from R14 (Spanish GP) onwards as scored league rounds
+      has_results: r.round >= LEAGUE_START_ROUND ? r.has_results : false,
+    }));
   },
 });
 
@@ -106,13 +112,23 @@ export const leaderboardQuery = queryOptions({
     ] = await Promise.all([
       supabase.from("scores").select("user_id, race_id, points"),
       supabase.from("profiles").select("id, display_name, avatar_url"),
-      supabase.from("races").select("id, round").eq("season", SEASON),
+      supabase.from("races").select("id, round").eq("season", SEASON).gte("round", LEAGUE_START_ROUND),
     ]);
     if (sErr) throw sErr;
     if (pErr) throw pErr;
     if (rErr) throw rErr;
 
     const rMap = new Map((raceRows ?? []).map((r) => [r.id, r.round]));
+
+    // Identify rounds >= 14 that actually have non-zero scores (ignore any all-zero placeholder rounds)
+    const activeRounds = new Set<number>();
+    for (const s of scores ?? []) {
+      const rd = rMap.get(s.race_id);
+      if (rd != null && rd >= LEAGUE_START_ROUND && s.points !== 0) {
+        activeRounds.add(rd);
+      }
+    }
+
     const byUser = new Map<string, LeaderboardEntry>();
     for (const p of profiles ?? []) {
       byUser.set(p.id, {
@@ -132,7 +148,7 @@ export const leaderboardQuery = queryOptions({
     for (const s of scores ?? []) {
       const entry = byUser.get(s.user_id);
       const rd = rMap.get(s.race_id);
-      if (!entry || rd == null) continue;
+      if (!entry || rd == null || !activeRounds.has(rd)) continue;
       entry.points += s.points;
       entry.races += 1;
       entry.best = entry.best == null ? s.points : Math.max(entry.best, s.points);
@@ -154,8 +170,8 @@ export const leaderboardQuery = queryOptions({
     if (latestRound > 0) {
       const prevPts = new Map<string, number>();
       for (const s of scores ?? []) {
-        const rd = rMap.get(s.race_id) ?? 0;
-        if (rd === 0 || rd === latestRound) continue;
+        const rd = rMap.get(s.race_id);
+        if (rd == null || !activeRounds.has(rd) || rd === latestRound) continue;
         prevPts.set(s.user_id, (prevPts.get(s.user_id) ?? 0) + s.points);
       }
       const prev = [...list].sort(
@@ -176,6 +192,6 @@ export function nextRace(races: Race[]): Race | null {
 }
 
 export function lastRace(races: Race[]): Race | null {
-  const done = races.filter((r) => r.has_results);
+  const done = races.filter((r) => r.has_results && r.round >= LEAGUE_START_ROUND);
   return done.length ? done[done.length - 1]! : null;
 }
