@@ -65,7 +65,6 @@ function Paddock() {
   const { data: races } = useQuery(racesQuery);
   const { data: drivers } = useQuery(driversQuery);
 
-  // Only include rounds from R14 (Spanish GP) onwards
   const locked = useMemo(
     () =>
       (races ?? []).filter(

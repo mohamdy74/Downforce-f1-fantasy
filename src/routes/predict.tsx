@@ -382,10 +382,7 @@ function Predict() {
                 You haven&apos;t locked in your predictions for <strong>{race.name}</strong>.
                 {race.race_at ? ` Race starts at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} (Cairo).` : ""}
               </p>
-              <div className="mt-2 flex items-center gap-2 font-mono text-xs font-bold text-destructive">
-                <span>Time left:</span>
-                <Countdown target={race.race_at} label="Race closes" />
-              </div>
+              
             </div>
             <Button asChild size="sm" className="shrink-0 h-9 bg-destructive text-destructive-foreground hover:bg-destructive/90">
               <Link to="/predict">Submit picks →</Link>

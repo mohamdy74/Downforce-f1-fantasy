@@ -13,7 +13,6 @@ function parts(msLeft: number) {
 }
 
 export function Countdown({ target, label }: { target: string; label: string }) {
-  // null until mounted so server and browser render the same placeholder
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {

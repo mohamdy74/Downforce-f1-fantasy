@@ -44,7 +44,6 @@ function H2H() {
   const pa = board.find((e) => e.userId === a);
   const pb = board.find((e) => e.userId === b);
 
-  // Only show scored rounds from R14 (Spanish GP) onwards that have non-zero scores, newest first
   const rounds = races
     .filter(
       (r) =>
@@ -87,12 +86,15 @@ function H2H() {
     v,
     set,
     taken,
+    label,
   }: {
     v: string;
     set: (s: string) => void;
     taken: string;
+    label: string;
   }) => (
     <select
+      aria-label={label}
       value={v}
       onChange={(e) => set(e.target.value)}
       className="h-12 w-full min-w-0 rounded-md border border-input bg-card px-2 font-display text-sm font-extrabold italic uppercase"
@@ -114,9 +116,9 @@ function H2H() {
         <>
           <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 -mx-4 mt-4 border-b border-border/70 bg-background/95 px-4 py-2.5 backdrop-blur-md shadow-md">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <Pick v={a} set={pickA} taken={b} />
+              <Pick v={a} set={pickA} taken={b} label="Select first player" />
               <span className="font-display text-xl font-black italic text-primary">VS</span>
-              <Pick v={b} set={pickB} taken={a} />
+              <Pick v={b} set={pickB} taken={a} label="Select second player" />
             </div>
           </div>
 

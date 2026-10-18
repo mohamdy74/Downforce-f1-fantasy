@@ -69,7 +69,6 @@ export const racesQuery = queryOptions({
     if (error) throw error;
     return ((data ?? []) as Race[]).map((r) => ({
       ...r,
-      // Only treat rounds from R14 (Spanish GP) onwards as scored league rounds
       has_results: r.round >= LEAGUE_START_ROUND ? r.has_results : false,
     }));
   },
@@ -120,7 +119,6 @@ export const leaderboardQuery = queryOptions({
 
     const rMap = new Map((raceRows ?? []).map((r) => [r.id, r.round]));
 
-    // Identify rounds >= 14 that actually have non-zero scores (ignore any all-zero placeholder rounds)
     const activeRounds = new Set<number>();
     for (const s of scores ?? []) {
       const rd = rMap.get(s.race_id);
