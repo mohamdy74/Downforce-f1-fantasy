@@ -1,26 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export const getVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
-  const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-  return { publicKey: pub };
-});
+import { VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY } from "@/lib/push-keys";
 
-export const savePushSubscription = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { endpoint: string; p256dh: string; auth: string }) => input)
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("sync_state").delete().like("key", "push_sub:" + context.userId + ":%"); const { error } = await supabaseAdmin.from("sync_state").upsert({ key: "push_sub:" + context.userId + ":" + JSON.stringify(data), synced_at: new Date().toISOString() }, { onConflict: "key" }); if (error) throw new Error(error.message); return { ok: true };
-  });
+// NOTE: getVapidPublicKey (dead, 0 imports) removed — clients import
+// VAPID_PUBLIC_KEY from @/lib/push-keys instead.
+// NOTE: savePushSubscription duplicate removed — single source is
+// savePushSubscription in @/lib/stewards.functions.ts.
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
   .inputValidator((input: { forceWindow?: "2h" | "30m" | null } | undefined) => ({
     forceWindow: input?.forceWindow ?? null,
   }))
   .handler(async ({ data }) => {
-    const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-    const priv = process.env["VAPID_PRIVATE_KEY"] || "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs";
+    const pub = VAPID_PUBLIC_KEY;
+    const priv = VAPID_PRIVATE_KEY;
     if (!pub || !priv) return { sent: 0, reason: "VAPID keys not configured" };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

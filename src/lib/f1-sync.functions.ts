@@ -53,36 +53,8 @@ async function getJson<T>(url: string): Promise<T | null> {
 
 const userSyncCalls = new Map<string, number>();
 
-export const savePushSubscription = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const prefix = `push_sub:${context.userId}:`;
-    const { data: existing } = await supabaseAdmin
-      .from("sync_state")
-      .select("key")
-      .like("key", `${prefix}%`);
-
-    const staleKeys: string[] = [];
-    for (const r of existing ?? []) {
-      try {
-        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
-        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
-      } catch {
-        staleKeys.push(r.key);
-      }
-    }
-    if (staleKeys.length > 0) {
-      await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
-    }
-
-    const key = `${prefix}${JSON.stringify(data)}`;
-    await supabaseAdmin
-      .from("sync_state")
-      .upsert({ key, synced_at: new Date().toISOString() }, { onConflict: "key" });
-    return { ok: true };
-  });
+// NOTE: savePushSubscription duplicate removed (0 imports) — single source is
+// savePushSubscription in @/lib/stewards.functions.ts.
 
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

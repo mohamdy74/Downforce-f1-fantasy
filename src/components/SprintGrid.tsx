@@ -8,29 +8,8 @@ import { cn } from "@/lib/utils";
 
 export const EMPTY = "__none__";
 
-export function Field({
-  label,
-  children,
-  purple,
-}: {
-  label: string;
-  children: React.ReactNode;
-  purple?: boolean;
-}) {
-  return (
-    <div>
-      <p
-        className={cn(
-          "mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest",
-          purple ? "text-purple" : "text-muted-foreground",
-        )}
-      >
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
+// NOTE: dead Field export removed (0 imports) — predict.tsx owns a local Field,
+// and SprintGrid consumers (sprint/stewards) never imported it.
 
 // Re-export DriverPicker as DriverSelect for backward compat with sprint.tsx
 export const DriverSelect = DriverPicker;
