@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Flag, Timer, Trophy } from "lucide-react";
 
-import heroImage from "@/assets/hero-f1.webp";
 import { Countdown } from "@/components/Countdown";
 import { MissingPlayers } from "@/components/MissingPlayers";
 import { PickStatus } from "@/components/PickStatus";
@@ -47,18 +46,11 @@ function Home() {
 
   return (
     <main>
-      <section className="relative overflow-hidden">
-        <img
-          src={heroImage}
-          alt="Racing car at night"
-          width={1600}
-          height={912}
-          fetchPriority="high"
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background/50 via-background/30 to-transparent" />
-        <div className="relative mx-auto max-w-5xl px-4 py-16 sm:py-24">
+      <section className="df-aura-hero relative overflow-hidden">
+        <div className="df-aura-layer-1" aria-hidden="true" />
+        <div className="df-aura-layer-2" aria-hidden="true" />
+        <div className="df-aura-layer-3" aria-hidden="true" />
+        <div className="relative z-10 mx-auto max-w-5xl px-4 py-16 sm:py-24">
           <StartLights />
           <p className="mt-6 font-mono text-xs font-semibold uppercase tracking-[0.3em] text-primary">
             Season {races[0]?.season ?? 2026}
