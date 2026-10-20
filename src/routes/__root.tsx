@@ -162,14 +162,20 @@ function RootComponent() {
       <BackgroundSync />
       <InstallPrompt />
       <PullToRefresh />
-      <div className="flex min-h-svh flex-col">
-        <SiteHeader />
+      <div className="df-prism-bg min-h-svh">
+        <div className="df-prism-layer-1" aria-hidden="true" />
+        <div className="df-prism-layer-2" aria-hidden="true" />
+        <div className="df-prism-layer-3" aria-hidden="true" />
+        <div className="df-prism-layer-4" aria-hidden="true" />
+        <div className="relative z-10 flex min-h-svh flex-col">
+          <SiteHeader />
         <div className="flex-1">
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>
         </div>
         <SiteFooter />
+        </div>
       </div>
       <BottomNav />
       <Toaster />

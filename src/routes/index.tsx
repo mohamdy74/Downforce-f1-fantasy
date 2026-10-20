@@ -46,10 +46,7 @@ function Home() {
 
   return (
     <main>
-      <section className="df-aura-hero relative overflow-hidden">
-        <div className="df-aura-layer-1" aria-hidden="true" />
-        <div className="df-aura-layer-2" aria-hidden="true" />
-        <div className="df-aura-layer-3" aria-hidden="true" />
+      <section className="relative overflow-hidden">
         <div className="relative z-10 mx-auto max-w-5xl px-4 py-16 sm:py-24">
           <StartLights />
           <p className="mt-6 font-mono text-xs font-semibold uppercase tracking-[0.3em] text-primary">
