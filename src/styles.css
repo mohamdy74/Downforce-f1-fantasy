@@ -637,120 +637,216 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focu
 }
 html, body { overflow-x: clip; max-width: 100vw; }
 
-/* === DOWNFORCE PRISM WINDOW AURA === */
-/* 4-Layer "Prism Window" Glass Aura tuned to DOWNFORCE F1 theme tokens.
-   Container has NO background-color so mix-blend-mode composites against body. */
-.df-prism-bg {
+/* === DOWNFORCE SMOOTH PRISM & HARMONIOUS CARDS === */
+/* 1. Soften Dark Mode theme variables so menus, selects, and inner boxes
+      are a comfortable smoked-slate instead of harsh pitch-black */
+:root,
+.dark {
+  --background: #10121a;
+  --card: rgba(30, 33, 46, 0.65);
+  --popover: #1a1d28;
+  --secondary: rgba(40, 44, 60, 0.58);
+  --muted: rgba(36, 40, 56, 0.52);
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.11);
+}
+
+.light {
+  --background: #f5f6fa;
+  --card: rgba(255, 255, 255, 0.78);
+  --popover: #ffffff;
+  --secondary: rgba(236, 239, 248, 0.75);
+  --muted: rgba(232, 236, 246, 0.70);
+  --border: rgba(15, 23, 42, 0.09);
+  --input: rgba(15, 23, 42, 0.12);
+}
+
+/* 2. 120fps GPU-Locked Global Prism Window Backdrop
+      Rendered on a single fixed layer with pre-diffused gradients (no runtime
+      filter:blur() or mix-blend-mode readbacks during touch scrolling),
+      eliminating scroll stutter, tile blanking, and horizontal cut-off lines. */
+html,
+body {
+  background-color: var(--background);
+}
+
+body {
   position: relative;
-  overflow: clip;
-  min-height: 100vh;
+  isolation: isolate;
+  overflow-x: hidden;
 }
 
-/* Layer 1 - normal (carbon-slate glass base) */
-.df-prism-layer-1 {
-  position: absolute;
+body::before {
+  content: "";
+  position: fixed;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(20, 22, 32, 0.85) 0%,
-    rgba(38, 24, 30, 0.55) 100%
-  );
-  mix-blend-mode: normal;
-  transform: translateZ(0);
-  will-change: transform;
+  z-index: -1;
   pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  background:
+    /* Layer 4: Upper-right telemetry gold/crimson spotlight */
+    radial-gradient(
+      circle at 72% 22%,
+      rgba(255, 210, 48, 0.13) 0%,
+      rgba(255, 106, 31, 0.08) 22%,
+      transparent 52%
+    ),
+    /* Layer 3: Diagonal glass specular beam (125deg) */
+    linear-gradient(
+      125deg,
+      transparent 32%,
+      rgba(255, 242, 226, 0.07) 48%,
+      rgba(255, 210, 48, 0.05) 53%,
+      transparent 68%
+    ),
+    /* Layer 2: Prism Window multi-stop F1 aura (Crimson -> Orange -> Gold -> Purple Sector) */
+    radial-gradient(
+      ellipse 95% 70% at 25% 18%,
+      rgba(225, 6, 0, 0.19) 0%,
+      rgba(255, 106, 31, 0.11) 38%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 90% 75% at 80% 65%,
+      rgba(168, 85, 247, 0.12) 0%,
+      rgba(225, 6, 0, 0.10) 42%,
+      transparent 75%
+    ),
+    /* Layer 1: Harmonious warm slate-carbon base (135deg) */
+    linear-gradient(
+      135deg,
+      #12141f 0%,
+      #171522 48%,
+      #12131c 100%
+    );
 }
 
-/* Layer 2 - screen (F1 Crimson -> Speed Orange -> Gold -> Purple Sector prism) */
-.df-prism-layer-2 {
-  position: absolute;
-  inset: 0;
+.light body::before {
+  background:
+    radial-gradient(
+      circle at 72% 22%,
+      rgba(255, 210, 48, 0.18) 0%,
+      rgba(255, 106, 31, 0.09) 26%,
+      transparent 55%
+    ),
+    linear-gradient(
+      125deg,
+      transparent 34%,
+      rgba(225, 6, 0, 0.06) 49%,
+      transparent 64%
+    ),
+    radial-gradient(
+      ellipse 95% 70% at 25% 18%,
+      rgba(225, 6, 0, 0.10) 0%,
+      rgba(255, 106, 31, 0.07) 40%,
+      transparent 74%
+    ),
+    radial-gradient(
+      ellipse 90% 75% at 80% 65%,
+      rgba(168, 85, 247, 0.08) 0%,
+      rgba(59, 130, 246, 0.06) 45%,
+      transparent 75%
+    ),
+    linear-gradient(
+      135deg,
+      #f6f7fb 0%,
+      #eef0f7 50%,
+      #f4f5f9 100%
+    );
+}
+
+/* 3. Harmonious, Eye-Friendly Cards, Panels & Rows (No harsh black bricks) */
+.carbon-panel {
   background: linear-gradient(
-    115deg,
-    transparent 22%,
-    rgba(225, 6, 0, 0.24) 33%,
-    rgba(255, 106, 31, 0.20) 42%,
-    rgba(255, 210, 48, 0.18) 50%,
-    rgba(168, 85, 247, 0.18) 58%,
-    rgba(225, 6, 0, 0.15) 67%,
-    transparent 78%
-  );
-  mix-blend-mode: screen;
-  filter: blur(80px);
-  transform: translateZ(0);
-  will-change: transform;
-  pointer-events: none;
+    145deg,
+    rgba(32, 35, 49, 0.62) 0%,
+    rgba(24, 26, 38, 0.54) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.085) !important;
+  box-shadow:
+    0 10px 30px -10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
 }
 
-/* Layer 3 - screen (diagonal glass specular beam) */
-.df-prism-layer-3 {
-  position: absolute;
-  inset: 0;
+.carbon-panel-strong {
   background: linear-gradient(
-    125deg,
-    transparent 40%,
-    rgba(255, 245, 230, 0.20) 49%,
-    transparent 58%
-  );
-  mix-blend-mode: screen;
-  filter: blur(30px);
-  transform: translateZ(0);
-  will-change: transform;
-  pointer-events: none;
+    145deg,
+    rgba(38, 42, 58, 0.66) 0%,
+    rgba(28, 31, 45, 0.58) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.095) !important;
+  box-shadow:
+    0 8px 24px -8px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Layer 4 - screen (upper-right telemetry spotlight glow) */
-.df-prism-layer-4 {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    circle at 68% 32%,
-    rgba(255, 210, 48, 0.14) 0%,
-    rgba(225, 6, 0, 0.08) 20%,
-    transparent 38%
-  );
-  mix-blend-mode: screen;
-  filter: blur(75px);
-  transform: translateZ(0);
-  will-change: transform;
-  pointer-events: none;
-}
-
-@media (min-width: 640px) {
-  .df-prism-layer-2 {
-    filter: blur(115px);
-  }
-  .df-prism-layer-3 {
-    filter: blur(43px);
-  }
-  .df-prism-layer-4 {
-    filter: blur(108px);
-  }
-}
-
-/* Light / Dark Theme Adaptation: swap screen -> multiply on light surfaces */
-.light .df-prism-layer-1 {
+.tower-row {
   background: linear-gradient(
-    135deg,
-    rgba(248, 249, 252, 0.75) 0%,
-    rgba(240, 242, 248, 0.45) 100%
-  );
+    90deg,
+    rgba(34, 37, 52, 0.62) 0%,
+    rgba(26, 28, 41, 0.52) 100%
+  ) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+  border-right: 1px solid rgba(255, 255, 255, 0.075);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow: 0 4px 16px -6px rgba(0, 0, 0, 0.28);
 }
 
-.light .df-prism-layer-2 {
-  mix-blend-mode: multiply;
+/* Native <select> options (like 1v1 player selector) so dropdown list is readable & soft */
+select {
+  background-color: rgba(34, 37, 52, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
 }
 
-.light .df-prism-layer-3 {
+select option {
+  background-color: #1c1f2e;
+  color: #f8fafc;
+}
+
+/* Light mode card & row overrides */
+.light .carbon-panel {
   background: linear-gradient(
-    125deg,
-    transparent 40%,
-    rgba(225, 6, 0, 0.10) 49%,
-    transparent 58%
-  );
-  mix-blend-mode: multiply;
+    145deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(246, 248, 253, 0.76) 100%
+  ) !important;
+  border: 1px solid rgba(15, 23, 42, 0.085) !important;
+  box-shadow:
+    0 10px 28px -10px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
-.light .df-prism-layer-4 {
-  mix-blend-mode: multiply;
+.light .carbon-panel-strong {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.90) 0%,
+    rgba(242, 245, 252, 0.82) 100%
+  ) !important;
+  border: 1px solid rgba(15, 23, 42, 0.095) !important;
+  box-shadow:
+    0 8px 22px -8px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+
+.light .tower-row {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.86) 0%,
+    rgba(246, 248, 253, 0.78) 100%
+  ) !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.075);
+  border-right: 1px solid rgba(15, 23, 42, 0.075);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.075);
+  box-shadow: 0 4px 14px -6px rgba(15, 23, 42, 0.05);
+}
+
+.light select {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+.light select option {
+  background-color: #ffffff;
+  color: #0f172a;
 }
