@@ -68,7 +68,7 @@ function H2H() {
     <select
       value={v}
       onChange={(e) => set(e.target.value)}
-      className="h-12 w-full min-w-0 rounded-md border border-input bg-card px-2 font-display text-sm font-extrabold italic uppercase"
+      className="carbon-panel h-12 w-full min-w-0 rounded-lg px-3 font-display text-sm font-extrabold italic uppercase text-foreground backdrop-blur-md"
     >
       {board.map((e) => (
         <option key={e.userId} value={e.userId} disabled={e.userId === taken}>
@@ -85,7 +85,7 @@ function H2H() {
         <p className="mt-6 text-sm text-muted-foreground">Need at least two players for a battle.</p>
       ) : (
         <>
-          <div className="sticky top-[52px] z-20 -mx-4 mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur">
+          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 mt-4 py-1.5 backdrop-blur-md">
             <Pick v={a} set={pickA} taken={b} />
             <span className="font-display text-xl font-black italic text-primary">VS</span>
             <Pick v={b} set={pickB} taken={a} />
