@@ -127,7 +127,7 @@ function Paddock() {
       </p>
 
       {locked.length > 1 && (
-        <div className="sticky top-[52px] z-20 -mx-4 mt-4 flex gap-2 overflow-x-auto bg-background/95 px-4 py-2 backdrop-blur">
+        <div className="mt-4 flex gap-2 overflow-x-auto py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {locked
             .slice()
             .reverse()
@@ -136,8 +136,10 @@ function Paddock() {
                 key={r.id}
                 onClick={() => setRaceId(r.id)}
                 className={cn(
-                  "shrink-0 rounded-full border px-3 py-1 font-mono text-xs",
-                  r.id === race?.id ? "border-primary text-primary" : "border-border text-muted-foreground",
+                  "carbon-panel shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-xs font-semibold transition-all",
+                  r.id === race?.id
+                    ? "border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(225,6,0,0.25)]"
+                    : "border-border/70 text-muted-foreground hover:text-foreground",
                 )}
               >
                 R{r.round}
