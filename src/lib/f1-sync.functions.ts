@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import type { Json } from "@/integrations/supabase/types";
-import { NO_SUBMISSION_PENALTY, scorePrediction, type ResultRow } from "./scoring";
+import { type ResultRow } from "./scoring";
+import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
 import { scoreSprint, type SprintResultRow } from "./sprintScoring";
 import { sendNativeWebPush } from "./webpush-native";
 
@@ -368,76 +369,17 @@ async function scoreAllRaces() {
 
     if (!profiles?.length || !results?.length) continue;
 
-    // Never overwrite a score that was manually overridden or waived by FIA Stewards
-    const stewardLockedUsers = new Set(
-      (existingScores ?? [])
-        .filter((s) => {
-          const b = s.breakdown as Record<string, unknown> | null;
-          return b && b["stewardOverride"] === true;
-        })
-        .map((s) => s.user_id),
-    );
-
-    const byUser = new Map((predictions ?? []).map((p) => [p.user_id, p]));
-    const sprintByUser = new Map((sprintPreds ?? []).map((p) => [p.user_id, p]));
-    const sprintFor = (userId: string) =>
-      sprintResults?.length
-        ? scoreSprint(sprintByUser.get(userId) ?? null, sprintResults as SprintResultRow[])
-        : null;
-
-    const rows: Array<{
-      user_id: string;
-      race_id: string;
-      points: number;
-      breakdown: Json;
-      updated_at: string;
-    }> = [];
-
-    for (const profile of profiles) {
-      if (stewardLockedUsers.has(profile.id)) continue;
-      if (new Date(profile.created_at) > new Date(race.race_at)) continue;
-
-      const sprint = sprintFor(profile.id);
-      const prediction = byUser.get(profile.id);
-      if (!prediction) {
-        rows.push({
-          user_id: profile.id,
-          race_id: race.id,
-          points: NO_SUBMISSION_PENALTY + (sprint?.total ?? 0),
-          breakdown: {
-            noSubmission: true,
-            ...(sprint ? { sprint } : {}),
-            total: NO_SUBMISSION_PENALTY + (sprint?.total ?? 0),
-          },
-          updated_at: new Date().toISOString(),
-        });
-        continue;
-      }
-
-      const validTop10 = (prediction.top10 ?? []).filter((x) => x && x !== "__none__");
-      const breakdown = scorePrediction(
-        {
-          top10: validTop10,
-          pole_driver_id: prediction.pole_driver_id,
-          fastest_lap_driver_id: prediction.fastest_lap_driver_id,
-          dnf_driver_id: prediction.dnf_driver_id,
-        },
-        results as ResultRow[],
-      );
-
-      const poleOnly = validTop10.length < 10;
-      const raceTotal = poleOnly ? NO_SUBMISSION_PENALTY + breakdown.pole : breakdown.total;
-      const total = raceTotal + (sprint?.total ?? 0);
-      rows.push({
-        user_id: profile.id,
-        race_id: race.id,
-        points: total,
-        breakdown: poleOnly
-          ? { noSubmission: true, poleOnly: true, pole: breakdown.pole, ...(sprint ? { sprint } : {}), total }
-          : { ...breakdown, ...(sprint ? { sprint } : {}), total },
-        updated_at: new Date().toISOString(),
-      });
-    }
+    const rows = buildRaceScoreRows({
+      raceId: race.id,
+      raceAt: race.race_at,
+      profiles: (profiles ?? []) as ProfileRecord[],
+      results: results as ResultRow[],
+      predictions: (predictions ?? []) as PredictionRecord[],
+      sprintResults: (sprintResults ?? []) as SprintResultRow[],
+      sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
+      existingScores: (existingScores ?? []) as ScoreRecord[],
+      mode: "auto_sync",
+    });
 
     if (rows.length) {
       await supabaseAdmin.from("scores").upsert(rows, { onConflict: "user_id,race_id" });

@@ -32,8 +32,8 @@ export function DriverPicker({
   drivers: Driver[];
   value: string;
   onChange: (value: string) => void;
-  disabled?: boolean;
-  exclude?: string[];
+  disabled?: boolean | undefined;
+  exclude?: string[] | undefined;
   placeholder?: string;
 }) {
   const mobile = useIsMobile();
@@ -95,8 +95,8 @@ function MobileDriverPicker({
   drivers: Driver[];
   value: string;
   onChange: (value: string) => void;
-  disabled?: boolean;
-  exclude?: string[];
+  disabled?: boolean | undefined;
+  exclude?: string[] | undefined;
   placeholder: string;
 }) {
   const [open, setOpen] = useState(false);

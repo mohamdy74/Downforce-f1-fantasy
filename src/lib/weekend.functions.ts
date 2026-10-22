@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import type { Json } from "@/integrations/supabase/types";
 import {
@@ -146,7 +145,6 @@ async function loadRace(admin: Admin, raceId: string): Promise<DbRace | null> {
 }
 
 export const getWeekendSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((input: { raceId: string }) => input)
   .handler(async ({ data }): Promise<{ sessions: ScheduleItem[] }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -359,7 +357,6 @@ async function fetchClassification(
 }
 
 export const getWeekendSession = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((input: { raceId: string; sessionType: string }) => input)
   .handler(async ({ data }): Promise<SessionPayload> => {
     const type = data.sessionType;

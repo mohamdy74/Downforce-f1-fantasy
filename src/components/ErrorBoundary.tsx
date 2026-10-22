@@ -11,13 +11,13 @@ interface ErrorBoundaryState {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null };
+  override state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { error };
   }
 
-  componentDidCatch(error: Error) {
+  override componentDidCatch(error: Error) {
     if (typeof window !== "undefined" && /No QueryClient set|dynamically imported module|Failed to fetch/i.test(error.message)) {
       const key = "dfr:hmr-reload";
       const last = Number(sessionStorage.getItem(key) ?? "0");
@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
   }
 
-  render() {
+  override render() {
     const { error } = this.state;
     if (error) {
       return (
