@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ReminderList } from "@/components/ReminderList";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { isCompleteTop10 } from "@/lib/push-keys";
 import { racesQuery, nextRace } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -33,7 +34,7 @@ function Reminders() {
         .eq("race_id", race.id);
 
       const submittedIds = (preds ?? [])
-        .filter((p) => (p.top10 ?? []).filter(Boolean).length === 10)
+        .filter((p) => isCompleteTop10(p.top10))
         .map((p) => p.user_id);
       const submittedSet = new Set(submittedIds);
 

@@ -12,6 +12,7 @@ import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isCompleteTop10 } from "@/lib/push-keys";
 import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
@@ -150,7 +151,7 @@ function Predict() {
   useEffect(() => {
     if (!draftKey || draftChecked.current || prediction === undefined) return;
     draftChecked.current = true;
-    if ((prediction?.top10 ?? []).filter(Boolean).length === 10) return; // already locked in
+    if (isCompleteTop10(prediction?.top10)) return; // already locked in
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
@@ -168,7 +169,7 @@ function Predict() {
   useEffect(() => {
     if (!draftKey || !draftChecked.current) return;
     try {
-      const done = (prediction?.top10 ?? []).filter(Boolean).length === 10;
+      const done = isCompleteTop10(prediction?.top10);
       const empty = top10.every((x) => x === EMPTY) && fastestLap === EMPTY && dnf === EMPTY;
       if (done || empty) window.localStorage.removeItem(draftKey);
       else
@@ -190,7 +191,7 @@ function Predict() {
   const poleLocked =
     raceLocked ||
     (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
-  const hasSaved = !!prediction && (prediction.top10?.length ?? 0) === 10;
+  const hasSaved = !!prediction && isCompleteTop10(prediction.top10);
   // Saved picks open in view mode so stray taps while scrolling can't change them.
   const viewOnly = raceLocked || (hasSaved && !editing);
 
@@ -233,7 +234,7 @@ function Predict() {
 
   // In-page reminder banner — red alert when picks not submitted
   const notSubmitted =
-    prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
+    prediction !== undefined && !isCompleteTop10(prediction?.top10) &&
     (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
@@ -305,7 +306,7 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
+    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && isCompleteTop10(prediction.top10) ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
     try {
       window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
     } catch {

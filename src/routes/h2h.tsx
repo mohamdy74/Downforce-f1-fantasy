@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { leaderboardQuery, racesQuery } from "@/lib/queries";
+import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-const LEAGUE_START_ROUND = 14;
 
 export const Route = createFileRoute("/h2h")({
   head: () => ({

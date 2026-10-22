@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PushOptIn } from "@/components/PushOptIn";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isCompleteTop10 } from "@/lib/push-keys";
 import type { Race } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +97,7 @@ export function PickStatus({ race }: { race: Race }) {
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
-      return !!data && (data.top10 ?? []).filter(Boolean).length === 10;
+      return !!data && isCompleteTop10(data.top10);
     },
   });
 

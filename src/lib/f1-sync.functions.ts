@@ -5,7 +5,7 @@ import { type ResultRow } from "./scoring";
 import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
 import { type SprintResultRow } from "./sprintScoring";
 import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
-import { parsePushSubscriptionKey } from "./push-keys";
+import { isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -288,7 +288,7 @@ export async function checkAndSendPushReminders(
             .filter((p) =>
               t.type === "pole"
                 ? !!p.pole_driver_id
-                : (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10,
+                : isCompleteTop10(p.top10),
             )
             .map((p) => p.user_id),
         );

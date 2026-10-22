@@ -8,7 +8,7 @@ import { FahlBadge } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
-import { leaderboardQuery, racesQuery } from "@/lib/queries";
+import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboard")({
@@ -42,7 +42,7 @@ function Leaderboard() {
 
   const [open, setOpen] = useState<string | null>(null); const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [syncing, setSyncing] = useState(false);
-  const scored = board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
+  const scored = board?.[0]?.races || (races?.filter((r) => r.round >= LEAGUE_START_ROUND && r.has_results && (board ?? []).some((e) => (e.byRound[r.round] ?? 0) !== 0)).length ?? 0);
 
   async function handleForceSync() {
     if (syncing) return;
@@ -181,7 +181,7 @@ function Leaderboard() {
             </button>
             {open === entry.userId && (
               <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6"><div className="col-span-full mb-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase"><span className="rounded bg-secondary px-2 py-0.5">Avg {entry.races ? (entry.points / entry.races).toFixed(1) : 0} pts</span><span className="rounded bg-secondary px-2 py-0.5">Best {entry.best ?? 0} pts</span>{index === 0 && <span className="rounded bg-gold/20 text-gold px-2 py-0.5">Leader</span>}{(entry.best ?? 0) >= 25 && <span className="rounded bg-primary/20 text-primary px-2 py-0.5">Pro Scorer</span>}</div>
-                {(races ?? []).filter((r) => r.has_results && (board ?? []).some((e) => e.byRound[r.round] !== undefined)).map((r) => (
+                {(races ?? []).filter((r) => r.round >= LEAGUE_START_ROUND && r.has_results && (board ?? []).some((e) => (e.byRound[r.round] ?? 0) !== 0)).map((r) => (
                   <div key={r.id} className="rounded-sm bg-muted/60 px-1 py-1 text-center">
                     <p className="font-mono text-[10px] uppercase text-muted-foreground">R{r.round}</p>
                     <p className="font-mono text-sm font-bold tabular-nums">{entry.byRound[r.round] ?? "–"}</p>

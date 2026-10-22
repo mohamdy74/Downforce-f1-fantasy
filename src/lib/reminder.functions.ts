@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isCompleteTop10 } from "@/lib/push-keys";
 
 export const getReminderStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -24,7 +25,7 @@ export const getReminderStats = createServerFn({ method: "POST" })
     }
 
     const submittedIds = (preds ?? [])
-      .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
+      .filter((p) => isCompleteTop10(p.top10))
       .map((p) => p.user_id);
 
     const { data: profiles, error: profilesError } = await supabase

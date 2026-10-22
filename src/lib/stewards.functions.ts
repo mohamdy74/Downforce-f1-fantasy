@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ResultRow } from "./scoring";
-import { parsePushSubscriptionKey } from "./push-keys";
+import { extractSubscribedUserIds, findStalePushKeysForEndpoint, isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
 import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
 import { type SprintResultRow } from "./sprintScoring";
 
@@ -31,15 +31,7 @@ export const savePushSubscription = createServerFn({ method: "POST" })
       .select("key")
       .like("key", `${prefix}%`);
 
-    const staleKeys: string[] = [];
-    for (const r of existing ?? []) {
-      try {
-        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
-        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
-      } catch {
-        staleKeys.push(r.key);
-      }
-    }
+    const staleKeys = findStalePushKeysForEndpoint(existing, context.userId, data.endpoint);
     if (staleKeys.length > 0) {
       await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
     }
@@ -71,13 +63,7 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
         sb.from("sync_state").select("key").like("key", "push_sub:%"),
       ]);
 
-    const pushUserIds = Array.from(
-      new Set(
-        (subRows ?? [])
-          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
-          .filter((x): x is string => !!x),
-      ),
-    );
+    const pushUserIds = extractSubscribedUserIds(subRows);
 
     return {
       profiles: profiles ?? [],
@@ -300,7 +286,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
       const completedUsers = new Set(
         (preds ?? [])
-          .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
+          .filter((p) => isCompleteTop10(p.top10))
           .map((p) => p.user_id),
       );
 

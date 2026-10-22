@@ -5,7 +5,7 @@ import { useMemo, useState } from "react"; import { useAutoAnimate } from "@form
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery, type Race } from "@/lib/queries";
+import { driversQuery, getTrustedNow, LEAGUE_START_ROUND, racesQuery, type Race } from "@/lib/queries";
 import { positionPoints } from "@/lib/scoring";
 import { teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -43,7 +43,7 @@ function Paddock() {
   const { data: drivers } = useQuery(driversQuery);
 
   const locked = useMemo(
-    () => (races ?? []).filter((r) => new Date(r.race_at).getTime() <= Date.now()),
+    () => (races ?? []).filter((r) => r.round >= LEAGUE_START_ROUND && new Date(r.race_at).getTime() <= getTrustedNow()),
     [races],
   );
   const [raceId, setRaceId] = useState<string | null>(null); const [padRef] = useAutoAnimate<HTMLDivElement>();
