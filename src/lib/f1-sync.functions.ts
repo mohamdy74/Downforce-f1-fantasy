@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-import type { Json } from "@/integrations/supabase/types";
 import { type ResultRow } from "./scoring";
 import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
-import { scoreSprint, type SprintResultRow } from "./sprintScoring";
-import { sendNativeWebPush } from "./webpush-native";
+import { type SprintResultRow } from "./sprintScoring";
+import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
+import { parsePushSubscriptionKey } from "./push-keys";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -37,22 +37,9 @@ type ErgastRace = {
   }>;
 };
 
-function toIso(session: { date: string; time?: string | undefined } | undefined): string | null {
-  if (!session?.date) return null;
-  return new Date(`${session.date}T${session.time ?? "12:00:00Z"}`).toISOString();
-}
-
-async function getJson<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
-  }
-}
 
 const userSyncCalls = new Map<string, number>();
+let inFlightSyncLock = false;
 
 // NOTE: savePushSubscription duplicate removed (0 imports) — single source is
 // savePushSubscription in @/lib/stewards.functions.ts.
@@ -73,7 +60,16 @@ export const syncF1Data = createServerFn({ method: "POST" })
       if (!data.force) return { skipped: true as const };
       throw new Error("Please wait a few seconds before syncing again.");
     }
+    if (userSyncCalls.size > 500) {
+      const cutoff = Date.now() - 10 * 60_000;
+      for (const [k, ts] of userSyncCalls) {
+        if (ts < cutoff) userSyncCalls.delete(k);
+      }
+    }
     userSyncCalls.set(userId, Date.now());
+    if (!data.force && inFlightSyncLock) {
+      return { skipped: true as const };
+    }
 
     // Always check if 2h / 30m push reminders need to go out
     await checkAndSendPushReminders(supabaseAdmin).catch(() => {});
@@ -89,6 +85,8 @@ export const syncF1Data = createServerFn({ method: "POST" })
       if (age < STALE_MS) return { skipped: true as const };
     }
 
+    inFlightSyncLock = true;
+    try {
     // ---- Calendar (preserving Steward custom deadline overrides!) ----
     const calendar = await getJson<{
       MRData: { RaceTable: { Races: ErgastRace[] } };
@@ -203,7 +201,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
       const rows = race.Results.map((res) => {
         const status = res.status ?? "";
-        const finished = /finished|lapped|\+\d+ lap/i.test(status);
+        const finished = isClassifiedFinishStatus(status, true);
         return {
           race_id: raceId,
           driver_id: res.Driver.driverId,
@@ -233,6 +231,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
       );
 
     return { skipped: false as const, races: races.length, scored: racesWithResults.length };
+    } finally { inFlightSyncLock = false; }
   });
 
 export async function checkAndSendPushReminders(
@@ -304,17 +303,24 @@ export async function checkAndSendPushReminders(
           url: "/predict",
         };
 
+        const { sendNativeWebPush } = await import("./webpush-native");
         const deadKeys: string[] = [];
-        for (const r of subRows) {
-          const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-          if (!m) continue;
-          if (doneUsers.has(m[1]!)) continue;
-          try {
-            const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-            const res = await sendNativeWebPush(sub, payloadObj);
-            if (res.ok) totalSent++;
-            else if (res.status === 404 || res.status === 410) deadKeys.push(r.key);
-          } catch {}
+        const pendingSubs = subRows.flatMap((r) => {
+          const parsed = parsePushSubscriptionKey(r.key);
+          return parsed && !doneUsers.has(parsed.userId) ? [parsed] : [];
+        });
+        const BATCH_SIZE = 25;
+        for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
+          const batch = pendingSubs.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(
+            batch.map(async (sub) => {
+              try {
+                const res = await sendNativeWebPush(sub, payloadObj);
+                if (res.ok) totalSent++;
+                else if (res.status === 404 || res.status === 410) deadKeys.push(sub.rawKey);
+              } catch {}
+            }),
+          );
         }
         if (deadKeys.length > 0) {
           await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
@@ -515,7 +521,7 @@ async function syncSprintResults(roundToId: Map<number, string>) {
     if (!raceId || !race.SprintResults?.length) continue;
     const rows = race.SprintResults.map((res) => {
       const status = res.status ?? "";
-      const finished = /finished|lapped|\+\d+ lap/i.test(status);
+      const finished = isClassifiedFinishStatus(status, true);
       return {
         race_id: raceId,
         driver_id: res.Driver.driverId,

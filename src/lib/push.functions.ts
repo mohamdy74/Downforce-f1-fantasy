@@ -3,11 +3,9 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   VAPID_PRIVATE_KEY,
   VAPID_PUBLIC_KEY,
-  VAPID_SUBJECT,
   isCompleteTop10,
   parsePushSubscriptionKey,
 } from "@/lib/push-keys";
-import { sendNativeWebPush } from "@/lib/webpush-native";
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
   .inputValidator((input: { forceWindow?: "2h" | "30m" | null } | undefined) => ({
@@ -19,6 +17,7 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
     if (!pub || !priv) return { sent: 0, reason: "VAPID keys not configured" };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendNativeWebPush } = await import("@/lib/webpush-native");
     const now = Date.now();
     const in3Hours = new Date(now + 3 * 3600_000).toISOString();
     const nowIso = new Date(now).toISOString();
@@ -36,7 +35,7 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
 
     const minsLeft = (new Date(race.race_at).getTime() - now) / 60_000;
 
-    // Strictly enforce real countdown windows (never allow unauthenticated forceWindow spoofing)
+    // Strictly enforce real countdown windows
     let windowTag: "2h" | "30m" | null = null;
     if (minsLeft <= 125 && minsLeft >= 95) windowTag = "2h";
     else if (minsLeft <= 35 && minsLeft >= 10) windowTag = "30m";
@@ -75,7 +74,7 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
       return { sent: 0, windowTag, reason: "No pending un-notified users" };
     }
 
-    const payload = JSON.stringify({
+    const payloadObj = {
       title:
         windowTag === "30m"
           ? `\u{1F6A8} 30 mins left \u2014 ${race.name}!`
@@ -86,24 +85,29 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
           : "You haven't submitted your picks yet. Tap to open Predict and lock in your Top 10!",
       tag: `downforce-${race.id}-${windowTag}`,
       url: "/predict",
-    });
+    };
 
     let sent = 0;
     const newlyNotified = new Set<string>();
-    for (const sub of targetSubs) {
-      try {
-        const res = await sendNativeWebPush(
-          { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
-          payload,
-          { subject: VAPID_SUBJECT, publicKey: pub, privateKey: priv },
-        );
-        if (res.ok) {
-          sent++;
-          newlyNotified.add(sub.userId);
-        }
-      } catch {
-        // Ignore expired subscription
-      }
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < targetSubs.length; i += BATCH_SIZE) {
+      const batch = targetSubs.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(
+        batch.map(async (sub) => {
+          try {
+            const res = await sendNativeWebPush(
+              { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+              payloadObj,
+            );
+            if (res.ok) {
+              sent++;
+              newlyNotified.add(sub.userId);
+            }
+          } catch {
+            // Ignore expired subscription
+          }
+        }),
+      );
     }
 
     if (newlyNotified.size > 0) {

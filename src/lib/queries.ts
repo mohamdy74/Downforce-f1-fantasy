@@ -82,8 +82,8 @@ export const leaderboardQuery = queryOptions({
       { data: profiles, error: pErr },
       { data: raceRows },
     ] = await Promise.all([
-      supabase.from("scores").select("user_id, race_id, points"),
-      supabase.from("profiles").select("id, display_name, avatar_url"),
+      supabase.from("scores").select("user_id, race_id, points").limit(50000),
+      supabase.from("profiles").select("id, display_name, avatar_url").limit(10000),
       supabase.from("races").select("id, round").eq("season", SEASON),
     ]);
     if (sErr) throw sErr;

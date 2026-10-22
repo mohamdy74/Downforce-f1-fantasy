@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
 import type { CardData, CardDriver } from "@/lib/shareCard";
+import { saveBlob, shareImageFile, shareOrCopyText } from "@/lib/shareActions";
 
 const MEDAL = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
@@ -100,55 +101,16 @@ export function SharePicks({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
 
-  function saveBlob(blob: Blob) {
-    const href = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 4000);
-    toast.success("Image saved.");
-  }
-
   async function handleDownloadImage() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
-    if (!blob) {
-      toast.error("Couldn't create the image.");
-      return;
-    }
-    saveBlob(blob);
+    if (!blob) { toast.error("Couldn't create the image."); return; }
+    saveBlob(blob, fileName);
   }
 
   async function handleShareImage() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
-    if (!blob) {
-      toast.error("Couldn't create the image.");
-      return;
-    }
-    const file = new File([blob], fileName, { type: "image/png" });
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `DOWNFORCE — ${raceName}` });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === "AbortError") return; // user closed the share sheet
-      }
-    }
-    saveBlob(blob); // browser can't share images: download instead
-  }
-
-  async function nativeShareText() {
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === "AbortError") return;
-      }
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    if (!blob) { toast.error("Couldn't create the image."); return; }
+    await shareImageFile(blob, fileName, `DOWNFORCE \u2014 ${raceName}`);
   }
 
   return (
@@ -179,7 +141,7 @@ export function SharePicks({
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" onClick={nativeShareText} className="h-9 gap-1.5 text-xs">
+            <Button variant="ghost" onClick={() => shareOrCopyText(text)} className="h-9 gap-1.5 text-xs">
               <Share2 className="h-3.5 w-3.5" /> Share Text
             </Button>
             <Button

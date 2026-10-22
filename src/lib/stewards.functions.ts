@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ResultRow } from "./scoring";
+import { parsePushSubscriptionKey } from "./push-keys";
 import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
-import { scoreSprint, type SprintResultRow } from "./sprintScoring";
-import { sendNativeWebPush } from "./webpush-native";
+import { type SprintResultRow } from "./sprintScoring";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
 
@@ -119,6 +119,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
   }) => d)
   .handler(async ({ data: d, context }) => {
     const sb = await requireSteward(context);
+    const { sendNativeWebPush } = await import("./webpush-native");
 
     if ((d.action === "override_score" || d.action === "remove_penalty") && d.userId && d.raceId) {
       const pts = d.action === "remove_penalty" ? 0 : (d.points ?? 0);
@@ -152,10 +153,12 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     }
 
     if (d.action === "set_exact_deadline" && d.raceId && d.isoTime) {
-      const col = d.target === "qualifying" ? "qualifying_at" : "race_at";
       const parsed = new Date(d.isoTime);
       if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date/time format");
-      const { error } = await sb.from("races").update({ [col]: parsed.toISOString() }).eq("id", d.raceId);
+      const updateData = d.target === "qualifying"
+        ? { qualifying_at: parsed.toISOString() }
+        : { race_at: parsed.toISOString() };
+      const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
         .from("sync_state")
@@ -166,10 +169,12 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     if (d.action === "shift_deadline" && d.raceId && d.minutes != null) {
       const { data: r } = await sb.from("races").select("race_at, qualifying_at").eq("id", d.raceId).single();
       if (!r) throw new Error("Race not found");
-      const col = d.target === "qualifying" ? "qualifying_at" : "race_at";
       const cur = (d.target === "qualifying" ? r.qualifying_at : r.race_at) ?? r.race_at;
       const nextIso = new Date(new Date(cur).getTime() + d.minutes * 60_000).toISOString();
-      const { error } = await sb.from("races").update({ [col]: nextIso }).eq("id", d.raceId);
+      const updateData = d.target === "qualifying"
+        ? { qualifying_at: nextIso }
+        : { race_at: nextIso };
+      const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
         .from("sync_state")
@@ -270,9 +275,8 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       }
       let sent = 0;
       for (const r of subRows) {
-        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-        if (!m) continue;
-        const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+        const sub = parsePushSubscriptionKey(r.key);
+        if (!sub) continue;
         const res = await sendNativeWebPush(sub, {
           title: "🏎️ Stewards Test Alert",
           body: "Push notifications are 100% working on your device!",
@@ -312,15 +316,12 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const deadKeys: string[] = [];
 
       const tasks = (subRows ?? []).map(async (r) => {
-        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-        if (!m) return;
-        const uid = m[1]!;
-        if (completedUsers.has(uid)) return;
+        const parsed = parsePushSubscriptionKey(r.key);
+        if (!parsed || completedUsers.has(parsed.userId)) return;
         try {
-          const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-          const res = await sendNativeWebPush(sub, payloadObj);
+          const res = await sendNativeWebPush(parsed, payloadObj);
           if (res.ok) {
-            reachedUserIds.add(uid);
+            reachedUserIds.add(parsed.userId);
           } else if (res.status === 404 || res.status === 410) {
             deadKeys.push(r.key);
           }

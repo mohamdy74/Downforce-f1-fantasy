@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import type { PoleCardData } from "@/lib/shareCard"; const formatCairo = (iso?: string | null) => iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }).toUpperCase() : null;
+import type { PoleCardData } from "@/lib/shareCard";
+import { saveBlob, shareImageFile, shareOrCopyText, formatCairoDate } from "@/lib/shareActions";
 
 /**
  * Stand-alone "pole position" share card. Works with or without a saved top 10:
@@ -46,7 +47,7 @@ export function SharePole({
     },
   });
   const shownName = (leagueName || playerName || "Player").trim();
-  const when = formatCairo(savedAt, true);
+  const when = formatCairoDate(savedAt, true);
   const url = typeof window !== "undefined" ? `${window.location.origin}/predict` : "";
   const fileName = `downforce-pole-round-${round}.png`;
 
@@ -92,57 +93,16 @@ export function SharePole({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
 
-  function saveBlob(blob: Blob) {
-    const href = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 4000);
-    toast.success("Image saved.");
-  }
-
   async function handleDownload() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
-    if (!blob) {
-      toast.error("Couldn't create the image.");
-      return;
-    }
-    saveBlob(blob);
+    if (!blob) { toast.error("Couldn't create the image."); return; }
+    saveBlob(blob, fileName);
   }
 
   async function handleShareImage() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPoleCard(card()));
-    if (!blob) {
-      toast.error("Couldn't create the image.");
-      return;
-    }
-    const file = new File([blob], fileName, { type: "image/png" });
-    
-
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `DOWNFORCE — ${raceName} pole pick` });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === "AbortError") return;
-      }
-    }
-    saveBlob(blob);
-  }
-
-  async function shareText() {
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === "AbortError") return;
-      }
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    if (!blob) { toast.error("Couldn't create the image."); return; }
+    await shareImageFile(blob, fileName, `DOWNFORCE \u2014 ${raceName} pole pick`);
   }
 
   return (
@@ -177,7 +137,7 @@ export function SharePole({
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" onClick={shareText} className="h-9 gap-1.5 text-xs">
+            <Button variant="ghost" onClick={() => shareOrCopyText(text)} className="h-9 gap-1.5 text-xs">
               <Share2 className="h-3.5 w-3.5" /> Share Text
             </Button>
             <Button

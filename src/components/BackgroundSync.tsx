@@ -41,8 +41,8 @@ export function BackgroundSync() {
         requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
       }
     ).requestIdleCallback;
-    if (idle) idle(run, { timeout: 4000 });
-    else window.setTimeout(run, 1500);
+    if (idle) window.setTimeout(() => idle(run, { timeout: 4000 }), Math.floor(Math.random() * 2500));
+    else window.setTimeout(run, 1500 + Math.floor(Math.random() * 4000));
 
     const onVisible = () => {
       if (document.visibilityState === "visible") run();
