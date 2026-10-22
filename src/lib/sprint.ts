@@ -1,4 +1,4 @@
-import type { Race } from "@/lib/queries";
+import { getTrustedNow, type Race } from "@/lib/queries";
 
 /** The sprint tab stays visible until a day and a half after the Grand Prix starts. */
 const GRACE_MS = 36 * 3600_000;
@@ -8,8 +8,8 @@ export function isSprintWeek(race: Race): boolean {
 }
 
 /** The current/next race weekend, but only if it is a sprint weekend. */
-export function sprintWeekend(races: Race[]): Race | null {
-  const now = Date.now();
+export function sprintWeekend(races: Race[], nowMs?: number): Race | null {
+  const now = nowMs ?? getTrustedNow();
   const current = races.find((r) => new Date(r.race_at).getTime() + GRACE_MS > now) ?? null;
   return current && isSprintWeek(current) ? current : null;
 }

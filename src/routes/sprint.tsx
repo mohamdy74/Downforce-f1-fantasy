@@ -8,7 +8,7 @@ import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery } from "@/lib/queries";
+import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
 import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
 import {
   SPRINT_MAX_POINTS,
@@ -47,9 +47,9 @@ function Sprint() {
 
   const race = useMemo(() => (races ? sprintWeekend(races) : null), [races]);
 
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => getTrustedNow());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    const t = setInterval(() => setNow(getTrustedNow()), 30_000);
     return () => clearInterval(t);
   }, []);
 

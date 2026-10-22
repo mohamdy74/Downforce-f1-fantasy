@@ -22,6 +22,7 @@ import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { isCompleteTop10 } from "@/lib/push-keys";
 import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
 import { executeStewardAction, exportLeagueBackup, getStewardsDashboard, STEWARD_EMAIL } from "@/lib/stewards.functions";
 import { Download } from "lucide-react";
@@ -214,7 +215,7 @@ function StewardsPage() {
   const totalPlayers = dash?.profiles?.length ?? 0;
   const lockedPlayers = (dash?.profiles ?? []).filter((p) => {
     const pr = predByUser.get(p.id);
-    return (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length === 10;
+    return isCompleteTop10(pr?.top10);
   }).length;
 
   function toggleDnfDriver(id: string) {

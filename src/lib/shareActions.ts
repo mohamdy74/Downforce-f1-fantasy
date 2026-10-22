@@ -46,19 +46,22 @@ export async function shareOrCopyText(text: string): Promise<void> {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
 }
 
+/** Formats an ISO timestamp in Africa/Cairo ("SAT 3 OCT \u00B7 14:32"). */
 export function formatCairoDate(iso: string | null | undefined, seconds = false): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d
-    .toLocaleString("en-GB", {
-      timeZone: "Africa/Cairo",
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      ...(seconds ? { second: "2-digit" as const } : {}),
-    })
-    .toUpperCase();
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Cairo",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(seconds ? { second: "2-digit" as const } : {}),
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const time = `${get("hour")}:${get("minute")}${seconds ? ":" + get("second") : ""}`;
+  return `${get("weekday")} ${get("day")} ${get("month")} \u00B7 ${time}`.toUpperCase();
 }

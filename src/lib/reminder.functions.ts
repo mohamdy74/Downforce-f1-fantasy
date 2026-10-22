@@ -5,7 +5,7 @@ import { isCompleteTop10 } from "@/lib/push-keys";
 export const getReminderStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { raceId: string }) => input)
-  .handler(async ({ data: { raceId }, context }) => {
+  .handler(async ({ data: { raceId } }) => {
     const normalizedRaceId = typeof raceId === "string" ? raceId.trim() : "";
     if (!normalizedRaceId) {
       return { submitted: 0, missing: [], total: 0 };
@@ -13,8 +13,7 @@ export const getReminderStats = createServerFn({ method: "POST" })
 
     const { supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server");
 
-    // Use the authenticated user's Supabase client so RLS remains in force.
-    // We intentionally avoid the service-role client here.
+    // Returns only submission counts and missing player names (never exposes pick contents).
     const { data: preds, error: predictionsError } = await supabase
       .from("predictions")
       .select("user_id, top10")

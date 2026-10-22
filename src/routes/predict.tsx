@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { isCompleteTop10 } from "@/lib/push-keys";
-import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
+import { driversQuery, getTrustedNow, nextRace, racesQuery, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
 
@@ -186,7 +186,7 @@ function Predict() {
     }
   }, [draftKey, top10, fastestLap, dnf, prediction]);
 
-  const now = Date.now();
+  const now = getTrustedNow();
   const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
   const poleLocked =
     raceLocked ||
@@ -235,7 +235,7 @@ function Predict() {
   // In-page reminder banner — red alert when picks not submitted
   const notSubmitted =
     prediction !== undefined && !isCompleteTop10(prediction?.top10) &&
-    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
+    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > now));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
   const duplicates = usedInTop10.length !== new Set(usedInTop10).size;
@@ -595,9 +595,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function TrackStatus({ target }: { target: string }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => getTrustedNow());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    const t = setInterval(() => setNow(getTrustedNow()), 30_000);
     return () => clearInterval(t);
   }, []);
   const left = new Date(target).getTime() - now;

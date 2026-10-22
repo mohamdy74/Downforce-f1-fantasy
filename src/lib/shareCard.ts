@@ -1,4 +1,5 @@
 import { LOGO } from "@/lib/logoPaths";
+import { formatCairoDate } from "@/lib/shareActions";
 import { teamLabel } from "@/lib/teams";
 
 export const CARD_W = 1080;
@@ -234,24 +235,7 @@ function drawFooter(ctx: Ctx, playerName: string, lockedAtLabel: string | null, 
 }
 
 /** "SAT 3 OCT · 14:32" in Cairo time */
-export function formatCairo(iso: string | null | undefined, seconds = false): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Africa/Cairo",
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    ...(seconds ? { second: "2-digit" as const } : {}),
-    hourCycle: "h23",
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const time = `${get("hour")}:${get("minute")}${seconds ? ":" + get("second") : ""}`;
-  return `${get("weekday")} ${get("day")} ${get("month")} · ${time}`.toUpperCase();
-}
+export const formatCairo = formatCairoDate;
 
 // ============================================================================
 // 1. FULL RACE PREDICTIONS CARD (Exact Left Card from Screenshot, No Top Kerb)

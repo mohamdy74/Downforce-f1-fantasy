@@ -74,6 +74,10 @@ function filterValidDriverIds(ids) {
   return (ids ?? []).filter((x) => Boolean(x && x !== "__none__"));
 }
 
+function isCompleteTop10(top10) {
+  return Array.isArray(top10) && filterValidDriverIds(top10).length === 10;
+}
+
 function extractStewardLockedUsers(existingScores) {
   return new Set(
     (existingScores ?? [])
@@ -298,6 +302,25 @@ function fmtLap(sec) {
   return m > 0 ? `${m}:${s}` : s;
 }
 
+function formatCairoDate(iso, seconds = false) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Cairo",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(seconds ? { second: "2-digit" } : {}),
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+  const time = `${get("hour")}:${get("minute")}${seconds ? ":" + get("second") : ""}`;
+  return `${get("weekday")} ${get("day")} ${get("month")} \u00B7 ${time}`.toUpperCase();
+}
+
 test("Characterization 1: positionPoints & scorePrediction preserve exact F1 league scoring rules", () => {
   assert.equal(positionPoints(0), 3);
   assert.equal(positionPoints(1), 2);
@@ -440,4 +463,23 @@ test("Characterization 5: push-keys and f1-parsers preserve exact string and reg
   assert.equal(isClassifiedFinishStatus("+1 Lap"), true);
   assert.equal(isClassifiedFinishStatus("Retired"), false);
   assert.equal(fmtLap(83.456), "1:23.456");
+});
+
+test("Characterization 6: isCompleteTop10, DNF constructor filter, and Cairo timezone formatting", () => {
+  assert.equal(isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10"]), true);
+  assert.equal(isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "__none__"]), false);
+  assert.equal(isCompleteTop10([]), false);
+  assert.equal(isCompleteTop10(null), false);
+
+  const sampleDrivers = [
+    { id: "alo", team: "Aston Martin" },
+    { id: "per", team: "Cadillac F1 Team" },
+    { id: "ver", team: "Red Bull" },
+    { id: "nor", team: "McLaren" },
+  ];
+  const eligibleDnf = sampleDrivers.filter((d) => !/aston|cadillac/i.test(d.team ?? ""));
+  assert.deepEqual(eligibleDnf.map((d) => d.id), ["ver", "nor"]);
+
+  const cairoLabel = formatCairoDate("2026-10-24T20:45:00.000Z", false);
+  assert.ok(cairoLabel && cairoLabel.includes("\u00B7") && cairoLabel.includes("OCT"));
 });

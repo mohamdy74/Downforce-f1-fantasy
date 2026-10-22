@@ -7,7 +7,7 @@ import { PushOptIn } from "@/components/PushOptIn";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { isCompleteTop10 } from "@/lib/push-keys";
-import type { Race } from "@/lib/queries";
+import { getTrustedNow, type Race } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function pad(n: number) {
@@ -24,7 +24,7 @@ function icsStamp(d: Date) {
 /** The next deadline that has not passed yet: pole closes at qualifying, everything else at the race. */
 function nextDeadline(race: Race): Date {
   const q = race.qualifying_at ? new Date(race.qualifying_at) : null;
-  if (q && q.getTime() > Date.now()) return q;
+  if (q && q.getTime() > getTrustedNow()) return q;
   return new Date(race.race_at);
 }
 
@@ -101,7 +101,7 @@ export function PickStatus({ race }: { race: Race }) {
     },
   });
 
-  const locked = new Date(race.race_at).getTime() <= Date.now();
+  const locked = new Date(race.race_at).getTime() <= getTrustedNow();
 
   if (!user) {
     return (

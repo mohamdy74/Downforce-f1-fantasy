@@ -1,1 +1,15 @@
-import type { Race } from "@/lib/queries"; export function MissingPlayers({ race }: { race: Race }) { if (new Date(race.race_at).getTime() <= Date.now()) return null; return (<div className="carbon-panel mt-3 flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2.5 text-xs text-muted-foreground"><span className="text-gold">&#128276;</span><span>Auto-reminders active for <strong className="text-foreground">{race.name}</strong> (2h &amp; 30m before lock).</span></div>); }
+import { getTrustedNow, type Race } from "@/lib/queries";
+
+export function MissingPlayers({ race }: { race: Race }) {
+  if (new Date(race.race_at).getTime() <= getTrustedNow()) return null;
+
+  return (
+    <div className="carbon-panel mt-3 flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2.5 text-xs text-muted-foreground">
+      <span className="text-gold">&#128276;</span>
+      <span>
+        Auto-reminders active for <strong className="text-foreground">{race.name}</strong> (2h &amp;
+        30m before lock).
+      </span>
+    </div>
+  );
+}

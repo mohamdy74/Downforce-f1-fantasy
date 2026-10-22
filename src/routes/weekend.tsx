@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"; import { useAutoAnimate } from "@fo
 
 import { Countdown } from "@/components/Countdown";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, racesQuery, type Driver, type Race } from "@/lib/queries";
+import { driversQuery, getTrustedNow, racesQuery, type Driver, type Race } from "@/lib/queries";
 import { teamColor } from "@/lib/teams";
 import {
   SESSION_LABEL,
@@ -68,8 +68,8 @@ function statusOf(startIso: string, type: SessionType, now: number): Status {
 function useNow(ms = 15_000) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), ms);
+    setNow(getTrustedNow());
+    const t = setInterval(() => setNow(getTrustedNow()), ms);
     return () => clearInterval(t);
   }, [ms]);
   return now;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getTrustedNow } from "@/lib/queries";
 
 function parts(msLeft: number) {
   const total = Math.max(0, Math.floor(msLeft / 1000));
@@ -15,8 +16,8 @@ export function Countdown({ target, label }: { target: string; label: string }) 
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    setNow(getTrustedNow());
+    const id = setInterval(() => setNow(getTrustedNow()), 1000);
     return () => clearInterval(id);
   }, []);
 
