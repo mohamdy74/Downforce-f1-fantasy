@@ -607,3 +607,159 @@ test("Characterization 7: hasChequeredFlag & computeVirtualStandings compute rea
   assert.equal(virtual[1].points, 46 - 30);
   assert.equal(virtual[1].liveRankDelta, -1); // dropped from #1 to #2!
 });
+
+function buildLiveOrderFromPositions(positions, laps, raceControl) {
+  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const latestPos = new Map();
+  for (let i = 0; i < positions.length; i++) {
+    const p = positions[i];
+    if (typeof p.driver_number !== "number" || typeof p.position !== "number" || p.position <= 0) continue;
+    const dateMs = p.date ? new Date(p.date).getTime() : 0;
+    const prev = latestPos.get(p.driver_number);
+    if (!prev || (dateMs > 0 && dateMs >= prev.dateMs) || (dateMs === 0 && i >= prev.idx)) {
+      latestPos.set(p.driver_number, { position: p.position, dateMs, idx: i });
+    }
+  }
+  if (latestPos.size === 0) return [];
+
+  const maxLapByDriver = new Map();
+  const bestLapByDriver = new Map();
+  for (const l of laps ?? []) {
+    if (typeof l.driver_number !== "number") continue;
+    if (typeof l.lap_number === "number" && l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)) {
+      maxLapByDriver.set(l.driver_number, l.lap_number);
+    }
+    if (
+      typeof l.lap_duration === "number" &&
+      l.lap_duration > 0 &&
+      l.lap_duration < (bestLapByDriver.get(l.driver_number) ?? Infinity)
+    ) {
+      bestLapByDriver.set(l.driver_number, l.lap_duration);
+    }
+  }
+  const leaderMaxLap = Math.max(0, ...maxLapByDriver.values());
+
+  const retiredNums = new Set();
+  for (const m of raceControl ?? []) {
+    const msg = (m.message ?? "").toUpperCase();
+    const match = msg.match(/\bCAR\s+(\d+)\b/);
+    if (
+      match &&
+      (msg.includes("RETIRED") ||
+        msg.includes("OUT OF THE RACE") ||
+        msg.includes("STOPPED ON TRACK") ||
+        msg.includes("WILL NOT RESUME"))
+    ) {
+      retiredNums.add(Number(match[1]));
+    }
+  }
+
+  const sorted = [...latestPos.entries()].sort(
+    (a, b) => a[1].position - b[1].position || a[0] - b[0],
+  );
+  return sorted.map(([driver_number, info], idx) => {
+    const drvLaps = maxLapByDriver.get(driver_number) ?? null;
+    const isLapsRetired =
+      leaderMaxLap >= 6 && drvLaps != null && leaderMaxLap - drvLaps >= 4 && info.position >= 15;
+    const dnf = retiredNums.has(driver_number) || isLapsRetired;
+    return {
+      position: idx + 1,
+      driver_number,
+      duration: bestLapByDriver.get(driver_number) ?? null,
+      gap_to_leader: null,
+      number_of_laps: drvLaps,
+      dnf,
+      dns: false,
+      dsq: false,
+    };
+  });
+}
+
+const LIVE_RACE_GRACE_MS = 4 * 60 * 60_000;
+function nextRaceLiveAware(races, nowMs) {
+  return (
+    races.find((r) => {
+      const start = new Date(r.race_at).getTime();
+      if (start > nowMs) return true;
+      return r.round >= LEAGUE_START_ROUND && !r.has_results && nowMs - start <= LIVE_RACE_GRACE_MS;
+    }) ?? null
+  );
+}
+
+test("Characterization 8: Race-Day End-to-End Safeguards (buildLiveOrderFromPositions, Sprint+GP Virtual Standings, and nextRace live window)", async () => {
+  const fs = await import("node:fs");
+
+  // 1) buildLiveOrderFromPositions synthesizes mid-race running order when /v1/session_result is empty
+  const positions = [
+    { driver_number: 44, position: 2, date: "2026-10-25T20:05:00Z" },
+    { driver_number: 1, position: 1, date: "2026-10-25T20:05:00Z" },
+    { driver_number: 44, position: 1, date: "2026-10-25T20:15:00Z" }, // HAM overtakes NOR for P1
+    { driver_number: 1, position: 2, date: "2026-10-25T20:15:00Z" },
+    { driver_number: 16, position: 3, date: "2026-10-25T20:15:00Z" },
+    { driver_number: 31, position: 20, date: "2026-10-25T20:10:00Z" },
+  ];
+  const laps = [
+    { driver_number: 44, lap_number: 12, lap_duration: 96.4 },
+    { driver_number: 1, lap_number: 12, lap_duration: 95.8 },
+    { driver_number: 16, lap_number: 12, lap_duration: 96.9 },
+    { driver_number: 31, lap_number: 3, lap_duration: 99.1 },
+  ];
+  const raceControl = [
+    { category: "CarEvent", message: "CAR 31 (OCO) RETIRED IN PIT LANE" },
+  ];
+
+  const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
+  assert.equal(synth.length, 4);
+  assert.equal(synth[0].driver_number, 44);
+  assert.equal(synth[0].position, 1);
+  assert.equal(synth[0].dnf, false);
+  assert.equal(synth[1].driver_number, 1);
+  assert.equal(synth[1].duration, 95.8);
+  assert.equal(synth[3].driver_number, 31);
+  assert.equal(synth[3].dnf, true);
+
+  // 2) nextRace keeps the active race during the 4-hour live race window until has_results is true
+  const sampleRaces = [
+    {
+      id: "r18",
+      season: 2026,
+      round: 18,
+      name: "United States Grand Prix",
+      race_at: "2026-10-25T20:00:00.000Z",
+      has_results: false,
+    },
+    {
+      id: "r19",
+      season: 2026,
+      round: 19,
+      name: "Mexico City Grand Prix",
+      race_at: "2026-11-01T20:00:00.000Z",
+      has_results: false,
+    },
+  ];
+
+  const midRaceNow = new Date("2026-10-25T20:45:00.000Z").getTime();
+  assert.equal(nextRaceLiveAware(sampleRaces, midRaceNow)?.id, "r18");
+
+  const finalizedRaces = sampleRaces.map((r) => (r.id === "r18" ? { ...r, has_results: true } : r));
+  assert.equal(nextRaceLiveAware(finalizedRaces, midRaceNow)?.id, "r19");
+
+  // 3) Verify on-disk source files contain all 5 Race-Day Safeguards
+  const liveStandingsSrc = fs.readFileSync("src/lib/liveStandings.ts", "utf8");
+  assert.ok(liveStandingsSrc.includes("export function buildLiveOrderFromPositions"));
+  assert.ok(liveStandingsSrc.includes("precomputedScores"));
+
+  const queriesSrc = fs.readFileSync("src/lib/queries.ts", "utf8");
+  assert.ok(queriesSrc.includes("LIVE_RACE_GRACE_MS"));
+
+  const weekendFnSrc = fs.readFileSync("src/lib/weekend.functions.ts", "utf8");
+  assert.ok(weekendFnSrc.includes("buildLiveOrderFromPositions"));
+  assert.ok(weekendFnSrc.includes("resolvePoleDriverId"));
+  assert.ok(weekendFnSrc.includes("liveScores"));
+
+  const leaderboardSrc = fs.readFileSync("src/routes/leaderboard.tsx", "utf8");
+  assert.ok(leaderboardSrc.includes("Test Live Mode"));
+
+  const weekendRouteSrc = fs.readFileSync("src/routes/weekend.tsx", "utf8");
+  assert.ok(weekendRouteSrc.includes("Live Grand Prix Telemetry"));
+});

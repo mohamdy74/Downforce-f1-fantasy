@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Countdown } from "@/components/Countdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,24 +15,29 @@ import {
   type SessionPayload,
   type SessionType,
 } from "@/lib/weekend";
-import { getWeekendSchedule, getWeekendSession } from "@/lib/weekend.functions";
+import {
+  getLiveRaceTelemetry,
+  getWeekendSchedule,
+  getWeekendSession,
+  type LiveRaceTelemetryPayload,
+} from "@/lib/weekend.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/weekend")({
   head: () => ({
     meta: [
-      { title: "Race weekend — DOWNFORCE" },
+      { title: "Race weekend \u2014 DOWNFORCE" },
       {
         name: "description",
         content:
           "Session schedule, practice, qualifying and race classification for the current Grand Prix weekend.",
       },
-      { property: "og:title", content: "Race weekend — DOWNFORCE" },
+      { property: "og:title", content: "Race weekend \u2014 DOWNFORCE" },
       {
         property: "og:description",
         content: "Follow the Grand Prix weekend: schedule, practice, qualifying and race result.",
       },
-      { name: "twitter:title", content: "Race weekend — DOWNFORCE" },
+      { name: "twitter:title", content: "Race weekend \u2014 DOWNFORCE" },
       {
         name: "twitter:description",
         content: "Follow the Grand Prix weekend: schedule, practice, qualifying and race result.",
@@ -56,7 +62,7 @@ const GROUPS: Record<Exclude<Tab, "schedule">, SessionType[]> = {
 
 type Status = "upcoming" | "live" | "completed";
 const MIN = 60_000;
-const STAY_MS = 18 * 60 * MIN; // keep showing a weekend until 3 days after the race starts
+const STAY_MS = 18 * 60 * MIN; // keep showing a weekend until 18h after the race starts
 
 function statusOf(startIso: string, type: SessionType, now: number): Status {
   const start = new Date(startIso).getTime();
@@ -120,7 +126,9 @@ function writeCache(raceId: string, type: string, payload: SessionPayload) {
 function Weekend() {
   const now = useNow();
   const { data: races, isLoading } = useQuery(racesQuery);
-  const [tab, setTab] = useState<Tab>("schedule"); const [rId, setRId] = useState<string | null>(null); const [tabRef] = useAutoAnimate<HTMLDivElement>();
+  const [tab, setTab] = useState<Tab>("schedule");
+  const [rId, setRId] = useState<string | null>(null);
+  const [tabRef] = useAutoAnimate<HTMLDivElement>();
 
   if (isLoading || now === null || !races) {
     return (
@@ -131,7 +139,8 @@ function Weekend() {
     );
   }
 
-  const defRace = currentWeekend(races, now); const race = races.find((r) => r.id === rId) ?? defRace;
+  const defRace = currentWeekend(races, now);
+  const race = races.find((r) => r.id === rId) ?? defRace;
   if (!race) {
     return (
       <Shell>
@@ -143,13 +152,34 @@ function Weekend() {
 
   return (
     <Shell>
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">{races.filter((r) => r.has_results || r.id === defRace?.id).slice(-6).reverse().map((r) => (<button key={r.id} type="button" onClick={() => setRId(r.id)} className={cn("shrink-0 rounded-full border px-3 py-1 font-mono text-xs font-bold", r.id === race.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground")}>R{r.round}</button>))}</div><p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        {races
+          .filter((r) => r.has_results || r.id === defRace?.id)
+          .slice(-6)
+          .reverse()
+          .map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setRId(r.id)}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1 font-mono text-xs font-bold",
+                r.id === race.id
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground",
+              )}
+            >
+              R{r.round}
+            </button>
+          ))}
+      </div>
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Round {race.round}
       </p>
       <h1 className="mt-1 text-3xl">{race.name}</h1>
       <p className="text-sm text-muted-foreground">
         {race.circuit}
-        {race.locality ? ` · ${race.locality}` : ""}
+        {race.locality ? ` \u00B7 ${race.locality}` : ""}
         {race.country ? `, ${race.country}` : ""}
       </p>
 
@@ -181,8 +211,6 @@ function Weekend() {
 }
 
 function WeekendBody({ race, now, tab }: { race: Race; now: number; tab: Tab }) {
-  // The full session list (practice, sprint, ...) comes from the server; until it
-  // arrives (or if it fails) we show what the races table already knows.
   const schedQ = useQuery({
     queryKey: ["weekend-schedule", race.id],
     staleTime: 30 * MIN,
@@ -339,7 +367,7 @@ function SessionResults({
   if (state === "live" && (!data || !data.rows.length))
     return <Empty text={`${SESSION_LABEL[type]} is live on track. Waiting for telemetry laps\u2026`} />;
   if (state === "pending" || !data || !data.rows.length)
-    return <Empty text="Waiting for the official classification…" />;
+    return <Empty text="Waiting for the official classification\u2026" />;
 
   return <ClassTable rows={data.rows} type={type} />;
 }
@@ -355,8 +383,8 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
     <div className="space-y-1">
       {rows.map((r, i) => {
         const sub = quali
-          ? [r.q1 && `Q1 ${r.q1}`, r.q2 && `Q2 ${r.q2}`, r.q3 && `Q3 ${r.q3}`].filter(Boolean).join(" · ")
-          : [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" · ");
+          ? [r.q1 && `Q1 ${r.q1}`, r.q2 && `Q2 ${r.q2}`, r.q3 && `Q3 ${r.q3}`].filter(Boolean).join(" \u00B7 ")
+          : [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" \u00B7 ");
         return (
           <div
             key={`${r.driverId ?? r.number ?? i}`}
@@ -372,19 +400,19 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
                 r.position === 1 && "text-gold",
               )}
             >
-              {r.position ?? "–"}
+              {r.position ?? "\u2013"}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-display text-sm font-extrabold italic uppercase">
-                {r.code ?? r.name ?? (r.number != null ? `#${r.number}` : "—")}
+                {r.code ?? r.name ?? (r.number != null ? `#${r.number}` : "\u2014")}
               </span>
               <span className="block truncate text-[11px] text-muted-foreground">
-                {[r.name, r.team].filter(Boolean).join(" · ")}
+                {[r.name, r.team].filter(Boolean).join(" \u00B7 ")}
               </span>
               {sub && <span className="block truncate font-mono text-[10px] text-muted-foreground">{sub}</span>}
             </span>
             <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums">
-              {r.status ? <span className="text-primary">{r.status}</span> : (r.time ?? "—")}
+              {r.status ? <span className="text-primary">{r.status}</span> : (r.time ?? "\u2014")}
             </span>
           </div>
         );
@@ -409,6 +437,7 @@ type ResultRow = {
 };
 
 function RaceResults({ race, now }: { race: Race; now: number }) {
+  const queryClient = useQueryClient();
   const { data: drivers } = useQuery(driversQuery);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["weekend-results", race.id],
@@ -424,14 +453,38 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
     },
   });
 
+  const startMs = new Date(race.race_at).getTime();
+  const isRaceWindow = !race.has_results && now >= startMs && now - startMs <= 4 * 60 * MIN;
+
+  const liveQ = useQuery<LiveRaceTelemetryPayload>({
+    queryKey: ["live-race-telemetry", race.id],
+    enabled: isRaceWindow,
+    staleTime: 20_000,
+    refetchInterval: (q) => (q.state.data?.state === "official" ? false : 25_000),
+    refetchIntervalInBackground: false,
+    queryFn: async () => getLiveRaceTelemetry({ data: { raceId: race.id } }),
+  });
+
+  useEffect(() => {
+    if (liveQ.data?.finalizedNow || liveQ.data?.state === "official") {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["weekend-results", race.id] }),
+        queryClient.invalidateQueries({ queryKey: ["races"] }),
+      ]);
+    }
+  }, [liveQ.data?.finalizedNow, liveQ.data?.state, race.id, queryClient]);
+
   const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
-  const rows = data ?? [];
-  const hasResults = race.has_results && rows.length > 0;
+  const dbRows: ResultRow[] = data ?? [];
+  const hasOfficial = race.has_results && dbRows.length > 0;
+  const liveRows: ResultRow[] = liveQ.data?.results ?? [];
+  const isShowingLive = !hasOfficial && liveRows.length > 0;
+  const rows: ResultRow[] = hasOfficial ? dbRows : liveRows;
 
   if (isLoading) return <div className="h-40 animate-pulse rounded-lg bg-muted/60" />;
-  if (isError) return <Empty text="Couldn't load results right now. Try again in a moment." />;
+  if (isError && !rows.length) return <Empty text="Couldn't load results right now. Try again in a moment." />;
 
-  if (!hasResults) {
+  if (!hasOfficial && !isShowingLive) {
     const st = statusOf(race.race_at, "race", now);
     return (
       <Empty
@@ -439,23 +492,29 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
           st === "upcoming"
             ? "The race hasn't started. Picks lock when the lights go out."
             : st === "live"
-              ? "The race is in progress. The classification appears after the chequered flag."
+              ? "The race is live on track. Waiting for initial OpenF1 telemetry laps\u2026"
               : "Waiting for the official classification."
         }
       />
     );
   }
 
-  const classified = rows.filter((r) => r.finished && r.position != null);
-  const dnfs = rows.filter((r) => !r.finished);
+  const classified = rows.filter((r: ResultRow) => r.finished && r.position != null);
+  const dnfs = rows.filter((r: ResultRow) => !r.finished);
   const winner = classified[0];
-  const pole = rows.find((r) => r.pole);
-  const fl = rows.find((r) => r.fastest_lap);
+  const pole = rows.find((r: ResultRow) => r.pole);
+  const fl = rows.find((r: ResultRow) => r.fastest_lap);
 
   return (
     <div className="space-y-4">
+      {isShowingLive && (
+        <div className="carbon-panel flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+          <span className="h-2 w-2 animate-ping rounded-full bg-primary" />
+          Live Grand Prix Telemetry \u00B7 Auto-updating every 25s
+        </div>
+      )}
       <div className="carbon-panel grid grid-cols-2 gap-3 rounded-lg p-4 sm:grid-cols-4">
-        <Fact label="Winner" d={winner && byId.get(winner.driver_id)} />
+        <Fact label={isShowingLive ? "Leader" : "Winner"} d={winner && byId.get(winner.driver_id)} />
         <Fact label="Pole" d={pole && byId.get(pole.driver_id)} />
         <Fact label="Fastest lap" d={fl && byId.get(fl.driver_id)} purple />
         <div>
@@ -465,7 +524,7 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
       </div>
 
       <div className="space-y-1">
-        {classified.map((r) => {
+        {classified.map((r: ResultRow) => {
           const d = byId.get(r.driver_id);
           return (
             <div
@@ -482,7 +541,7 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
             </div>
           );
         })}
-        {dnfs.map((r) => {
+        {dnfs.map((r: ResultRow) => {
           const d = byId.get(r.driver_id);
           return (
             <div
@@ -509,20 +568,20 @@ function DriverName({ d, fallback }: { d?: Driver | undefined; fallback: string 
       {d && (
         <span className="block truncate text-[11px] text-muted-foreground">
           {d.full_name}
-          {d.team ? ` · ${d.team}` : ""}
+          {d.team ? ` \u00B7 ${d.team}` : ""}
         </span>
       )}
     </span>
   );
 }
 
-function Fact({ label, d, purple }: { label: string; d?: Driver | undefined; purple?: boolean }) {
+function Fact({ label, d, purple }: { label: string; d?: Driver | undefined; purple?: boolean | undefined }) {
   return (
     <div>
       <p className={cn("font-mono text-[10px] uppercase tracking-widest", purple ? "text-purple" : "text-muted-foreground")}>
         {label}
       </p>
-      <p className="font-display text-lg font-extrabold italic uppercase">{d ? (d.code ?? d.full_name) : "—"}</p>
+      <p className="font-display text-lg font-extrabold italic uppercase">{d ? (d.code ?? d.full_name) : "\u2014"}</p>
     </div>
   );
 }

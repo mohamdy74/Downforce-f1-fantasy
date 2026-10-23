@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Radio, RefreshCw } from "lucide-react";
+import { Play, Radio, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
@@ -8,13 +8,11 @@ import { toast } from "sonner";
 import { FahlBadge } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { computeVirtualStandings, type VirtualLeaderboardEntry } from "@/lib/liveStandings";
-import { getTrustedNow, LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
-import type { PredictionRecord } from "@/lib/roundScoring";
+import { getTrustedNow, lastRace, LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { getLiveRaceTelemetry } from "@/lib/weekend.functions";
+import { getLiveRaceTelemetry, type LiveRaceTelemetryPayload } from "@/lib/weekend.functions";
 
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
@@ -51,6 +49,7 @@ function Leaderboard() {
   const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [syncing, setSyncing] = useState(false);
   const [viewMode, setViewMode] = useState<"live" | "official">("live");
+  const [previewLive, setPreviewLive] = useState(false);
 
   // Detect if a race from R14+ is currently live on track (started within last 4h and not yet officially scored)
   const activeLiveRace = useMemo(() => {
@@ -64,29 +63,18 @@ function Leaderboard() {
     );
   }, [races]);
 
+  // For "Test Live Mode" outside an active race window, use the most recent scored round
+  const previewRace = useMemo(() => (races ? lastRace(races) : null), [races]);
+  const targetLiveRace = activeLiveRace ?? (previewLive ? previewRace : null);
+
   // Poll shared server live race telemetry every 25s ONLY when a race is live and tab is focused
-  const liveTelemetryQ = useQuery({
+  const liveTelemetryQ = useQuery<LiveRaceTelemetryPayload>({
     queryKey: ["live-race-telemetry", activeLiveRace?.id],
     enabled: !!user && !!activeLiveRace,
     staleTime: 20_000,
     refetchInterval: (q) => (q.state.data?.state === "official" ? false : 25_000),
     refetchIntervalInBackground: false,
     queryFn: async () => getLiveRaceTelemetry({ data: { raceId: activeLiveRace!.id } }),
-  });
-
-  // Load locked predictions for the active live race once (they never change after lock)
-  const livePredsQ = useQuery({
-    queryKey: ["live-race-predictions", activeLiveRace?.id],
-    enabled: !!user && !!activeLiveRace,
-    staleTime: 10 * 60_000,
-    queryFn: async (): Promise<PredictionRecord[]> => {
-      const { data, error } = await supabase
-        .from("predictions")
-        .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-        .eq("race_id", activeLiveRace!.id);
-      if (error) throw error;
-      return (data ?? []) as PredictionRecord[];
-    },
   });
 
   // Instant Chequered Flag Finalizer: when telemetry transitions to finalized/official, refresh official leaderboard!
@@ -108,27 +96,41 @@ function Leaderboard() {
   ]);
 
   const hasLiveTelemetry =
-    !!activeLiveRace &&
-    (liveTelemetryQ.data?.results.length ?? 0) >= 10 &&
-    (livePredsQ.data?.length ?? 0) > 0;
+    (!!activeLiveRace &&
+      ((liveTelemetryQ.data?.results.length ?? 0) >= 10 ||
+        Object.keys(liveTelemetryQ.data?.liveScores ?? {}).length > 0)) ||
+    (previewLive && !!previewRace);
 
   const virtualBoard = useMemo<VirtualLeaderboardEntry[] | null>(() => {
-    if (!hasLiveTelemetry || !board || !activeLiveRace || !liveTelemetryQ.data || !livePredsQ.data) {
-      return null;
+    if (!hasLiveTelemetry || !board || !targetLiveRace) return null;
+
+    if (activeLiveRace && liveTelemetryQ.data) {
+      return computeVirtualStandings({
+        officialBoard: board,
+        raceId: activeLiveRace.id,
+        round: activeLiveRace.round,
+        raceAt: activeLiveRace.race_at,
+        liveResults: liveTelemetryQ.data.results,
+        precomputedScores: liveTelemetryQ.data.liveScores,
+      });
+    }
+
+    // Preview mode: replay the latest scored round as a live telemetry simulation
+    const simScores: Record<string, number> = {};
+    for (const e of board) {
+      simScores[e.userId] = e.byRound[targetLiveRace.round] ?? 0;
     }
     return computeVirtualStandings({
       officialBoard: board,
-      raceId: activeLiveRace.id,
-      round: activeLiveRace.round,
-      raceAt: activeLiveRace.race_at,
-      profiles: [],
-      liveResults: liveTelemetryQ.data.results,
-      predictions: livePredsQ.data,
+      raceId: targetLiveRace.id,
+      round: targetLiveRace.round,
+      raceAt: targetLiveRace.race_at,
+      precomputedScores: simScores,
     });
-  }, [hasLiveTelemetry, board, activeLiveRace, liveTelemetryQ.data, livePredsQ.data]);
+  }, [hasLiveTelemetry, board, targetLiveRace, activeLiveRace, liveTelemetryQ.data]);
 
   const isShowingVirtual = hasLiveTelemetry && viewMode === "live" && !!virtualBoard;
-  const displayBoard: Array< VirtualLeaderboardEntry | NonNullable<typeof board>[number] > =
+  const displayBoard: Array<VirtualLeaderboardEntry | NonNullable<typeof board>[number]> =
     isShowingVirtual ? virtualBoard! : (board ?? []);
 
   const scored =
@@ -184,28 +186,49 @@ function Leaderboard() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl">League standings</h1>
           <p className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {scored} race{scored === 1 ? "" : "s"} scored
-            {isShowingVirtual && activeLiveRace ? ` \u00B7 + R${activeLiveRace.round} LIVE` : ""}
+            {isShowingVirtual && targetLiveRace ? ` \u00B7 + R${targetLiveRace.round} LIVE` : ""}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={syncing}
-          onClick={handleForceSync}
-          className="shrink-0 gap-1.5"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-          {syncing ? "Syncing\u2026" : "Sync results"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {!activeLiveRace && previewRace && (
+            <Button
+              type="button"
+              variant={previewLive ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                const next = !previewLive;
+                setPreviewLive(next);
+                setViewMode("live");
+                if (next) {
+                  toast.info(`Simulating Live Virtual Standings using R${previewRace.round} (${previewRace.name})`);
+                }
+              }}
+              className="shrink-0 gap-1.5"
+            >
+              <Play className="h-3.5 w-3.5" />
+              {previewLive ? "Exit Live Preview" : "Test Live Mode"}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={syncing}
+            onClick={handleForceSync}
+            className="shrink-0 gap-1.5"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+            {syncing ? "Syncing\u2026" : "Sync results"}
+          </Button>
+        </div>
       </div>
 
-      {activeLiveRace && (
+      {targetLiveRace && (
         <div className="carbon-panel mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/50 bg-primary/10 px-3.5 py-2.5">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-2.5 w-2.5">
@@ -215,12 +238,15 @@ function Leaderboard() {
             <div>
               <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
                 <Radio className="mr-1 inline h-3.5 w-3.5" />
-                Live Virtual Standings \u00B7 R{activeLiveRace.round} {activeLiveRace.name}
+                {previewLive && !activeLiveRace ? "Live Preview Simulation \u00B7 " : "Live Virtual Standings \u00B7 "}
+                R{targetLiveRace.round} {targetLiveRace.name}
               </p>
               <p className="text-xs text-muted-foreground">
-                {hasLiveTelemetry
-                  ? "Real-time virtual points & rank deltas (<1ms client calc \u00B7 auto-locks on Chequered Flag)"
-                  : "Waiting for live OpenF1 track classification\u2026"}
+                {previewLive && !activeLiveRace
+                  ? "Previewing how live round badges (+PTS LIVE) and rank deltas (\u25B2/\u25BC) appear during Sunday's race"
+                  : hasLiveTelemetry
+                    ? "Real-time virtual points & rank deltas (<1ms client calc \u00B7 auto-locks on Chequered Flag)"
+                    : "Waiting for live OpenF1 track classification\u2026"}
               </p>
             </div>
           </div>
@@ -245,7 +271,7 @@ function Leaderboard() {
                   viewMode === "official" ? "bg-secondary text-foreground" : "text-muted-foreground",
                 )}
               >
-                Official Only
+                Before R{targetLiveRace.round}
               </button>
             </div>
           )}
@@ -356,7 +382,7 @@ function Leaderboard() {
                     .filter(
                       (r) =>
                         r.round >= LEAGUE_START_ROUND &&
-                        (r.has_results || (isShowingVirtual && r.id === activeLiveRace?.id)) &&
+                        (r.has_results || (isShowingVirtual && r.id === targetLiveRace?.id)) &&
                         displayBoard.some((e) => (e.byRound[r.round] ?? 0) !== 0),
                     )
                     .map((r) => (
@@ -364,14 +390,14 @@ function Leaderboard() {
                         key={r.id}
                         className={cn(
                           "rounded-sm px-1 py-1 text-center",
-                          isShowingVirtual && r.id === activeLiveRace?.id
+                          isShowingVirtual && r.id === targetLiveRace?.id
                             ? "border border-primary/50 bg-primary/15"
                             : "bg-muted/60",
                         )}
                       >
                         <p className="font-mono text-[10px] uppercase text-muted-foreground">
                           R{r.round}
-                          {isShowingVirtual && r.id === activeLiveRace?.id ? " \u2022" : ""}
+                          {isShowingVirtual && r.id === targetLiveRace?.id ? " \u2022" : ""}
                         </p>
                         <p className="font-mono text-sm font-bold tabular-nums">
                           {entry.byRound[r.round] ?? "\u2013"}

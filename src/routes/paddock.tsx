@@ -11,7 +11,7 @@ import { driversQuery, getTrustedNow, LEAGUE_START_ROUND, racesQuery, type Race 
 import { positionPoints, scorePrediction } from "@/lib/scoring";
 import { teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
-import { getLiveRaceTelemetry } from "@/lib/weekend.functions";
+import { getLiveRaceTelemetry, type LiveRaceTelemetryPayload } from "@/lib/weekend.functions";
 
 export const Route = createFileRoute("/paddock")({
   head: () => ({
@@ -63,7 +63,7 @@ function Paddock() {
     return elapsed >= 0 && elapsed <= LIVE_WINDOW_MS;
   }, [race]);
 
-  const liveTelemetryQ = useQuery({
+  const liveTelemetryQ = useQuery<LiveRaceTelemetryPayload>({
     queryKey: ["live-race-telemetry", race?.id],
     enabled: !!user && !!race && isRaceLiveCandidate,
     staleTime: 20_000,
@@ -162,8 +162,12 @@ function Paddock() {
   const computedPoints = new Map<string, number>();
   for (const p of data?.preds ?? []) {
     const dbPt = data?.points.get(p.user_id);
+    const serverLivePt = liveTelemetryQ.data?.liveScores?.[p.user_id];
     if (dbPt != null && !isLiveScoring) {
       computedPoints.set(p.user_id, dbPt);
+    } else if (isLiveScoring && serverLivePt != null) {
+      // Uses exact server live score (includes Sprint points, Pole-only save, and Steward waivers)
+      computedPoints.set(p.user_id, serverLivePt);
     } else if (hasResults && activeResults.length >= 10) {
       const validTop10 = (p.top10 ?? []).filter((x) => x && x !== "__none__");
       const b = scorePrediction(

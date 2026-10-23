@@ -2,8 +2,20 @@ import { createServerFn } from "@tanstack/react-start";
 
 import type { Json } from "@/integrations/supabase/types";
 import { getJson, toIso as iso, fmtLap } from "./f1-parsers";
-import { hasChequeredFlag, type OpenF1RaceControlMessage } from "./liveStandings";
-import { buildRaceScoreRows, type PredictionRecord, type ProfileRecord, type ScoreRecord, type SprintPredictionRecord } from "./roundScoring";
+import {
+  buildLiveOrderFromPositions,
+  hasChequeredFlag,
+  type OpenF1LapEntry,
+  type OpenF1PositionEntry,
+  type OpenF1RaceControlMessage,
+} from "./liveStandings";
+import {
+  buildRaceScoreRows,
+  type PredictionRecord,
+  type ProfileRecord,
+  type ScoreRecord,
+  type SprintPredictionRecord,
+} from "./roundScoring";
 import { type ResultRow } from "./scoring";
 import { type SprintResultRow } from "./sprintScoring";
 import {
@@ -39,6 +51,10 @@ type SessRow = {
   updated_at: string;
 };
 
+/**
+ * 100% JSON-serializable payload for TanStack Start `ValidateSerializableMapped<T>`.
+ * Maps `liveScores` as `Record<string, number>` (userId -> total live round points).
+ */
 export type LiveRaceTelemetryPayload = {
   raceId: string;
   round: number;
@@ -49,6 +65,7 @@ export type LiveRaceTelemetryPayload = {
   updatedAt: string;
   results: ResultRow[];
   classification: ClassRow[];
+  liveScores: Record<string, number>;
 };
 
 // Per-server throttles & shared live telemetry cache (coalesces 50+ concurrent viewers into 1 OpenF1 request per 22s).
@@ -58,6 +75,7 @@ const liveSessionCache = new Map<string, { ts: number; rows: ClassRow[] }>();
 const inFlightSessionFetch = new Map<string, Promise<ClassRow[]>>();
 const liveRaceCache = new Map<string, { ts: number; payload: LiveRaceTelemetryPayload }>();
 const inFlightLiveRace = new Map<string, Promise<LiveRaceTelemetryPayload>>();
+const cachedPoleByRace = new Map<string, string>(); // raceId -> driver_id
 
 type JSess = { date: string; time?: string | undefined };
 
@@ -93,13 +111,13 @@ async function ensureSchedule(admin: Admin, race: DbRace): Promise<SessRow[]> {
   scheduleChecked.set(race.id, Date.now());
 
   type JRace = {
-    FirstPractice?: JSess;
-    SecondPractice?: JSess;
-    ThirdPractice?: JSess;
-    SprintQualifying?: JSess;
-    SprintShootout?: JSess;
-    Sprint?: JSess;
-    Qualifying?: JSess;
+    FirstPractice?: JSess | undefined;
+    SecondPractice?: JSess | undefined;
+    ThirdPractice?: JSess | undefined;
+    SprintQualifying?: JSess | undefined;
+    SprintShootout?: JSess | undefined;
+    Sprint?: JSess | undefined;
+    Qualifying?: JSess | undefined;
   };
   const res = await getJson<{ MRData: { RaceTable: { Races: JRace[] } } }>(
     `${JOLPICA}/${SEASON}/${race.round}/races/?format=json`,
@@ -187,7 +205,7 @@ function blank(): ClassRow {
   };
 }
 
-type JDriver = { driverId: string; code?: string; givenName: string; familyName: string };
+type JDriver = { driverId: string; code?: string | undefined; givenName: string; familyName: string };
 
 async function fromJolpica(
   race: DbRace,
@@ -200,14 +218,14 @@ async function fromJolpica(
         RaceTable: {
           Races: Array<{
             QualifyingResults?: Array<{
-              number?: string;
+              number?: string | undefined;
               position: string;
               Driver: JDriver;
-              Constructor?: { name: string };
-              Q1?: string;
-              Q2?: string;
-              Q3?: string;
-            }>;
+              Constructor?: { name: string } | undefined;
+              Q1?: string | undefined;
+              Q2?: string | undefined;
+              Q3?: string | undefined;
+            }> | undefined;
           }>;
         };
       };
@@ -237,12 +255,12 @@ async function fromJolpica(
         Races: Array<{
           SprintResults?: Array<{
             position: string;
-            laps?: string;
-            status?: string;
+            laps?: string | undefined;
+            status?: string | undefined;
             Driver: JDriver;
-            Constructor?: { name: string };
-            Time?: { time?: string };
-          }>;
+            Constructor?: { name: string } | undefined;
+            Time?: { time?: string | undefined } | undefined;
+          }> | undefined;
         }>;
       };
     };
@@ -284,9 +302,9 @@ type OfResult = {
   duration: number | Array<number | null> | null;
   gap_to_leader: number | string | Array<number | string | null> | null;
   number_of_laps: number | null;
-  dnf?: boolean;
-  dns?: boolean;
-  dsq?: boolean;
+  dnf?: boolean | undefined;
+  dns?: boolean | undefined;
+  dsq?: boolean | undefined;
 };
 
 async function fromOpenF1(
@@ -305,8 +323,17 @@ async function fromOpenF1(
     .sort((a, b) => a.diff - b.diff)[0]?.s;
   if (!match) return [];
 
-  const res = await getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${match.session_key}`);
-  if (!Array.isArray(res)) return [];
+  let res = await getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${match.session_key}`);
+  if (!Array.isArray(res) || res.filter((r) => r.position != null).length < 5) {
+    // Mid-session fallback: synthesize running order from live /v1/position and /v1/laps streams
+    const [positions, laps] = await Promise.all([
+      getJson<OpenF1PositionEntry[]>(`${OPENF1}/position?session_key=${match.session_key}`),
+      getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${match.session_key}`),
+    ]);
+    const synth = buildLiveOrderFromPositions(positions, laps, null);
+    if (synth.length > 0) res = synth;
+  }
+  if (!Array.isArray(res) || !res.length) return [];
 
   const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
     if (Array.isArray(v)) {
@@ -361,6 +388,79 @@ async function fetchClassification(
     if (rows.length) return rows;
   }
   return fromOpenF1(type, startsAt, byNumber);
+}
+
+/**
+ * Resolves the Pole Position driver_id for a race using:
+ * 1) In-memory cache,
+ * 2) Saturday's saved Qualifying session in `weekend_sessions`,
+ * 3) Jolpica Qualifying API,
+ * 4) OpenF1 Qualifying session_result.
+ */
+async function resolvePoleDriverId(
+  admin: Admin,
+  race: DbRace,
+  sessions: OfSession[] | null,
+  byId: Map<string, DriverRef>,
+  numToDrv: Map<number, DriverRef>,
+): Promise<string | null> {
+  const memo = cachedPoleByRace.get(race.id);
+  if (memo) return memo;
+
+  // 1) Check weekend_sessions qualifying classification in DB
+  const { data: qSess } = await admin
+    .from("weekend_sessions")
+    .select("classification")
+    .eq("race_id", race.id)
+    .eq("session_type", "qualifying")
+    .maybeSingle();
+  if (qSess && Array.isArray(qSess.classification)) {
+    const p1 = (qSess.classification as unknown as ClassRow[]).find((r) => r.position === 1);
+    if (p1?.driverId) {
+      cachedPoleByRace.set(race.id, p1.driverId);
+      return p1.driverId;
+    }
+    if (p1?.number != null) {
+      const d = numToDrv.get(p1.number);
+      if (d?.id) {
+        cachedPoleByRace.set(race.id, d.id);
+        return d.id;
+      }
+    }
+  }
+
+  // 2) Check Jolpica Qualifying
+  const jRows = await fromJolpica(race, "qualifying", byId);
+  const jP1 = jRows.find((r) => r.position === 1);
+  if (jP1?.driverId) {
+    cachedPoleByRace.set(race.id, jP1.driverId);
+    return jP1.driverId;
+  }
+
+  // 3) Check OpenF1 Qualifying
+  if (race.qualifying_at && Array.isArray(sessions)) {
+    const qt = new Date(race.qualifying_at).getTime();
+    const qs = sessions
+      .filter((s) => s.session_name === "Qualifying")
+      .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - qt) }))
+      .filter((x) => x.diff < 6 * 60 * MIN)
+      .sort((a, b) => a.diff - b.diff)[0]?.s;
+    if (qs) {
+      const qRes = await getJson<OfResult[]>(
+        `${OPENF1}/session_result?session_key=${qs.session_key}`,
+      );
+      const poleNum = qRes?.find((r) => r.position === 1)?.driver_number;
+      if (poleNum != null) {
+        const d = numToDrv.get(poleNum);
+        if (d?.id) {
+          cachedPoleByRace.set(race.id, d.id);
+          return d.id;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 export const getWeekendSession = createServerFn({ method: "POST" })
@@ -428,10 +528,11 @@ export const getWeekendSession = createServerFn({ method: "POST" })
 /**
  * High-efficiency live race telemetry & Instant Chequered Flag Finalizer.
  * - Coalesces all concurrent client polls into 1 OpenF1 call per 22 seconds.
- * - Streams live driver positions, fastest lap, pole, and DNF status for `<1ms` client Virtual Standings.
+ * - Falls back automatically to `/v1/position` + `/v1/laps` when `/v1/session_result` is empty mid-race.
+ * - Precomputes exact live round scores (including Sprint points, -25 penalties, and Steward waivers).
  * - The moment OpenF1 `/v1/race_control` signals `CHEQUERED` flag (after >= 40m of racing),
- *   automatically persists `race_results`, marks `has_results = true`, and runs `buildRaceScoreRows`
- *   so official league points finalize in 0 seconds instead of waiting 8-15 minutes.
+ *   automatically persists `race_results`, marks `has_results = true`, and upserts `scores`
+ *   so official league points finalize in 0 seconds.
  */
 export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
   .inputValidator((input: { raceId: string }) => input)
@@ -449,6 +550,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
         updatedAt: new Date().toISOString(),
         results: [],
         classification: [],
+        liveScores: {},
       };
     }
 
@@ -465,6 +567,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
         updatedAt: new Date().toISOString(),
         results: [],
         classification: [],
+        liveScores: {},
       };
     }
 
@@ -486,11 +589,17 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
 
         // If official results are already saved in DB, return them directly
         if (race.has_results) {
-          const { data: dbResults } = await supabaseAdmin
-            .from("race_results")
-            .select("driver_id, position, finished, fastest_lap, pole")
-            .eq("race_id", race.id)
-            .order("position", { ascending: true, nullsFirst: false });
+          const [{ data: dbResults }, { data: dbScores }] = await Promise.all([
+            supabaseAdmin
+              .from("race_results")
+              .select("driver_id, position, finished, fastest_lap, pole")
+              .eq("race_id", race.id)
+              .order("position", { ascending: true, nullsFirst: false }),
+            supabaseAdmin
+              .from("scores")
+              .select("user_id, points")
+              .eq("race_id", race.id),
+          ]);
           if (dbResults?.length) {
             const classification: ClassRow[] = dbResults.map((r) => {
               const d = byId.get(r.driver_id);
@@ -505,6 +614,10 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
                 status: r.finished ? null : "DNF",
               };
             });
+            const liveScores: Record<string, number> = {};
+            for (const s of dbScores ?? []) {
+              liveScores[s.user_id] = s.points;
+            }
             return {
               raceId: race.id,
               round: race.round,
@@ -515,6 +628,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
               updatedAt: new Date().toISOString(),
               results: dbResults as ResultRow[],
               classification,
+              liveScores,
             };
           }
         }
@@ -543,21 +657,34 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
             updatedAt: new Date().toISOString(),
             results: [],
             classification: [],
+            liveScores: {},
           };
         }
 
-        const [ofResults, ofDrivers, laps, raceControl] = await Promise.all([
+        const [rawOfResults, ofDrivers, laps, raceControl] = await Promise.all([
           getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
           getJson<Array<{ driver_number: number; name_acronym: string }>>(
             `${OPENF1}/drivers?session_key=${rs.session_key}`,
           ),
-          getJson<Array<{ driver_number: number; lap_duration: number | null }>>(
+          getJson<OpenF1LapEntry[]>(
             `${OPENF1}/laps?session_key=${rs.session_key}`,
           ),
           getJson<OpenF1RaceControlMessage[]>(
             `${OPENF1}/race_control?session_key=${rs.session_key}`,
           ),
         ]);
+
+        let ofResults: OfResult[] = Array.isArray(rawOfResults) ? rawOfResults : [];
+        if (ofResults.filter((r) => r.position != null).length < 10) {
+          // Mid-race fallback: synthesize running order from OpenF1 /v1/position stream
+          const positions = await getJson<OpenF1PositionEntry[]>(
+            `${OPENF1}/position?session_key=${rs.session_key}`,
+          );
+          const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
+          if (synth.length >= 10) {
+            ofResults = synth;
+          }
+        }
 
         const numToDrv = new Map<number, DriverRef>();
         for (const d of drvList) {
@@ -568,14 +695,13 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           if (matched) numToDrv.set(od.driver_number, matched);
         }
 
-        let poleNum: number | undefined;
-        const qs = nearSession("Qualifying", race.qualifying_at);
-        if (qs) {
-          const qRes = await getJson<OfResult[]>(
-            `${OPENF1}/session_result?session_key=${qs.session_key}`,
-          );
-          poleNum = qRes?.find((r) => r.position === 1)?.driver_number;
-        }
+        const poleDriverId = await resolvePoleDriverId(
+          supabaseAdmin,
+          race,
+          sessions,
+          byId,
+          numToDrv,
+        );
 
         let flNum: number | undefined;
         let bestLap = Infinity;
@@ -594,7 +720,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           return v;
         };
 
-        const sortedOf = [...(ofResults ?? [])].sort(
+        const sortedOf = [...ofResults].sort(
           (a, b) => (a.position ?? 999) - (b.position ?? 999),
         );
 
@@ -633,7 +759,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
               position: finished ? r.position : null,
               finished,
               fastest_lap: r.driver_number === flNum,
-              pole: r.driver_number === poleNum,
+              pole: poleDriverId ? d.id === poleDriverId : false,
             });
           }
         }
@@ -642,76 +768,91 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
         const chequered =
           (minutesElapsed >= 40 && hasChequeredFlag(raceControl)) || minutesElapsed >= 180;
 
+        const liveScores: Record<string, number> = {};
         let finalizedNow = false;
-        if (chequered && !race.has_results && liveResults.length >= 10) {
-          // Instant Chequered Flag Finalizer: write results and compute official scores immediately!
-          const dbRows = sortedOf.flatMap((r) => {
-            const d = numToDrv.get(r.driver_number) ?? byNumber.get(r.driver_number);
-            if (!d?.id) return [];
-            const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
-            return [
-              {
-                race_id: race.id,
-                driver_id: d.id,
-                position: finished ? r.position : null,
-                status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
-                finished,
-                fastest_lap: r.driver_number === flNum,
-                pole: r.driver_number === poleNum,
-              },
-            ];
+
+        if (liveResults.length >= 10) {
+          const [
+            { data: profiles },
+            { data: predictions },
+            { data: sprintResults },
+            { data: sprintPreds },
+            { data: existingScores },
+          ] = await Promise.all([
+            supabaseAdmin
+              .from("profiles")
+              .select("id, created_at")
+              .lt("created_at", race.race_at),
+            supabaseAdmin
+              .from("predictions")
+              .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
+              .eq("race_id", race.id),
+            supabaseAdmin
+              .from("sprint_results")
+              .select("driver_id, position, finished, pole")
+              .eq("race_id", race.id),
+            supabaseAdmin
+              .from("sprint_predictions")
+              .select("user_id, top8, pole_driver_id")
+              .eq("race_id", race.id),
+            supabaseAdmin.from("scores").select("user_id, points, breakdown").eq("race_id", race.id),
+          ]);
+
+          const scoreRows = buildRaceScoreRows({
+            raceId: race.id,
+            raceAt: race.race_at,
+            profiles: (profiles ?? []) as ProfileRecord[],
+            results: liveResults,
+            predictions: (predictions ?? []) as PredictionRecord[],
+            sprintResults: (sprintResults ?? []) as SprintResultRow[],
+            sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
+            existingScores: (existingScores ?? []) as ScoreRecord[],
+            mode: "auto_sync",
           });
 
-          if (dbRows.length >= 10) {
-            await supabaseAdmin
-              .from("race_results")
-              .upsert(dbRows, { onConflict: "race_id,driver_id" });
-            await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
+          // Populate liveScores for all players (including any Steward-locked existingScores)
+          for (const ex of (existingScores ?? []) as Array<{ user_id: string; points: number; breakdown: unknown }>) {
+            const bd = (ex.breakdown as Record<string, unknown> | null) ?? {};
+            if (bd["stewardOverride"] === true) {
+              liveScores[ex.user_id] = ex.points;
+            }
+          }
+          for (const row of scoreRows) {
+            liveScores[row.user_id] = row.points;
+          }
 
-            const [
-              { data: profiles },
-              { data: predictions },
-              { data: sprintResults },
-              { data: sprintPreds },
-              { data: existingScores },
-            ] = await Promise.all([
-              supabaseAdmin
-                .from("profiles")
-                .select("id, created_at")
-                .lt("created_at", race.race_at),
-              supabaseAdmin
-                .from("predictions")
-                .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-                .eq("race_id", race.id),
-              supabaseAdmin
-                .from("sprint_results")
-                .select("driver_id, position, finished, pole")
-                .eq("race_id", race.id),
-              supabaseAdmin
-                .from("sprint_predictions")
-                .select("user_id, top8, pole_driver_id")
-                .eq("race_id", race.id),
-              supabaseAdmin.from("scores").select("user_id, breakdown").eq("race_id", race.id),
-            ]);
-
-            const scoreRows = buildRaceScoreRows({
-              raceId: race.id,
-              raceAt: race.race_at,
-              profiles: (profiles ?? []) as ProfileRecord[],
-              results: liveResults,
-              predictions: (predictions ?? []) as PredictionRecord[],
-              sprintResults: (sprintResults ?? []) as SprintResultRow[],
-              sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
-              existingScores: (existingScores ?? []) as ScoreRecord[],
-              mode: "auto_sync",
+          if (chequered && !race.has_results) {
+            // Instant Chequered Flag Finalizer: write results and official scores immediately!
+            const dbRows = sortedOf.flatMap((r) => {
+              const d = numToDrv.get(r.driver_number) ?? byNumber.get(r.driver_number);
+              if (!d?.id) return [];
+              const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
+              return [
+                {
+                  race_id: race.id,
+                  driver_id: d.id,
+                  position: finished ? r.position : null,
+                  status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
+                  finished,
+                  fastest_lap: r.driver_number === flNum,
+                  pole: poleDriverId ? d.id === poleDriverId : false,
+                },
+              ];
             });
 
-            if (scoreRows.length) {
+            if (dbRows.length >= 10) {
               await supabaseAdmin
-                .from("scores")
-                .upsert(scoreRows, { onConflict: "user_id,race_id" });
+                .from("race_results")
+                .upsert(dbRows, { onConflict: "race_id,driver_id" });
+              await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
+
+              if (scoreRows.length) {
+                await supabaseAdmin
+                  .from("scores")
+                  .upsert(scoreRows, { onConflict: "user_id,race_id" });
+              }
+              finalizedNow = true;
             }
-            finalizedNow = true;
           }
         }
 
@@ -725,6 +866,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           updatedAt: new Date().toISOString(),
           results: liveResults,
           classification,
+          liveScores,
         };
       })().finally(() => {
         inFlightLiveRace.delete(race.id);

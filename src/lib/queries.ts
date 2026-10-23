@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 export const SEASON = 2026;
 /** Official league start: Round 14 (Spanish Grand Prix) */
 export const LEAGUE_START_ROUND = 14;
+/** Keep the active race as `nextRace` for up to 4h after lights out until `has_results` is true */
+export const LIVE_RACE_GRACE_MS = 4 * 60 * 60_000;
 
 let clockOffsetMs = 0;
 let clockSynced = false;
@@ -200,9 +202,17 @@ export const leaderboardQuery = queryOptions({
   },
 });
 
-export function nextRace(races: Race[]): Race | null {
-  const now = getTrustedNow();
-  return races.find((r) => new Date(r.race_at).getTime() > now) ?? null;
+export function nextRace(races: Race[], nowMs?: number | undefined): Race | null {
+  const now = nowMs ?? getTrustedNow();
+  return (
+    races.find((r) => {
+      const start = new Date(r.race_at).getTime();
+      if (start > now) return true;
+      // Keep the active race on /predict, /, and /stewards while the race is live on track
+      // until Chequered Flag results are finalized (or 4h grace window expires).
+      return r.round >= LEAGUE_START_ROUND && !r.has_results && now - start <= LIVE_RACE_GRACE_MS;
+    }) ?? null
+  );
 }
 
 export function lastRace(races: Race[]): Race | null {

@@ -6,7 +6,13 @@ import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type Spr
 import { type SprintResultRow } from "./sprintScoring";
 import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
 import { isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
-import { hasChequeredFlag, type OpenF1RaceControlMessage } from "./liveStandings";
+import {
+  buildLiveOrderFromPositions,
+  hasChequeredFlag,
+  type OpenF1LapEntry,
+  type OpenF1PositionEntry,
+  type OpenF1RaceControlMessage,
+} from "./liveStandings";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -19,36 +25,33 @@ type ErgastRace = {
   round: string;
   raceName: string;
   date: string;
-  time?: string;
+  time?: string | undefined;
   Circuit: {
     circuitName: string;
-    Location: { locality?: string; country?: string };
+    Location: { locality?: string | undefined; country?: string | undefined };
   };
-  Qualifying?: ErgastSession;
-  Sprint?: ErgastSession;
-  SprintQualifying?: ErgastSession;
-  SprintShootout?: ErgastSession;
+  Qualifying?: ErgastSession | undefined;
+  Sprint?: ErgastSession | undefined;
+  SprintQualifying?: ErgastSession | undefined;
+  SprintShootout?: ErgastSession | undefined;
   Results?: Array<{
     position: string;
     grid: string;
     status: string;
-    Driver: { driverId: string; code?: string; givenName: string; familyName: string };
-    Constructor?: { name: string };
-    FastestLap?: { rank?: string };
-  }>;
+    Driver: { driverId: string; code?: string | undefined; givenName: string; familyName: string };
+    Constructor?: { name: string } | undefined;
+    FastestLap?: { rank?: string | undefined } | undefined;
+  }> | undefined;
 };
 
 
 const userSyncCalls = new Map<string, number>();
 let inFlightSyncLock = false;
 
-// NOTE: savePushSubscription duplicate removed (0 imports) — single source is
-// savePushSubscription in @/lib/stewards.functions.ts.
-
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ({
-    force: Boolean((input as { force?: boolean } | null)?.force),
+    force: Boolean((input as { force?: boolean | undefined } | null)?.force),
   }))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -142,8 +145,8 @@ export const syncF1Data = createServerFn({ method: "POST" })
             DriverStandings: Array<{
               Driver: {
                 driverId: string;
-                code?: string;
-                permanentNumber?: string;
+                code?: string | undefined;
+                permanentNumber?: string | undefined;
                 givenName: string;
                 familyName: string;
               };
@@ -295,11 +298,11 @@ export async function checkAndSendPushReminders(
         );
 
         const payloadObj = {
-          title: `⏰ ${race.name} — Lock Alert!`,
+          title: `\u23F0 ${race.name} \u2014 Lock Alert!`,
           body:
             t.type === "pole"
               ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
-              : `Race locks ${w.text}! Submit your Top 10 now to avoid the −25 penalty.`,
+              : `Race locks ${w.text}! Submit your Top 10 now to avoid the \u221225 penalty.`,
           tag: stateKey,
           url: "/predict",
         };
@@ -400,7 +403,13 @@ const RACE_MAX_DONE_MS = 180 * 60 * 1000; // 3h hard ceiling if race_control fee
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 type OF1Session = { session_key: number; session_name: string; date_start: string };
-type OF1Result = { position: number | null; driver_number: number; dnf?: boolean; dns?: boolean; dsq?: boolean };
+type OF1Result = {
+  position: number | null;
+  driver_number: number;
+  dnf?: boolean | undefined;
+  dns?: boolean | undefined;
+  dsq?: boolean | undefined;
+};
 
 async function openF1Fallback(officialRounds: Set<number>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -417,9 +426,10 @@ async function openF1Fallback(officialRounds: Set<number>) {
   if (!races.length) return;
 
   const sessions = await getJson<OF1Session[]>(`${OPENF1}/sessions?year=${SEASON}`);
-  const { data: drivers } = await supabaseAdmin.from("drivers").select("id, code");
+  const { data: drivers } = await supabaseAdmin.from("drivers").select("id, code, number");
   const byCode = new Map((drivers ?? []).filter((d) => d.code).map((d) => [d.code!, d.id]));
-  if (!sessions?.length || !byCode.size) return;
+  const byNumber = new Map((drivers ?? []).filter((d) => d.number != null).map((d) => [d.number!, d.id]));
+  if (!sessions?.length || (!byCode.size && !byNumber.size)) return;
 
   const near = (name: string, iso: string | null) => {
     if (!iso) return undefined;
@@ -432,12 +442,12 @@ async function openF1Fallback(officialRounds: Set<number>) {
   for (const race of races) {
     const rs = near("Race", race.race_at);
     if (!rs) continue;
-    const [results, ofDrivers, laps, raceControl] = await Promise.all([
+    const [rawResults, ofDrivers, laps, raceControl] = await Promise.all([
       getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
       getJson<Array<{ driver_number: number; name_acronym: string }>>(
         `${OPENF1}/drivers?session_key=${rs.session_key}`,
       ),
-      getJson<Array<{ driver_number: number; lap_duration: number | null }>>(
+      getJson<OpenF1LapEntry[]>(
         `${OPENF1}/laps?session_key=${rs.session_key}`,
       ),
       getJson<OpenF1RaceControlMessage[]>(
@@ -446,24 +456,56 @@ async function openF1Fallback(officialRounds: Set<number>) {
     ]);
     const raceElapsedMs = now - new Date(race.race_at).getTime();
     const isFinished = hasChequeredFlag(raceControl) || raceElapsedMs >= RACE_MAX_DONE_MS;
-    if (!isFinished || !results || results.length < 10 || !ofDrivers) continue;
+    if (!isFinished) continue;
 
-    const numToId = new Map<number, string>();
-    for (const d of ofDrivers) {
+    let results: OF1Result[] = Array.isArray(rawResults) ? rawResults : [];
+    if (results.filter((r) => r.position != null).length < 10) {
+      const positions = await getJson<OpenF1PositionEntry[]>(
+        `${OPENF1}/position?session_key=${rs.session_key}`,
+      );
+      const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
+      if (synth.length >= 10) results = synth;
+    }
+    if (results.length < 10) continue;
+
+    const numToId = new Map<number, string>(byNumber);
+    for (const d of ofDrivers ?? []) {
       const id = byCode.get(d.name_acronym);
       if (id) numToId.set(d.driver_number, id);
     }
 
-    let poleNum: number | undefined;
-    const qs = near("Qualifying", race.qualifying_at);
-    if (qs) {
-      const q = await getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${qs.session_key}`);
-      poleNum = q?.find((r) => r.position === 1)?.driver_number;
+    let poleDriverId: string | undefined;
+    // Check weekend_sessions qualifying classification first
+    const { data: qSess } = await supabaseAdmin
+      .from("weekend_sessions")
+      .select("classification")
+      .eq("race_id", race.id)
+      .eq("session_type", "qualifying")
+      .maybeSingle();
+    if (qSess && Array.isArray(qSess.classification)) {
+      const p1 = (
+        qSess.classification as Array<{
+          position?: number | undefined;
+          driverId?: string | undefined;
+          number?: number | undefined;
+        }>
+      ).find((r) => r.position === 1);
+      if (p1?.driverId) poleDriverId = p1.driverId;
+      else if (p1?.number != null) poleDriverId = numToId.get(p1.number);
     }
+    if (!poleDriverId) {
+      const qs = near("Qualifying", race.qualifying_at);
+      if (qs) {
+        const q = await getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${qs.session_key}`);
+        const poleNum = q?.find((r) => r.position === 1)?.driver_number;
+        if (poleNum != null) poleDriverId = numToId.get(poleNum);
+      }
+    }
+
     let flNum: number | undefined;
     let best = Infinity;
     for (const l of laps ?? []) {
-      if (l.lap_duration && l.lap_duration < best) {
+      if (l.lap_duration && l.lap_duration > 0 && l.lap_duration < best) {
         best = l.lap_duration;
         flNum = l.driver_number;
       }
@@ -481,7 +523,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
           status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
           finished,
           fastest_lap: r.driver_number === flNum,
-          pole: r.driver_number === poleNum,
+          pole: poleDriverId ? driver_id === poleDriverId : false,
         },
       ];
     });
@@ -499,7 +541,7 @@ type ErgastSprintRace = {
     grid: string;
     status: string;
     Driver: { driverId: string };
-  }>;
+  }> | undefined;
 };
 
 async function syncSprintResults(roundToId: Map<number, string>) {

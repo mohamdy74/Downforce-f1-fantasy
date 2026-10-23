@@ -47,11 +47,11 @@ export function buildRaceScoreRows(params: {
   profiles: ProfileRecord[];
   results: ResultRow[];
   predictions: PredictionRecord[];
-  sprintResults: SprintResultRow[] | null;
-  sprintPredictions: SprintPredictionRecord[] | null;
-  existingScores: ScoreRecord[] | null;
-  mode: "auto_sync" | "manual_results";
-  manualPoleWinner?: string | null;
+  sprintResults?: SprintResultRow[] | null | undefined;
+  sprintPredictions?: SprintPredictionRecord[] | null | undefined;
+  existingScores?: ScoreRecord[] | null | undefined;
+  mode?: "auto_sync" | "manual_results" | undefined;
+  manualPoleWinner?: string | null | undefined;
 }): BuiltScoreRow[] {
   const {
     raceId,
@@ -59,11 +59,11 @@ export function buildRaceScoreRows(params: {
     profiles,
     results,
     predictions,
-    sprintResults,
-    sprintPredictions,
-    existingScores,
-    mode,
-    manualPoleWinner,
+    sprintResults = null,
+    sprintPredictions = null,
+    existingScores = null,
+    mode = "auto_sync",
+    manualPoleWinner = null,
   } = params;
 
   if (!profiles.length || !results.length) return [];
