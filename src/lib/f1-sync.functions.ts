@@ -6,6 +6,7 @@ import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type Spr
 import { type SprintResultRow } from "./sprintScoring";
 import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
 import { isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
+import { hasChequeredFlag, type OpenF1RaceControlMessage } from "./liveStandings";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -394,7 +395,8 @@ async function scoreAllRaces() {
 }
 
 const OPENF1 = "https://api.openf1.org/v1";
-const RACE_DONE_MS = 80 * 60 * 1000; // 80 minutes after lights out
+const RACE_MIN_START_MS = 40 * 60 * 1000; // Check Race Control from 40m after lights out
+const RACE_MAX_DONE_MS = 180 * 60 * 1000; // 3h hard ceiling if race_control feed is empty
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 type OF1Session = { session_key: number; session_name: string; date_start: string };
@@ -409,7 +411,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
     .select("id, round, race_at, qualifying_at")
     .eq("season", SEASON)
     .eq("has_results", false)
-    .lte("race_at", new Date(now - RACE_DONE_MS).toISOString())
+    .lte("race_at", new Date(now - RACE_MIN_START_MS).toISOString())
     .gte("race_at", new Date(now - FALLBACK_WINDOW_MS).toISOString());
   const races = (pending ?? []).filter((r) => !officialRounds.has(r.round));
   if (!races.length) return;
@@ -430,7 +432,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
   for (const race of races) {
     const rs = near("Race", race.race_at);
     if (!rs) continue;
-    const [results, ofDrivers, laps] = await Promise.all([
+    const [results, ofDrivers, laps, raceControl] = await Promise.all([
       getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
       getJson<Array<{ driver_number: number; name_acronym: string }>>(
         `${OPENF1}/drivers?session_key=${rs.session_key}`,
@@ -438,8 +440,13 @@ async function openF1Fallback(officialRounds: Set<number>) {
       getJson<Array<{ driver_number: number; lap_duration: number | null }>>(
         `${OPENF1}/laps?session_key=${rs.session_key}`,
       ),
+      getJson<OpenF1RaceControlMessage[]>(
+        `${OPENF1}/race_control?session_key=${rs.session_key}`,
+      ),
     ]);
-    if (!results || results.length < 10 || !ofDrivers) continue;
+    const raceElapsedMs = now - new Date(race.race_at).getTime();
+    const isFinished = hasChequeredFlag(raceControl) || raceElapsedMs >= RACE_MAX_DONE_MS;
+    if (!isFinished || !results || results.length < 10 || !ofDrivers) continue;
 
     const numToId = new Map<number, string>();
     for (const d of ofDrivers) {

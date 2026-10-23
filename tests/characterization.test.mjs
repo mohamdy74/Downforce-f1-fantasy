@@ -483,3 +483,127 @@ test("Characterization 6: isCompleteTop10, DNF constructor filter, and Cairo tim
   const cairoLabel = formatCairoDate("2026-10-24T20:45:00.000Z", false);
   assert.ok(cairoLabel && cairoLabel.includes("\u00B7") && cairoLabel.includes("OCT"));
 });
+// 7. Live Virtual Standings & Chequered Flag Instant Finalizer contract (src/lib/liveStandings.ts)
+function hasChequeredFlag(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return false;
+  for (const m of messages) {
+    const flag = (m.flag ?? "").toUpperCase();
+    const msg = (m.message ?? "").toUpperCase();
+    if (flag === "CHEQUERED" || flag === "CHECKERED") return true;
+    if (msg.includes("CHEQUERED FLAG") || msg.includes("CHECKERED FLAG")) return true;
+    if (msg.includes("SESSION ENDED") || msg.includes("RACE ENDED")) return true;
+  }
+  return false;
+}
+
+function computeVirtualStandings({
+  officialBoard,
+  raceId,
+  round,
+  raceAt,
+  profiles,
+  liveResults,
+  predictions,
+}) {
+  if (!officialBoard.length) return [];
+  const effectiveProfiles =
+    profiles.length > 0
+      ? profiles
+      : officialBoard.map((e) => ({ id: e.userId, created_at: "2026-01-01T00:00:00.000Z" }));
+
+  const builtRows = buildRaceScoreRows({
+    raceId,
+    raceAt,
+    profiles: effectiveProfiles,
+    results: liveResults,
+    predictions,
+    sprintResults: [],
+    sprintPredictions: [],
+    existingScores: [],
+    mode: "auto_sync",
+  });
+
+  const liveRowByUser = new Map(builtRows.map((r) => [r.user_id, r]));
+  const virtualEntries = officialBoard.map((entry, idx) => {
+    const alreadyCountedPts = entry.byRound[round];
+    const hasOfficialRoundScore = alreadyCountedPts !== undefined;
+    const basePoints = hasOfficialRoundScore ? entry.points - alreadyCountedPts : entry.points;
+    const baseRaces = hasOfficialRoundScore ? Math.max(0, entry.races - 1) : entry.races;
+    const liveRow = liveRowByUser.get(entry.userId);
+    const liveRoundPoints = liveRow ? liveRow.points : (alreadyCountedPts ?? 0);
+    const totalPoints = basePoints + liveRoundPoints;
+    const totalRaces = baseRaces + (liveRow || hasOfficialRoundScore ? 1 : 0);
+    const nextByRound = { ...entry.byRound, [round]: liveRoundPoints };
+    const nextBest = entry.best == null ? liveRoundPoints : Math.max(entry.best, liveRoundPoints);
+    return {
+      ...entry,
+      points: totalPoints,
+      races: totalRaces,
+      best: nextBest,
+      byRound: nextByRound,
+      officialPoints: basePoints,
+      officialRank: idx + 1,
+      liveRoundPoints,
+      liveRankDelta: 0,
+    };
+  });
+
+  virtualEntries.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+  const topLiveRound = Math.max(...virtualEntries.map((e) => e.liveRoundPoints), -Infinity);
+  for (let i = 0; i < virtualEntries.length; i++) {
+    const entry = virtualEntries[i];
+    entry.liveRankDelta = entry.officialRank - (i + 1);
+    entry.change = entry.liveRankDelta;
+    entry.fahl = Number.isFinite(topLiveRound) && entry.liveRoundPoints === topLiveRound;
+  }
+  return virtualEntries;
+}
+
+test("Characterization 7: hasChequeredFlag & computeVirtualStandings compute real-time rank deltas and guard Red Flag races", () => {
+  assert.equal(hasChequeredFlag([]), false);
+  assert.equal(hasChequeredFlag([{ flag: "RED", message: "RED FLAG - SESSION SUSPENDED" }]), false);
+  assert.equal(hasChequeredFlag([{ flag: "CHEQUERED", message: "CHEQUERED FLAG" }]), true);
+  assert.equal(hasChequeredFlag([{ category: "SessionStatus", message: "SESSION ENDED" }]), true);
+
+  const officialBoard = [
+    { userId: "u_ahmed", name: "Ahmed Hatem", avatar: null, points: 46, races: 4, best: 18, change: 0, byRound: { 14: 12, 15: 16, 16: 18 }, fahl: true },
+    { userId: "u_mohamed", name: "Mohamed Hamdy", avatar: null, points: 32, races: 4, best: 14, change: 0, byRound: { 14: 10, 15: 8, 16: 14 }, fahl: false },
+  ];
+
+  const drivers = ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10"];
+  const liveResults = drivers.map((id, i) => ({
+    driver_id: id,
+    position: i + 1,
+    finished: true,
+    pole: i === 0,
+    fastest_lap: i === 1,
+  }));
+
+  const predictions = [
+    // Mohamed nails exact top 10 + Pole + FL (+30 + 3 + 3 + 10 = +46 pts!)
+    { user_id: "u_mohamed", top10: drivers, pole_driver_id: "d1", fastest_lap_driver_id: "d2", dnf_driver_id: null },
+    // Ahmed misses all top 10 (-30 pts)
+    { user_id: "u_ahmed", top10: ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10"], pole_driver_id: null, fastest_lap_driver_id: null, dnf_driver_id: null },
+  ];
+
+  const virtual = computeVirtualStandings({
+    officialBoard,
+    raceId: "r18",
+    round: 18,
+    raceAt: "2026-10-25T19:00:00Z",
+    profiles: [],
+    liveResults,
+    predictions,
+  });
+
+  assert.equal(virtual[0].userId, "u_mohamed");
+  assert.equal(virtual[0].liveRoundPoints, 46);
+  assert.equal(virtual[0].points, 32 + 46);
+  assert.equal(virtual[0].liveRankDelta, 1); // jumped from #2 to #1!
+  assert.equal(virtual[0].fahl, true);
+
+  assert.equal(virtual[1].userId, "u_ahmed");
+  assert.equal(virtual[1].liveRoundPoints, -30);
+  assert.equal(virtual[1].points, 46 - 30);
+  assert.equal(virtual[1].liveRankDelta, -1); // dropped from #1 to #2!
+});

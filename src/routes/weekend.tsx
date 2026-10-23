@@ -317,8 +317,9 @@ function SessionResults({
     queryKey: ["weekend-session", raceId, type],
     retry: 1,
     initialData: () => readCache(raceId, type),
-    staleTime: (query) => (query.state.data?.state === "ready" ? Number.POSITIVE_INFINITY : 30_000),
-    refetchInterval: (query) => (query.state.data?.state === "ready" ? false : 60_000),
+    staleTime: (query) => (query.state.data?.state === "ready" ? Number.POSITIVE_INFINITY : 20_000),
+    refetchInterval: (query) => (query.state.data?.state === "ready" ? false : 25_000),
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const r = await getWeekendSession({ data: { raceId, sessionType: type } });
       if (r.state === "ready") writeCache(raceId, type, r);
@@ -335,8 +336,8 @@ function SessionResults({
   const state = data?.state ?? statusLikeState(startsAt, type, now);
 
   if (state === "upcoming") return <Empty text={`${SESSION_LABEL[type]} starts ${localTime(startsAt)}.`} />;
-  if (state === "live")
-    return <Empty text={`${SESSION_LABEL[type]} is in progress. The classification appears once it ends.`} />;
+  if (state === "live" && (!data || !data.rows.length))
+    return <Empty text={`${SESSION_LABEL[type]} is live on track. Waiting for telemetry laps\u2026`} />;
   if (state === "pending" || !data || !data.rows.length)
     return <Empty text="Waiting for the official classification…" />;
 

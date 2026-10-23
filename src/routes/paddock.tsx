@@ -1,28 +1,31 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { driversQuery, getTrustedNow, LEAGUE_START_ROUND, racesQuery, type Race } from "@/lib/queries";
-import { positionPoints } from "@/lib/scoring";
+import { positionPoints, scorePrediction } from "@/lib/scoring";
 import { teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
+import { getLiveRaceTelemetry } from "@/lib/weekend.functions";
 
 export const Route = createFileRoute("/paddock")({
   head: () => ({
     meta: [
-      { title: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { title: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
       {
         name: "description",
         content: "See every player's picks once the grid locks, and a colour-coded debrief of where points were won and lost.",
       },
-      { property: "og:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { property: "og:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
       { property: "og:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Paddock Reveal & Race Debrief — DOWNFORCE" },
+      { name: "twitter:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
       { name: "twitter:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
     ],
   }),
@@ -37,8 +40,11 @@ type Pred = {
   dnf_driver_id: string | null;
 };
 
+const LIVE_WINDOW_MS = 4 * 60 * 60_000;
+
 function Paddock() {
   const { user, loading } = useAuth();
+  const queryClient = useQueryClient();
   const { data: races } = useQuery(racesQuery);
   const { data: drivers } = useQuery(driversQuery);
 
@@ -46,9 +52,25 @@ function Paddock() {
     () => (races ?? []).filter((r) => r.round >= LEAGUE_START_ROUND && new Date(r.race_at).getTime() <= getTrustedNow()),
     [races],
   );
-  const [raceId, setRaceId] = useState<string | null>(null); const [padRef] = useAutoAnimate<HTMLDivElement>();
+  const [raceId, setRaceId] = useState<string | null>(null);
+  const [padRef] = useAutoAnimate<HTMLDivElement>();
   const race: Race | undefined =
     locked.find((r) => r.id === raceId) ?? locked[locked.length - 1];
+
+  const isRaceLiveCandidate = useMemo(() => {
+    if (!race || race.has_results) return false;
+    const elapsed = getTrustedNow() - new Date(race.race_at).getTime();
+    return elapsed >= 0 && elapsed <= LIVE_WINDOW_MS;
+  }, [race]);
+
+  const liveTelemetryQ = useQuery({
+    queryKey: ["live-race-telemetry", race?.id],
+    enabled: !!user && !!race && isRaceLiveCandidate,
+    staleTime: 20_000,
+    refetchInterval: (q) => (q.state.data?.state === "official" ? false : 25_000),
+    refetchIntervalInBackground: false,
+    queryFn: async () => getLiveRaceTelemetry({ data: { raceId: race!.id } }),
+  });
 
   const { data } = useQuery({
     queryKey: ["paddock", race?.id, user?.id],
@@ -87,7 +109,26 @@ function Paddock() {
     },
   });
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading…</main>;
+  useEffect(() => {
+    if (liveTelemetryQ.data?.finalizedNow || liveTelemetryQ.data?.state === "official") {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["races"] }),
+        queryClient.invalidateQueries({ queryKey: ["paddock", race?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
+      ]);
+      if (liveTelemetryQ.data?.finalizedNow) {
+        toast.success(`Chequered Flag! ${liveTelemetryQ.data.raceName} official scores locked!`);
+      }
+    }
+  }, [
+    liveTelemetryQ.data?.finalizedNow,
+    liveTelemetryQ.data?.state,
+    liveTelemetryQ.data?.raceName,
+    race?.id,
+    queryClient,
+  ]);
+
+  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading\u2026</main>;
   if (!user)
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
@@ -99,31 +140,61 @@ function Paddock() {
     );
 
   const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
+  const activeResults =
+    (data?.results?.length ?? 0) > 0
+      ? data!.results
+      : (liveTelemetryQ.data?.results ?? []);
+  const isLiveScoring =
+    !(data?.results?.length) && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
+
   const finish = new Map<string, number>();
   const dnfs = new Set<string>();
   let poleId: string | null = null;
   let flId: string | null = null;
-  for (const r of data?.results ?? []) {
+  for (const r of activeResults) {
     if (r.finished && r.position != null) finish.set(r.driver_id, r.position);
     if (!r.finished) dnfs.add(r.driver_id);
     if (r.pole) poleId = r.driver_id;
     if (r.fastest_lap) flId = r.driver_id;
   }
-  const hasResults = !!race?.has_results && (data?.results.length ?? 0) > 0;
+  const hasResults = (!!race?.has_results && (data?.results.length ?? 0) > 0) || isLiveScoring;
+
+  const computedPoints = new Map<string, number>();
+  for (const p of data?.preds ?? []) {
+    const dbPt = data?.points.get(p.user_id);
+    if (dbPt != null && !isLiveScoring) {
+      computedPoints.set(p.user_id, dbPt);
+    } else if (hasResults && activeResults.length >= 10) {
+      const validTop10 = (p.top10 ?? []).filter((x) => x && x !== "__none__");
+      const b = scorePrediction(
+        {
+          top10: validTop10,
+          pole_driver_id: p.pole_driver_id,
+          fastest_lap_driver_id: p.fastest_lap_driver_id,
+          dnf_driver_id: p.dnf_driver_id,
+        },
+        activeResults,
+      );
+      computedPoints.set(p.user_id, validTop10.length < 10 ? -25 + b.pole : b.total);
+    }
+  }
+
   const sorted = [...(data?.preds ?? [])].sort(
-    (a, b) => (data?.points.get(b.user_id) ?? 0) - (data?.points.get(a.user_id) ?? 0),
+    (a, b) => (computedPoints.get(b.user_id) ?? 0) - (computedPoints.get(a.user_id) ?? 0),
   );
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-10">
       <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
-        {hasResults ? "Race debrief" : "Paddock reveal"}
+        {isLiveScoring ? "Live Telemetry Debrief" : hasResults ? "Race debrief" : "Paddock reveal"}
       </p>
       <h1 className="mt-1 text-3xl">{race ? race.name : "No locked race yet"}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {hasResults
-          ? "Green = exact position, gold = close, red = points lost"
-          : "Picks are revealed once the grid locks — see what the group chose"}
+        {isLiveScoring
+          ? "Live virtual points updating every 25s from OpenF1 telemetry \u2014 finalizes automatically at the Chequered Flag"
+          : hasResults
+            ? "Green = exact position, gold = close, red = points lost"
+            : "Picks are revealed once the grid locks \u2014 see what the group chose"}
       </p>
 
       {locked.length > 1 && (
@@ -153,8 +224,34 @@ function Paddock() {
       )}
 
       <div ref={padRef} className="mt-6 space-y-4">
-        {sorted.length > 0 && (() => { const m = (a: (string | null | undefined)[]) => { const c = new Map<string, number>(); for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1); return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]; }; const c1 = m(sorted.map((p) => p.top10?.[0])), cp = m(sorted.map((p) => p.pole_driver_id)), cd = m(sorted.map((p) => p.dnf_driver_id)); return (<div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs"><div><span className="block text-[10px] text-muted-foreground">CROWD P1</span><b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD POLE</span><b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b></div><div><span className="block text-[10px] text-muted-foreground">CROWD DNF</span><b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b></div></div>); })()}{sorted.map((p) => {
-          const pts = data?.points.get(p.user_id);
+        {sorted.length > 0 && (() => {
+          const m = (a: (string | null | undefined)[]) => {
+            const c = new Map<string, number>();
+            for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1);
+            return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
+          };
+          const c1 = m(sorted.map((p) => p.top10?.[0]));
+          const cp = m(sorted.map((p) => p.pole_driver_id));
+          const cd = m(sorted.map((p) => p.dnf_driver_id));
+          return (
+            <div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs">
+              <div>
+                <span className="block text-[10px] text-muted-foreground">CROWD P1</span>
+                <b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b>
+              </div>
+              <div>
+                <span className="block text-[10px] text-muted-foreground">CROWD POLE</span>
+                <b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b>
+              </div>
+              <div>
+                <span className="block text-[10px] text-muted-foreground">CROWD DNF</span>
+                <b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b>
+              </div>
+            </div>
+          );
+        })()}
+        {sorted.map((p) => {
+          const pts = computedPoints.get(p.user_id);
           return (
             <section key={p.user_id} className="carbon-panel rounded-lg p-3">
               <div className="flex items-center justify-between">
@@ -163,7 +260,9 @@ function Paddock() {
                   {p.user_id === user.id && <span className="ml-2 text-xs text-primary">YOU</span>}
                 </h2>
                 {hasResults && pts != null && (
-                  <span className="font-display text-2xl font-black text-gold">{pts} pts</span>
+                  <span className="font-display text-2xl font-black text-gold">
+                    {pts} pts{isLiveScoring ? " (LIVE)" : ""}
+                  </span>
                 )}
               </div>
               <ol className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -188,7 +287,7 @@ function Paddock() {
                       <span className="font-semibold">{d?.code ?? id}</span>
                       {hasResults && (
                         <span className="ml-auto font-mono text-xs">
-                          {actual ? `P${actual}` : "DNF"} · {pt > 0 ? `+${pt}` : pt}
+                          {actual ? `P${actual}` : "DNF"} \u00B7 {pt > 0 ? `+${pt}` : pt}
                         </span>
                       )}
                     </li>
@@ -219,7 +318,7 @@ function BonusChip({ label, code, hit, pts }: { label: string; code?: string | n
         hit === false && "bg-muted/20 text-muted-foreground",
       )}
     >
-      <span className="text-muted-foreground">{label}</span> <b>{code ?? "—"}</b>
+      <span className="text-muted-foreground">{label}</span> <b>{code ?? "\u2014"}</b>
       {hit && <span className="ml-1 text-success">+{pts}</span>}
     </div>
   );
@@ -247,21 +346,21 @@ function AuditTrail({
     const parts: string[] = [];
     for (const [k, label] of [["pole", "Pole"], ["fl", "FL"], ["dnf", "DNF"]] as const) {
       const v = ch[k];
-      if (Array.isArray(v)) parts.push(`${label} ${v[0] ? code(String(v[0])) : "—"}→${v[1] ? code(String(v[1])) : "—"}`);
+      if (Array.isArray(v)) parts.push(`${label} ${v[0] ? code(String(v[0])) : "\u2014"}\u2192${v[1] ? code(String(v[1])) : "\u2014"}`);
       else if (typeof v === "string") parts.push(`${label} ${code(v)}`);
     }
     if (Array.isArray(ch["top10"]) && Array.isArray((ch["top10"] as unknown[])[0])) parts.push("top 10 changed");
-    return parts.join(" · ");
+    return parts.join(" \u00B7 ");
   };
   return (
     <details className="mt-2 text-xs text-muted-foreground">
       <summary className="cursor-pointer">
-        {entries.length} change{entries.length > 1 ? "s" : ""} · last {fmt(entries[entries.length - 1]!.created_at)} (Cairo)
+        {entries.length} change{entries.length > 1 ? "s" : ""} \u00B7 last {fmt(entries[entries.length - 1]!.created_at)} (Cairo)
       </summary>
       <ul className="mt-1 space-y-0.5 font-mono">
         {entries.map((e, i) => (
           <li key={i}>
-            {fmt(e.created_at)} — {ACTION_LABEL[e.action] ?? e.action} {describe(e.changes)}
+            {fmt(e.created_at)} \u2014 {ACTION_LABEL[e.action] ?? e.action} {describe(e.changes)}
           </li>
         ))}
       </ul>
