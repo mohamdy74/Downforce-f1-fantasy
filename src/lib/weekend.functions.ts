@@ -3,7 +3,19 @@ import { createServerFn } from "@tanstack/react-start";
 import type { Json } from "@/integrations/supabase/types";
 import { getJson, toIso as iso, fmtLap } from "./f1-parsers";
 import {
+  buildDriverLookup,
+  fetchFromEspnScoreboard,
+  fetchFromF1LiveTiming,
+  getCachedOpenF1Drivers,
+  getCachedOpenF1Sessions,
+  resolveDriver,
+  type DriverLookup,
+  type DriverRef,
+  type OfSession,
+} from "./f1-live-sources";
+import {
   buildLiveOrderFromPositions,
+  buildTimedSessionOrderFromLaps,
   hasChequeredFlag,
   type OpenF1LapEntry,
   type OpenF1PositionEntry,
@@ -31,7 +43,7 @@ const JOLPICA = "https://api.jolpi.ca/ergast/f1";
 const OPENF1 = "https://api.openf1.org/v1";
 const SEASON = 2026;
 const MIN = 60_000;
-const LIVE_CACHE_TTL_MS = 22_000; // 22s shared server cache for live polling
+const LIVE_CACHE_TTL_MS = 20_000; // 20s shared server cache for live polling
 
 type Admin = (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"];
 type DbRace = {
@@ -68,7 +80,6 @@ export type LiveRaceTelemetryPayload = {
   liveScores: Record<string, number>;
 };
 
-// Per-server throttles & shared live telemetry cache (coalesces 50+ concurrent viewers into 1 OpenF1 request per 22s).
 const scheduleChecked = new Map<string, number>();
 const attempts = new Map<string, number>();
 const liveSessionCache = new Map<string, { ts: number; rows: ClassRow[] }>();
@@ -87,7 +98,6 @@ async function loadRows(admin: Admin, raceId: string): Promise<SessRow[]> {
     .select("id, session_type, starts_at, status, classification, updated_at")
     .eq("race_id", raceId)
     .order("updated_at", { ascending: false });
-  // The table may hold accidental duplicates: keep the newest per session, delete the rest.
   const seen = new Set<string>();
   const keep: SessRow[] = [];
   const drop: string[] = [];
@@ -146,8 +156,17 @@ async function ensureSchedule(admin: Admin, race: DbRace): Promise<SessRow[]> {
     if (!startsAt) continue;
     const existing = rows.find((r) => r.session_type === type);
     if (!existing) {
-      inserts.push({ race_id: race.id, session_type: type, starts_at: startsAt, status: "scheduled", classification: [] });
-    } else if (!existing.starts_at || new Date(existing.starts_at).getTime() !== new Date(startsAt).getTime()) {
+      inserts.push({
+        race_id: race.id,
+        session_type: type,
+        starts_at: startsAt,
+        status: "scheduled",
+        classification: [],
+      });
+    } else if (
+      !existing.starts_at ||
+      new Date(existing.starts_at).getTime() !== new Date(startsAt).getTime()
+    ) {
       await admin.from("weekend_sessions").update({ starts_at: startsAt }).eq("id", existing.id);
       changed = true;
     }
@@ -169,6 +188,40 @@ async function loadRace(admin: Admin, raceId: string): Promise<DbRace | null> {
   return (data as DbRace | null) ?? null;
 }
 
+/**
+ * Proactively archives completed sessions (FP1/FP2/FP3/SQ/Sprint/Qualifying)
+ * into `weekend_sessions` in the background so they are permanently cached in DB.
+ */
+async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessRow[]) {
+  const now = Date.now();
+  for (const row of rows) {
+    if (!row.starts_at || !isSessionType(row.session_type) || row.session_type === "race") continue;
+    const type = row.session_type as SessionType;
+    const end = new Date(row.starts_at).getTime() + SESSION_MINUTES[type] * MIN;
+    const cached = Array.isArray(row.classification) ? row.classification : [];
+    if (now >= end && (row.status !== "completed" || cached.length < 5)) {
+      const key = `backfill:${race.id}:${type}`;
+      if (now - (attempts.get(key) ?? 0) < 30_000) continue;
+      attempts.set(key, now);
+      try {
+        const fresh = await fetchClassification(admin, race, type, row.starts_at);
+        if (fresh.length >= 5) {
+          await admin
+            .from("weekend_sessions")
+            .update({
+              classification: fresh as unknown as Json,
+              status: "completed",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id);
+        }
+      } catch {
+        /* ignore background backfill error */
+      }
+    }
+  }
+}
+
 export const getWeekendSchedule = createServerFn({ method: "POST" })
   .inputValidator((input: { raceId: string }) => input)
   .handler(async ({ data }): Promise<{ sessions: ScheduleItem[] }> => {
@@ -176,6 +229,7 @@ export const getWeekendSchedule = createServerFn({ method: "POST" })
     const race = await loadRace(supabaseAdmin, data.raceId);
     if (!race) return { sessions: [] };
     const rows = await ensureSchedule(supabaseAdmin, race);
+    void backfillCompletedSessions(supabaseAdmin, race, rows);
     const sessions = rows
       .filter((r) => r.starts_at && isSessionType(r.session_type))
       .map((r) => ({ type: r.session_type as SessionType, startsAt: r.starts_at! }))
@@ -184,8 +238,6 @@ export const getWeekendSchedule = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------- classification
-
-type DriverRef = { id: string; code: string | null; full_name: string; team: string | null; number: number | null };
 
 function blank(): ClassRow {
   return {
@@ -209,8 +261,8 @@ type JDriver = { driverId: string; code?: string | undefined; givenName: string;
 
 async function fromJolpica(
   race: DbRace,
-  type: "qualifying" | "sprint",
-  byId: Map<string, DriverRef>,
+  type: "qualifying" | "sprint" | "race",
+  lookup: DriverLookup,
 ): Promise<ClassRow[]> {
   if (type === "qualifying") {
     const j = await getJson<{
@@ -232,15 +284,21 @@ async function fromJolpica(
     }>(`${JOLPICA}/${SEASON}/${race.round}/qualifying/?format=json`);
     const list = j?.MRData.RaceTable.Races?.[0]?.QualifyingResults ?? [];
     return list.map((r) => {
-      const d = byId.get(r.Driver.driverId);
+      const d = resolveDriver(lookup, {
+        driverId: r.Driver.driverId,
+        code: r.Driver.code,
+        name: `${r.Driver.givenName} ${r.Driver.familyName}`,
+        team: r.Constructor?.name,
+        number: r.number ? Number(r.number) : null,
+      });
       return {
         ...blank(),
         position: Number(r.position),
-        driverId: r.Driver.driverId,
-        code: d?.code ?? r.Driver.code ?? null,
-        name: d?.full_name ?? `${r.Driver.givenName} ${r.Driver.familyName}`,
-        team: d?.team ?? r.Constructor?.name ?? null,
-        number: r.number ? Number(r.number) : (d?.number ?? null),
+        driverId: d.id,
+        code: d.code,
+        name: d.full_name,
+        team: d.team ?? r.Constructor?.name ?? null,
+        number: r.number ? Number(r.number) : d.number,
         time: r.Q3 || r.Q2 || r.Q1 || null,
         q1: r.Q1 || null,
         q2: r.Q2 || null,
@@ -249,6 +307,7 @@ async function fromJolpica(
     });
   }
 
+  const endpoint = type === "sprint" ? "sprint" : "results";
   const j = await getJson<{
     MRData: {
       RaceTable: {
@@ -261,22 +320,36 @@ async function fromJolpica(
             Constructor?: { name: string } | undefined;
             Time?: { time?: string | undefined } | undefined;
           }> | undefined;
+          Results?: Array<{
+            position: string;
+            laps?: string | undefined;
+            status?: string | undefined;
+            Driver: JDriver;
+            Constructor?: { name: string } | undefined;
+            Time?: { time?: string | undefined } | undefined;
+          }> | undefined;
         }>;
       };
     };
-  }>(`${JOLPICA}/${SEASON}/${race.round}/sprint/?format=json`);
-  const list = j?.MRData.RaceTable.Races?.[0]?.SprintResults ?? [];
+  }>(`${JOLPICA}/${SEASON}/${race.round}/${endpoint}/?format=json`);
+  const raceObj = j?.MRData.RaceTable.Races?.[0];
+  const list = (type === "sprint" ? raceObj?.SprintResults : raceObj?.Results) ?? [];
   return list.map((r, i) => {
-    const d = byId.get(r.Driver.driverId);
+    const d = resolveDriver(lookup, {
+      driverId: r.Driver.driverId,
+      code: r.Driver.code,
+      name: `${r.Driver.givenName} ${r.Driver.familyName}`,
+      team: r.Constructor?.name,
+    });
     const finished = /finished|\+\d+ lap/i.test(r.status ?? "");
     return {
       ...blank(),
       position: Number(r.position),
-      driverId: r.Driver.driverId,
-      code: d?.code ?? r.Driver.code ?? null,
-      name: d?.full_name ?? `${r.Driver.givenName} ${r.Driver.familyName}`,
-      team: d?.team ?? r.Constructor?.name ?? null,
-      number: d?.number ?? null,
+      driverId: d.id,
+      code: d.code,
+      name: d.full_name,
+      team: d.team ?? r.Constructor?.name ?? null,
+      number: d.number,
       time: i === 0 ? (r.Time?.time ?? null) : null,
       gap: i === 0 ? null : (r.Time?.time ?? null),
       laps: r.laps ? Number(r.laps) : null,
@@ -295,7 +368,6 @@ const OPENF1_NAMES: Record<SessionType, string[]> = {
   race: ["Race"],
 };
 
-type OfSession = { session_key: number; session_name: string; date_start: string };
 type OfResult = {
   position: number | null;
   driver_number: number;
@@ -310,30 +382,45 @@ type OfResult = {
 async function fromOpenF1(
   type: SessionType,
   startsAt: string,
-  byNumber: Map<number, DriverRef>,
+  lookup: DriverLookup,
 ): Promise<ClassRow[]> {
   const target = new Date(startsAt).getTime();
-  const all = await getJson<OfSession[]>(`${OPENF1}/sessions?year=${SEASON}`);
-  if (!Array.isArray(all)) return [];
+  const all = await getCachedOpenF1Sessions(SEASON);
+  if (!all.length) return [];
   const names = OPENF1_NAMES[type];
   const match = all
     .filter((s) => names.includes(s.session_name))
     .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - target) }))
-    .filter((x) => x.diff < 6 * 60 * MIN)
+    .filter((x) => x.diff < 12 * 60 * MIN)
     .sort((a, b) => a.diff - b.diff)[0]?.s;
   if (!match) return [];
 
-  let res = await getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${match.session_key}`);
-  if (!Array.isArray(res) || res.filter((r) => r.position != null).length < 5) {
-    // Mid-session fallback: synthesize running order from live /v1/position and /v1/laps streams
-    const [positions, laps] = await Promise.all([
-      getJson<OpenF1PositionEntry[]>(`${OPENF1}/position?session_key=${match.session_key}`),
+  const [rawRes, ofDrivers] = await Promise.all([
+    getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${match.session_key}`),
+    getCachedOpenF1Drivers(match.session_key),
+  ]);
+
+  const ofDrvByNum = new Map(ofDrivers.map((d) => [d.driver_number, d]));
+  const isTimedSession =
+    type === "fp1" ||
+    type === "fp2" ||
+    type === "fp3" ||
+    type === "qualifying" ||
+    type === "sprint_qualifying";
+
+  let res: OfResult[] = Array.isArray(rawRes) ? rawRes : [];
+  if (res.filter((r) => r.position != null).length < 5) {
+    // Mid-session or post-session fallback when session_result is not yet populated
+    const [laps, positions] = await Promise.all([
       getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${match.session_key}`),
+      getJson<OpenF1PositionEntry[]>(`${OPENF1}/position?session_key=${match.session_key}`),
     ]);
-    const synth = buildLiveOrderFromPositions(positions, laps, null);
+    const synth = isTimedSession
+      ? buildTimedSessionOrderFromLaps(laps, positions)
+      : buildLiveOrderFromPositions(positions, laps, null);
     if (synth.length > 0) res = synth;
   }
-  if (!Array.isArray(res) || !res.length) return [];
+  if (!res.length) return [];
 
   const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
     if (Array.isArray(v)) {
@@ -345,7 +432,13 @@ async function fromOpenF1(
 
   return res
     .map((r) => {
-      const d = byNumber.get(r.driver_number);
+      const ofMeta = ofDrvByNum.get(r.driver_number);
+      const d = resolveDriver(lookup, {
+        code: ofMeta?.name_acronym,
+        name: ofMeta?.full_name,
+        team: ofMeta?.team_name,
+        number: r.driver_number,
+      });
       const dur = r.duration;
       const q = Array.isArray(dur) ? dur : null;
       const best = typeof lastOf(dur) === "number" ? (lastOf(dur) as number) : null;
@@ -355,11 +448,11 @@ async function fromOpenF1(
       return {
         ...blank(),
         position: r.position,
-        driverId: d?.id ?? null,
-        code: d?.code ?? null,
-        name: d?.full_name ?? null,
-        team: d?.team ?? null,
-        number: d?.number ?? r.driver_number,
+        driverId: d.id,
+        code: d.code,
+        name: d.full_name,
+        team: d.team,
+        number: d.number ?? r.driver_number,
         time: fmtLap(best),
         q1: q ? fmtLap(q[0]) : null,
         q2: q ? fmtLap(q[1]) : null,
@@ -372,6 +465,13 @@ async function fromOpenF1(
     .sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
 }
 
+/**
+ * 4-Engine Classification Cascade for Practice 1/2/3, Sprint Qualifying, Sprint, and Qualifying:
+ * 1) Jolpica F1 (for official Qualifying / Sprint classifications)
+ * 2) OpenF1 (session_result + timed laps synthesizer + position synthesizer)
+ * 3) Official F1 Live Timing SignalR & Static stream (zero-auth live & post-session feed)
+ * 4) ESPN F1 Live Scoreboard API (zero-auth live & completed weekend feed)
+ */
 async function fetchClassification(
   admin: Admin,
   race: DbRace,
@@ -379,15 +479,25 @@ async function fetchClassification(
   startsAt: string,
 ): Promise<ClassRow[]> {
   const { data: drivers } = await admin.from("drivers").select("id, code, full_name, team, number");
-  const list = (drivers ?? []) as DriverRef[];
-  const byId = new Map(list.map((d) => [d.id, d]));
-  const byNumber = new Map(list.filter((d) => d.number != null).map((d) => [d.number!, d]));
+  const lookup = buildDriverLookup((drivers ?? []) as DriverRef[]);
 
   if (type === "qualifying" || type === "sprint") {
-    const rows = await fromJolpica(race, type, byId);
-    if (rows.length) return rows;
+    const jRows = await fromJolpica(race, type, lookup);
+    if (jRows.length >= 5) return jRows;
   }
-  return fromOpenF1(type, startsAt, byNumber);
+
+  const ofRows = await fromOpenF1(type, startsAt, lookup);
+  if (ofRows.length >= 5) return ofRows;
+
+  const [f1Live, espnLive] = await Promise.all([
+    fetchFromF1LiveTiming(type, startsAt, lookup),
+    fetchFromEspnScoreboard(type, startsAt, lookup),
+  ]);
+
+  if (f1Live && f1Live.rows.length >= 5) return f1Live.rows;
+  if (espnLive && espnLive.rows.length >= 5) return espnLive.rows;
+
+  return ofRows.length > 0 ? ofRows : (f1Live?.rows ?? espnLive?.rows ?? []);
 }
 
 /**
@@ -395,14 +505,13 @@ async function fetchClassification(
  * 1) In-memory cache,
  * 2) Saturday's saved Qualifying session in `weekend_sessions`,
  * 3) Jolpica Qualifying API,
- * 4) OpenF1 Qualifying session_result.
+ * 4) OpenF1 / ESPN Qualifying results.
  */
 async function resolvePoleDriverId(
   admin: Admin,
   race: DbRace,
   sessions: OfSession[] | null,
-  byId: Map<string, DriverRef>,
-  numToDrv: Map<number, DriverRef>,
+  lookup: DriverLookup,
 ): Promise<string | null> {
   const memo = cachedPoleByRace.get(race.id);
   if (memo) return memo;
@@ -416,13 +525,18 @@ async function resolvePoleDriverId(
     .maybeSingle();
   if (qSess && Array.isArray(qSess.classification)) {
     const p1 = (qSess.classification as unknown as ClassRow[]).find((r) => r.position === 1);
-    if (p1?.driverId) {
+    if (p1?.driverId && lookup.byId.has(p1.driverId)) {
       cachedPoleByRace.set(race.id, p1.driverId);
       return p1.driverId;
     }
-    if (p1?.number != null) {
-      const d = numToDrv.get(p1.number);
-      if (d?.id) {
+    if (p1) {
+      const d = resolveDriver(lookup, {
+        driverId: p1.driverId,
+        code: p1.code,
+        name: p1.name,
+        number: p1.number,
+      });
+      if (lookup.byId.has(d.id)) {
         cachedPoleByRace.set(race.id, d.id);
         return d.id;
       }
@@ -430,33 +544,41 @@ async function resolvePoleDriverId(
   }
 
   // 2) Check Jolpica Qualifying
-  const jRows = await fromJolpica(race, "qualifying", byId);
+  const jRows = await fromJolpica(race, "qualifying", lookup);
   const jP1 = jRows.find((r) => r.position === 1);
-  if (jP1?.driverId) {
+  if (jP1?.driverId && lookup.byId.has(jP1.driverId)) {
     cachedPoleByRace.set(race.id, jP1.driverId);
     return jP1.driverId;
   }
 
-  // 3) Check OpenF1 Qualifying
-  if (race.qualifying_at && Array.isArray(sessions)) {
-    const qt = new Date(race.qualifying_at).getTime();
-    const qs = sessions
-      .filter((s) => s.session_name === "Qualifying")
-      .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - qt) }))
-      .filter((x) => x.diff < 6 * 60 * MIN)
-      .sort((a, b) => a.diff - b.diff)[0]?.s;
-    if (qs) {
-      const qRes = await getJson<OfResult[]>(
-        `${OPENF1}/session_result?session_key=${qs.session_key}`,
-      );
-      const poleNum = qRes?.find((r) => r.position === 1)?.driver_number;
-      if (poleNum != null) {
-        const d = numToDrv.get(poleNum);
-        if (d?.id) {
-          cachedPoleByRace.set(race.id, d.id);
-          return d.id;
+  // 3) Check OpenF1 or ESPN Qualifying
+  if (race.qualifying_at) {
+    if (Array.isArray(sessions) && sessions.length) {
+      const qt = new Date(race.qualifying_at).getTime();
+      const qs = sessions
+        .filter((s) => s.session_name === "Qualifying")
+        .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - qt) }))
+        .filter((x) => x.diff < 12 * 60 * MIN)
+        .sort((a, b) => a.diff - b.diff)[0]?.s;
+      if (qs) {
+        const qRes = await getJson<OfResult[]>(
+          `${OPENF1}/session_result?session_key=${qs.session_key}`,
+        );
+        const poleNum = qRes?.find((r) => r.position === 1)?.driver_number;
+        if (poleNum != null) {
+          const d = resolveDriver(lookup, { number: poleNum });
+          if (lookup.byId.has(d.id)) {
+            cachedPoleByRace.set(race.id, d.id);
+            return d.id;
+          }
         }
       }
+    }
+    const espnQ = await fetchFromEspnScoreboard("qualifying", race.qualifying_at, lookup);
+    const espnP1 = espnQ?.rows.find((r) => r.position === 1);
+    if (espnP1?.driverId && lookup.byId.has(espnP1.driverId)) {
+      cachedPoleByRace.set(race.id, espnP1.driverId);
+      return espnP1.driverId;
     }
   }
 
@@ -482,11 +604,15 @@ export const getWeekendSession = createServerFn({ method: "POST" })
     const now = Date.now();
     if (now < start) return { state: "upcoming", startsAt: row.starts_at, rows: [] };
 
+    const cached = Array.isArray(row.classification)
+      ? (row.classification as unknown as ClassRow[])
+      : [];
     const key = `${race.id}:${type}`;
+
     if (now < end) {
-      // Live session: serve 22s shared server cache with in-flight deduplication
+      // Live session: serve 20s shared server cache with in-flight deduplication
       const mem = liveSessionCache.get(key);
-      if (mem && now - mem.ts < LIVE_CACHE_TTL_MS) {
+      if (mem && mem.rows.length > 0 && now - mem.ts < LIVE_CACHE_TTL_MS) {
         return { state: "live", startsAt: row.starts_at, rows: mem.rows };
       }
       let inflight = inFlightSessionFetch.get(key);
@@ -497,22 +623,42 @@ export const getWeekendSession = createServerFn({ method: "POST" })
         inFlightSessionFetch.set(key, inflight);
       }
       const liveRows = await inflight;
-      liveSessionCache.set(key, { ts: Date.now(), rows: liveRows });
-      return { state: "live", startsAt: row.starts_at, rows: liveRows };
+      const effectiveRows =
+        liveRows.length > 0 ? liveRows : (mem?.rows.length ? mem.rows : cached);
+
+      if (effectiveRows.length > 0) {
+        liveSessionCache.set(key, { ts: Date.now(), rows: effectiveRows });
+      }
+      // Persist latest live classification snapshot to DB so it survives after session ends
+      if (liveRows.length >= 5) {
+        void supabaseAdmin
+          .from("weekend_sessions")
+          .update({
+            classification: liveRows as unknown as Json,
+            status: "live",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", row.id);
+      }
+      return { state: "live", startsAt: row.starts_at, rows: effectiveRows };
     }
 
-    const cached = Array.isArray(row.classification) ? (row.classification as unknown as ClassRow[]) : [];
-    if (cached.length && row.status === "completed") {
+    if (cached.length >= 5 && row.status === "completed") {
       return { state: "ready", startsAt: row.starts_at, rows: cached };
     }
 
-    if (now - (attempts.get(key) ?? 0) < 25_000) {
-      return { state: cached.length ? "ready" : "pending", startsAt: row.starts_at, rows: cached };
+    if (now - (attempts.get(key) ?? 0) < 12_000 && cached.length >= 5) {
+      return { state: "ready", startsAt: row.starts_at, rows: cached };
     }
     attempts.set(key, now);
 
     const fresh = await fetchClassification(supabaseAdmin, race, type, row.starts_at);
-    if (!fresh.length) return { state: "pending", startsAt: row.starts_at, rows: [] };
+    if (!fresh.length) {
+      if (cached.length > 0) {
+        return { state: "ready", startsAt: row.starts_at, rows: cached };
+      }
+      return { state: "pending", startsAt: row.starts_at, rows: [] };
+    }
 
     await supabaseAdmin
       .from("weekend_sessions")
@@ -527,12 +673,8 @@ export const getWeekendSession = createServerFn({ method: "POST" })
 
 /**
  * High-efficiency live race telemetry & Instant Chequered Flag Finalizer.
- * - Coalesces all concurrent client polls into 1 OpenF1 call per 22 seconds.
- * - Falls back automatically to `/v1/position` + `/v1/laps` when `/v1/session_result` is empty mid-race.
- * - Precomputes exact live round scores (including Sprint points, -25 penalties, and Steward waivers).
- * - The moment OpenF1 `/v1/race_control` signals `CHEQUERED` flag (after >= 40m of racing),
- *   automatically persists `race_results`, marks `has_results = true`, and upserts `scores`
- *   so official league points finalize in 0 seconds.
+ * - Uses 4-Engine Multi-Source Cascade (OpenF1 -> F1 Live Timing SignalR -> ESPN -> Jolpica)
+ *   so Sunday's Race works live and finalizes in 0s even if OpenF1 restricts live access.
  */
 export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
   .inputValidator((input: { raceId: string }) => input)
@@ -572,7 +714,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
     }
 
     const cached = liveRaceCache.get(race.id);
-    if (cached && now - cached.ts < LIVE_CACHE_TTL_MS) {
+    if (cached && cached.payload.results.length >= 10 && now - cached.ts < LIVE_CACHE_TTL_MS) {
       return cached.payload;
     }
 
@@ -583,9 +725,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           .from("drivers")
           .select("id, code, full_name, team, number");
         const drvList = (drivers ?? []) as DriverRef[];
-        const byId = new Map(drvList.map((d) => [d.id, d]));
-        const byCode = new Map(drvList.filter((d) => d.code).map((d) => [d.code!, d]));
-        const byNumber = new Map(drvList.filter((d) => d.number != null).map((d) => [d.number!, d]));
+        const lookup = buildDriverLookup(drvList);
 
         // If official results are already saved in DB, return them directly
         if (race.has_results) {
@@ -602,7 +742,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           ]);
           if (dbResults?.length) {
             const classification: ClassRow[] = dbResults.map((r) => {
-              const d = byId.get(r.driver_id);
+              const d = lookup.byId.get(r.driver_id);
               return {
                 ...blank(),
                 position: r.position,
@@ -633,140 +773,163 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           }
         }
 
-        // Query OpenF1 live session
-        const sessions = await getJson<OfSession[]>(`${OPENF1}/sessions?year=${SEASON}`);
-        const nearSession = (name: string, isoTime: string | null) => {
-          if (!isoTime || !Array.isArray(sessions)) return undefined;
-          const t = new Date(isoTime).getTime();
-          return sessions
-            .filter((s) => s.session_name === name)
-            .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - t) }))
-            .filter((x) => x.diff < 6 * 60 * MIN)
-            .sort((a, b) => a.diff - b.diff)[0]?.s;
-        };
+        const sessions = await getCachedOpenF1Sessions(SEASON);
+        const poleDriverId = await resolvePoleDriverId(supabaseAdmin, race, sessions, lookup);
 
-        const rs = nearSession("Race", race.race_at);
-        if (!rs) {
-          return {
-            raceId: race.id,
-            round: race.round,
-            raceName: race.name,
-            state: "live",
-            chequeredFlag: false,
-            finalizedNow: false,
-            updatedAt: new Date().toISOString(),
-            results: [],
-            classification: [],
-            liveScores: {},
-          };
-        }
+        let classification: ClassRow[] = [];
+        let liveResults: ResultRow[] = [];
+        let externalChequered = false;
 
-        const [rawOfResults, ofDrivers, laps, raceControl] = await Promise.all([
-          getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
-          getJson<Array<{ driver_number: number; name_acronym: string }>>(
-            `${OPENF1}/drivers?session_key=${rs.session_key}`,
-          ),
-          getJson<OpenF1LapEntry[]>(
-            `${OPENF1}/laps?session_key=${rs.session_key}`,
-          ),
-          getJson<OpenF1RaceControlMessage[]>(
-            `${OPENF1}/race_control?session_key=${rs.session_key}`,
-          ),
-        ]);
+        // 1) Try OpenF1 Race session
+        const rs = sessions
+          .filter((s) => s.session_name === "Race")
+          .map((s) => ({ s, diff: Math.abs(new Date(s.date_start).getTime() - startMs) }))
+          .filter((x) => x.diff < 12 * 60 * MIN)
+          .sort((a, b) => a.diff - b.diff)[0]?.s;
 
-        let ofResults: OfResult[] = Array.isArray(rawOfResults) ? rawOfResults : [];
-        if (ofResults.filter((r) => r.position != null).length < 10) {
-          // Mid-race fallback: synthesize running order from OpenF1 /v1/position stream
-          const positions = await getJson<OpenF1PositionEntry[]>(
-            `${OPENF1}/position?session_key=${rs.session_key}`,
-          );
-          const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
-          if (synth.length >= 10) {
-            ofResults = synth;
+        if (rs) {
+          const [rawOfResults, ofDrivers, laps, raceControl] = await Promise.all([
+            getJson<OfResult[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
+            getCachedOpenF1Drivers(rs.session_key),
+            getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${rs.session_key}`),
+            getJson<OpenF1RaceControlMessage[]>(
+              `${OPENF1}/race_control?session_key=${rs.session_key}`,
+            ),
+          ]);
+
+          let ofResults: OfResult[] = Array.isArray(rawOfResults) ? rawOfResults : [];
+          if (ofResults.filter((r) => r.position != null).length < 10) {
+            const positions = await getJson<OpenF1PositionEntry[]>(
+              `${OPENF1}/position?session_key=${rs.session_key}`,
+            );
+            const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
+            if (synth.length >= 10) ofResults = synth;
+          }
+
+          if (ofResults.length >= 10) {
+            const ofDrvByNum = new Map(ofDrivers.map((d) => [d.driver_number, d]));
+            let flNum: number | undefined;
+            let bestLap = Infinity;
+            for (const l of laps ?? []) {
+              if (l.lap_duration && l.lap_duration > 0 && l.lap_duration < bestLap) {
+                bestLap = l.lap_duration;
+                flNum = l.driver_number;
+              }
+            }
+
+            const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
+              if (Array.isArray(v)) {
+                for (let i = v.length - 1; i >= 0; i--) if (v[i] != null) return v[i] as T;
+                return null;
+              }
+              return v;
+            };
+
+            const sortedOf = [...ofResults].sort(
+              (a, b) => (a.position ?? 999) - (b.position ?? 999),
+            );
+
+            for (const r of sortedOf) {
+              const ofMeta = ofDrvByNum.get(r.driver_number);
+              const d = resolveDriver(lookup, {
+                code: ofMeta?.name_acronym,
+                name: ofMeta?.full_name,
+                team: ofMeta?.team_name,
+                number: r.driver_number,
+              });
+              const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
+              const dur = lastOf(r.duration);
+              const gapRaw = lastOf(r.gap_to_leader);
+              const gap =
+                typeof gapRaw === "number"
+                  ? gapRaw > 0
+                    ? `+${gapRaw.toFixed(3)}`
+                    : null
+                  : (gapRaw ?? null);
+
+              classification.push({
+                ...blank(),
+                position: r.position,
+                driverId: d.id,
+                code: d.code,
+                name: d.full_name,
+                team: d.team,
+                number: d.number ?? r.driver_number,
+                time: typeof dur === "number" ? fmtLap(dur) : null,
+                gap,
+                laps: r.number_of_laps ?? null,
+                status: r.dsq ? "DSQ" : r.dns ? "DNS" : r.dnf ? "DNF" : null,
+              });
+
+              if (lookup.byId.has(d.id)) {
+                liveResults.push({
+                  driver_id: d.id,
+                  position: finished ? r.position : null,
+                  finished,
+                  fastest_lap: r.driver_number === flNum,
+                  pole: poleDriverId ? d.id === poleDriverId : false,
+                });
+              }
+            }
+
+            if (hasChequeredFlag(raceControl)) externalChequered = true;
           }
         }
 
-        const numToDrv = new Map<number, DriverRef>();
-        for (const d of drvList) {
-          if (d.number != null) numToDrv.set(d.number, d);
-        }
-        for (const od of ofDrivers ?? []) {
-          const matched = byCode.get(od.name_acronym);
-          if (matched) numToDrv.set(od.driver_number, matched);
-        }
+        // 2) Multi-Engine Fallback (Official F1 Live Timing SignalR + ESPN Scoreboard + Jolpica)
+        if (liveResults.length < 10) {
+          const [f1Snap, espnSnap] = await Promise.all([
+            fetchFromF1LiveTiming("race", race.race_at, lookup),
+            fetchFromEspnScoreboard("race", race.race_at, lookup),
+          ]);
+          const chosen =
+            f1Snap && f1Snap.rows.length >= 10
+              ? f1Snap
+              : espnSnap && espnSnap.rows.length >= 10
+                ? espnSnap
+                : null;
 
-        const poleDriverId = await resolvePoleDriverId(
-          supabaseAdmin,
-          race,
-          sessions,
-          byId,
-          numToDrv,
-        );
-
-        let flNum: number | undefined;
-        let bestLap = Infinity;
-        for (const l of laps ?? []) {
-          if (l.lap_duration && l.lap_duration > 0 && l.lap_duration < bestLap) {
-            bestLap = l.lap_duration;
-            flNum = l.driver_number;
-          }
-        }
-
-        const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
-          if (Array.isArray(v)) {
-            for (let i = v.length - 1; i >= 0; i--) if (v[i] != null) return v[i] as T;
-            return null;
-          }
-          return v;
-        };
-
-        const sortedOf = [...ofResults].sort(
-          (a, b) => (a.position ?? 999) - (b.position ?? 999),
-        );
-
-        const classification: ClassRow[] = [];
-        const liveResults: ResultRow[] = [];
-
-        for (const r of sortedOf) {
-          const d = numToDrv.get(r.driver_number) ?? byNumber.get(r.driver_number);
-          const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
-          const dur = lastOf(r.duration);
-          const gapRaw = lastOf(r.gap_to_leader);
-          const gap =
-            typeof gapRaw === "number"
-              ? gapRaw > 0
-                ? `+${gapRaw.toFixed(3)}`
-                : null
-              : (gapRaw ?? null);
-
-          classification.push({
-            ...blank(),
-            position: r.position,
-            driverId: d?.id ?? null,
-            code: d?.code ?? null,
-            name: d?.full_name ?? null,
-            team: d?.team ?? null,
-            number: d?.number ?? r.driver_number,
-            time: typeof dur === "number" ? fmtLap(dur) : null,
-            gap,
-            laps: r.number_of_laps ?? null,
-            status: r.dsq ? "DSQ" : r.dns ? "DNS" : r.dnf ? "DNF" : null,
-          });
-
-          if (d?.id) {
-            liveResults.push({
-              driver_id: d.id,
-              position: finished ? r.position : null,
-              finished,
-              fastest_lap: r.driver_number === flNum,
-              pole: poleDriverId ? d.id === poleDriverId : false,
-            });
+          if (chosen) {
+            classification = chosen.rows;
+            externalChequered = chosen.chequeredFlag;
+            liveResults = chosen.rows
+              .filter((r) => r.driverId && lookup.byId.has(r.driverId))
+              .map((r) => {
+                const finished = !r.status && r.position != null;
+                return {
+                  driver_id: r.driverId!,
+                  position: finished ? r.position : null,
+                  finished,
+                  fastest_lap: chosen.fastestLapDriverId
+                    ? r.driverId === chosen.fastestLapDriverId
+                    : false,
+                  pole: poleDriverId ? r.driverId === poleDriverId : false,
+                };
+              });
+          } else {
+            const jRaceRows = await fromJolpica(race, "race", lookup);
+            if (jRaceRows.length >= 10) {
+              classification = jRaceRows;
+              externalChequered = true;
+              liveResults = jRaceRows
+                .filter((r) => r.driverId && lookup.byId.has(r.driverId))
+                .map((r) => {
+                  const finished = !r.status && r.position != null;
+                  return {
+                    driver_id: r.driverId!,
+                    position: finished ? r.position : null,
+                    finished,
+                    fastest_lap: false,
+                    pole: poleDriverId ? r.driverId === poleDriverId : false,
+                  };
+                });
+            }
           }
         }
 
         const minutesElapsed = (Date.now() - startMs) / MIN;
         const chequered =
-          (minutesElapsed >= 40 && hasChequeredFlag(raceControl)) || minutesElapsed >= 180;
+          (minutesElapsed >= 40 && externalChequered) || minutesElapsed >= 180;
 
         const liveScores: Record<string, number> = {};
         let finalizedNow = false;
@@ -810,8 +973,11 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
             mode: "auto_sync",
           });
 
-          // Populate liveScores for all players (including any Steward-locked existingScores)
-          for (const ex of (existingScores ?? []) as Array<{ user_id: string; points: number; breakdown: unknown }>) {
+          for (const ex of (existingScores ?? []) as Array<{
+            user_id: string;
+            points: number;
+            breakdown: unknown;
+          }>) {
             const bd = (ex.breakdown as Record<string, unknown> | null) ?? {};
             if (bd["stewardOverride"] === true) {
               liveScores[ex.user_id] = ex.points;
@@ -822,23 +988,15 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
           }
 
           if (chequered && !race.has_results) {
-            // Instant Chequered Flag Finalizer: write results and official scores immediately!
-            const dbRows = sortedOf.flatMap((r) => {
-              const d = numToDrv.get(r.driver_number) ?? byNumber.get(r.driver_number);
-              if (!d?.id) return [];
-              const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
-              return [
-                {
-                  race_id: race.id,
-                  driver_id: d.id,
-                  position: finished ? r.position : null,
-                  status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
-                  finished,
-                  fastest_lap: r.driver_number === flNum,
-                  pole: poleDriverId ? d.id === poleDriverId : false,
-                },
-              ];
-            });
+            const dbRows = liveResults.map((r) => ({
+              race_id: race.id,
+              driver_id: r.driver_id,
+              position: r.finished ? r.position : null,
+              status: r.finished ? "Finished" : "Retired",
+              finished: r.finished,
+              fastest_lap: r.fastest_lap,
+              pole: r.pole,
+            }));
 
             if (dbRows.length >= 10) {
               await supabaseAdmin
@@ -875,6 +1033,8 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
     }
 
     const payload = await promise;
-    liveRaceCache.set(race.id, { ts: Date.now(), payload });
+    if (payload.results.length >= 10) {
+      liveRaceCache.set(race.id, { ts: Date.now(), payload });
+    }
     return payload;
   });

@@ -110,14 +110,22 @@ const cacheKey = (raceId: string, type: string) => `dfr:session:${raceId}:${type
 function readCache(raceId: string, type: string): SessionPayload | undefined {
   try {
     const raw = window.localStorage.getItem(cacheKey(raceId, type));
-    return raw ? (JSON.parse(raw) as SessionPayload) : undefined;
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as SessionPayload;
+    if (parsed.state !== "ready" || !Array.isArray(parsed.rows) || parsed.rows.length < 5) {
+      window.localStorage.removeItem(cacheKey(raceId, type));
+      return undefined;
+    }
+    return parsed;
   } catch {
     return undefined;
   }
 }
 function writeCache(raceId: string, type: string, payload: SessionPayload) {
   try {
-    window.localStorage.setItem(cacheKey(raceId, type), JSON.stringify(payload));
+    if (payload.state === "ready" && Array.isArray(payload.rows) && payload.rows.length >= 5) {
+      window.localStorage.setItem(cacheKey(raceId, type), JSON.stringify(payload));
+    }
   } catch {
     /* storage unavailable: ignore */
   }
@@ -345,19 +353,31 @@ function SessionResults({
     queryKey: ["weekend-session", raceId, type],
     retry: 1,
     initialData: () => readCache(raceId, type),
-    staleTime: (query) => (query.state.data?.state === "ready" ? Number.POSITIVE_INFINITY : 20_000),
-    refetchInterval: (query) => (query.state.data?.state === "ready" ? false : 25_000),
+    staleTime: (query) =>
+      query.state.data?.state === "ready" && (query.state.data?.rows.length ?? 0) >= 5
+        ? Number.POSITIVE_INFINITY
+        : 15_000,
+    refetchInterval: (query) =>
+      query.state.data?.state === "ready" && (query.state.data?.rows.length ?? 0) >= 5
+        ? false
+        : 20_000,
     refetchIntervalInBackground: false,
     queryFn: async () => {
       const r = await getWeekendSession({ data: { raceId, sessionType: type } });
-      if (r.state === "ready") writeCache(raceId, type, r);
+      if (r.state === "ready" && r.rows.length >= 5) writeCache(raceId, type, r);
       return r;
     },
   });
 
   if (q.isLoading) return <div className="h-40 animate-pulse rounded-lg bg-muted/60" />;
   if (q.isError && !q.data) {
-    return <Empty text="Couldn't load this session right now. Pull to refresh or try again in a moment." />;
+    return (
+      <Empty
+        text="Couldn't load this session right now. Tap below to retry."
+        onRetry={() => void q.refetch()}
+        retrying={q.isFetching}
+      />
+    );
   }
 
   const data = q.data;
@@ -365,9 +385,21 @@ function SessionResults({
 
   if (state === "upcoming") return <Empty text={`${SESSION_LABEL[type]} starts ${localTime(startsAt)}.`} />;
   if (state === "live" && (!data || !data.rows.length))
-    return <Empty text={`${SESSION_LABEL[type]} is live on track. Waiting for telemetry laps\u2026`} />;
+    return (
+      <Empty
+        text={`${SESSION_LABEL[type]} is live on track. Fetching live telemetry classification...`}
+        onRetry={() => void q.refetch()}
+        retrying={q.isFetching}
+      />
+    );
   if (state === "pending" || !data || !data.rows.length)
-    return <Empty text="Waiting for the official classification\u2026" />;
+    return (
+      <Empty
+        text={`Syncing ${SESSION_LABEL[type]} classification...`}
+        onRetry={() => void q.refetch()}
+        retrying={q.isFetching}
+      />
+    );
 
   return <ClassTable rows={data.rows} type={type} />;
 }
@@ -492,7 +524,7 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
           st === "upcoming"
             ? "The race hasn't started. Picks lock when the lights go out."
             : st === "live"
-              ? "The race is live on track. Waiting for initial OpenF1 telemetry laps\u2026"
+              ? "The race is live on track. Fetching live telemetry classification..."
               : "Waiting for the official classification."
         }
       />
@@ -510,7 +542,7 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
       {isShowingLive && (
         <div className="carbon-panel flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
           <span className="h-2 w-2 animate-ping rounded-full bg-primary" />
-          Live Grand Prix Telemetry \u00B7 Auto-updating every 25s
+          {"Live Grand Prix Telemetry \u00B7 Auto-updating every 25s"}
         </div>
       )}
       <div className="carbon-panel grid grid-cols-2 gap-3 rounded-lg p-4 sm:grid-cols-4">
@@ -586,8 +618,30 @@ function Fact({ label, d, purple }: { label: string; d?: Driver | undefined; pur
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return <p className="carbon-panel rounded-lg p-5 text-sm text-muted-foreground">{text}</p>;
+function Empty({
+  text,
+  onRetry,
+  retrying,
+}: {
+  text: string;
+  onRetry?: (() => void) | undefined;
+  retrying?: boolean | undefined;
+}) {
+  return (
+    <div className="carbon-panel flex flex-col items-start justify-between gap-3 rounded-lg p-5 sm:flex-row sm:items-center">
+      <p className="text-sm text-muted-foreground">{text}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-primary transition hover:bg-primary/20 disabled:opacity-50"
+        >
+          {retrying ? "Refreshing..." : "Refresh timing"}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

@@ -26,6 +26,8 @@ export type OpenF1LapEntry = {
   driver_number: number;
   lap_number?: number | null | undefined;
   lap_duration?: number | null | undefined;
+  date_start?: string | null | undefined;
+  is_pit_out_lap?: boolean | null | undefined;
 };
 
 export type SynthesizedOpenF1Result = {
@@ -42,8 +44,6 @@ export type SynthesizedOpenF1Result = {
 /**
  * Detects whether the Chequered Flag or official Session End has been signaled
  * in OpenF1 `/v1/race_control` telemetry messages.
- * Guards against premature scoring during Red Flag suspensions while allowing
- * zero-delay finalization the moment the leader crosses the finish line.
  */
 export function hasChequeredFlag(
   messages: OpenF1RaceControlMessage[] | null | undefined,
@@ -60,46 +60,151 @@ export function hasChequeredFlag(
 }
 
 /**
+ * Synthesizes a timed classification table for Practice (FP1/FP2/FP3) and Qualifying
+ * (Sprint Qualifying / Qualifying) directly from `/v1/laps` (and optional `/v1/position`),
+ * ranking drivers by their fastest `lap_duration` ascending and computing exact gaps to P1.
+ */
+export function buildTimedSessionOrderFromLaps(
+  laps: OpenF1LapEntry[] | null | undefined,
+  positions?: OpenF1PositionEntry[] | null | undefined,
+): SynthesizedOpenF1Result[] {
+  const maxLapByDriver = new Map<number, number>();
+  const bestLapByDriver = new Map<number, number>();
+  const allDriverNums = new Set<number>();
+
+  for (const l of laps ?? []) {
+    if (typeof l.driver_number !== "number" || l.driver_number <= 0) continue;
+    allDriverNums.add(l.driver_number);
+    if (
+      typeof l.lap_number === "number" &&
+      l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)
+    ) {
+      maxLapByDriver.set(l.driver_number, l.lap_number);
+    }
+    if (
+      typeof l.lap_duration === "number" &&
+      Number.isFinite(l.lap_duration) &&
+      l.lap_duration > 20 &&
+      l.lap_duration < 300
+    ) {
+      const prev = bestLapByDriver.get(l.driver_number) ?? Infinity;
+      if (l.lap_duration < prev) {
+        bestLapByDriver.set(l.driver_number, l.lap_duration);
+      }
+    }
+  }
+
+  const posHint = new Map<number, number>();
+  for (const p of positions ?? []) {
+    if (typeof p.driver_number === "number" && p.driver_number > 0) {
+      allDriverNums.add(p.driver_number);
+      if (typeof p.position === "number" && p.position > 0) {
+        posHint.set(p.driver_number, p.position);
+      }
+    }
+  }
+
+  if (allDriverNums.size === 0) return [];
+
+  const sorted = [...allDriverNums].sort((a, b) => {
+    const ba = bestLapByDriver.get(a) ?? Infinity;
+    const bb = bestLapByDriver.get(b) ?? Infinity;
+    if (ba !== bb) return ba - bb;
+    const pa = posHint.get(a) ?? 999;
+    const pb = posHint.get(b) ?? 999;
+    if (pa !== pb) return pa - pb;
+    const la = maxLapByDriver.get(a) ?? 0;
+    const lb = maxLapByDriver.get(b) ?? 0;
+    return lb - la || a - b;
+  });
+
+  const leaderBest = bestLapByDriver.get(sorted[0]!) ?? null;
+
+  return sorted.map((driver_number, idx) => {
+    const best = bestLapByDriver.get(driver_number) ?? null;
+    const gap =
+      idx > 0 && best != null && leaderBest != null && best > leaderBest
+        ? `+${(best - leaderBest).toFixed(3)}`
+        : null;
+    return {
+      position: idx + 1,
+      driver_number,
+      duration: best,
+      gap_to_leader: gap,
+      number_of_laps: maxLapByDriver.get(driver_number) ?? null,
+      dnf: false,
+      dns: false,
+      dsq: false,
+    };
+  });
+}
+
+/**
  * Synthesizes a live classification table from OpenF1 `/v1/position`, `/v1/laps`,
  * and `/v1/race_control` streams whenever `/v1/session_result` is not yet populated mid-race.
+ * Also falls back to `/v1/laps` if `/v1/position` is empty or unavailable.
  */
 export function buildLiveOrderFromPositions(
   positions: OpenF1PositionEntry[] | null | undefined,
   laps?: OpenF1LapEntry[] | null | undefined,
   raceControl?: OpenF1RaceControlMessage[] | null | undefined,
 ): SynthesizedOpenF1Result[] {
-  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const maxLapByDriver = new Map<number, number>();
+  const bestLapByDriver = new Map<number, number>();
+  const cumTimeByDriver = new Map<number, number>();
+
+  for (const l of laps ?? []) {
+    if (typeof l.driver_number !== "number" || l.driver_number <= 0) continue;
+    if (
+      typeof l.lap_number === "number" &&
+      l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)
+    ) {
+      maxLapByDriver.set(l.driver_number, l.lap_number);
+    }
+    if (typeof l.lap_duration === "number" && l.lap_duration > 0) {
+      cumTimeByDriver.set(
+        l.driver_number,
+        (cumTimeByDriver.get(l.driver_number) ?? 0) + l.lap_duration,
+      );
+      if (l.lap_duration < (bestLapByDriver.get(l.driver_number) ?? Infinity)) {
+        bestLapByDriver.set(l.driver_number, l.lap_duration);
+      }
+    }
+  }
 
   const latestPos = new Map<number, { position: number; dateMs: number; idx: number }>();
-  for (let i = 0; i < positions.length; i++) {
-    const p = positions[i]!;
-    if (typeof p.driver_number !== "number" || typeof p.position !== "number" || p.position <= 0) {
-      continue;
+  if (Array.isArray(positions)) {
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i]!;
+      if (
+        typeof p.driver_number !== "number" ||
+        typeof p.position !== "number" ||
+        p.position <= 0
+      ) {
+        continue;
+      }
+      const dateMs = p.date ? new Date(p.date).getTime() : 0;
+      const prev = latestPos.get(p.driver_number);
+      if (!prev || (dateMs > 0 && dateMs >= prev.dateMs) || (dateMs === 0 && i >= prev.idx)) {
+        latestPos.set(p.driver_number, { position: p.position, dateMs, idx: i });
+      }
     }
-    const dateMs = p.date ? new Date(p.date).getTime() : 0;
-    const prev = latestPos.get(p.driver_number);
-    if (!prev || (dateMs > 0 && dateMs >= prev.dateMs) || (dateMs === 0 && i >= prev.idx)) {
-      latestPos.set(p.driver_number, { position: p.position, dateMs, idx: i });
-    }
+  }
+
+  // Fallback if /v1/position is empty but /v1/laps has lap entries
+  if (latestPos.size === 0 && maxLapByDriver.size > 0) {
+    const byLaps = [...maxLapByDriver.entries()].sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const ca = cumTimeByDriver.get(a[0]) ?? Infinity;
+      const cb = cumTimeByDriver.get(b[0]) ?? Infinity;
+      return ca - cb || a[0] - b[0];
+    });
+    byLaps.forEach(([num], i) => {
+      latestPos.set(num, { position: i + 1, dateMs: 0, idx: i });
+    });
   }
 
   if (latestPos.size === 0) return [];
-
-  const maxLapByDriver = new Map<number, number>();
-  const bestLapByDriver = new Map<number, number>();
-  for (const l of laps ?? []) {
-    if (typeof l.driver_number !== "number") continue;
-    if (typeof l.lap_number === "number" && l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)) {
-      maxLapByDriver.set(l.driver_number, l.lap_number);
-    }
-    if (
-      typeof l.lap_duration === "number" &&
-      l.lap_duration > 0 &&
-      l.lap_duration < (bestLapByDriver.get(l.driver_number) ?? Infinity)
-    ) {
-      bestLapByDriver.set(l.driver_number, l.lap_duration);
-    }
-  }
 
   const leaderMaxLap = Math.max(0, ...maxLapByDriver.values());
 
@@ -227,8 +332,6 @@ export function computeVirtualStandings(params: {
     }
   }
 
-  // Compute each player's base points prior to `round` so rank deltas are exact
-  // both during an un-scored live race and when previewing on a completed round.
   const baseBoard = officialBoard.map((entry) => {
     const alreadyCountedPts = entry.byRound[round];
     const hasOfficialRoundScore = alreadyCountedPts !== undefined;
@@ -248,20 +351,18 @@ export function computeVirtualStandings(params: {
       const liveRoundPoints = hasLiveRow
         ? livePtsByUser.get(entry.userId)!
         : (alreadyCountedPts ?? 0);
-      const totalPoints = basePoints + liveRoundPoints;
-      const totalRaces = baseRaces + (hasLiveRow || hasOfficialRoundScore ? 1 : 0);
-      const nextByRound = { ...entry.byRound, [round]: liveRoundPoints };
-      const otherRoundPts = Object.entries(entry.byRound)
-        .filter(([r]) => Number(r) !== round)
-        .map(([, pts]) => pts);
-      const nextBest = Math.max(...otherRoundPts, liveRoundPoints);
+      const totalPoints =
+        hasLiveRow || hasOfficialRoundScore ? basePoints + liveRoundPoints : entry.points;
+      const totalRaces = hasLiveRow || hasOfficialRoundScore ? baseRaces + 1 : entry.races;
+      const newByRound = { ...entry.byRound, [round]: liveRoundPoints };
+      const best = Math.max(entry.best ?? 0, liveRoundPoints);
 
       return {
         ...entry,
         points: totalPoints,
         races: totalRaces,
-        best: nextBest,
-        byRound: nextByRound,
+        best,
+        byRound: newByRound,
         officialPoints: basePoints,
         officialRank: baseRankByUser.get(entry.userId) ?? idx + 1,
         liveRoundPoints,
@@ -270,20 +371,15 @@ export function computeVirtualStandings(params: {
     },
   );
 
-  // Sort by virtual points descending, then name ascending (identical tie-break to official board)
-  virtualEntries.sort(
-    (a, b) => b.points - a.points || a.name.localeCompare(b.name),
-  );
+  virtualEntries.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
-  // Recompute virtual Fahl badge for the active round
-  const topLiveRound = Math.max(...virtualEntries.map((e) => e.liveRoundPoints), -Infinity);
-  for (let i = 0; i < virtualEntries.length; i++) {
-    const entry = virtualEntries[i]!;
-    const newRank = i + 1;
-    entry.liveRankDelta = entry.officialRank - newRank;
-    entry.change = entry.liveRankDelta;
-    entry.fahl = Number.isFinite(topLiveRound) && entry.liveRoundPoints === topLiveRound;
-  }
-
-  return virtualEntries;
+  return virtualEntries.map((v, newIdx) => {
+    const newRank = newIdx + 1;
+    const delta = v.officialRank - newRank;
+    return {
+      ...v,
+      change: delta,
+      liveRankDelta: delta,
+    };
+  });
 }

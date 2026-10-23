@@ -128,7 +128,7 @@ function Paddock() {
     queryClient,
   ]);
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading\u2026</main>;
+  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading...</main>;
   if (!user)
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
@@ -291,7 +291,7 @@ function Paddock() {
                       <span className="font-semibold">{d?.code ?? id}</span>
                       {hasResults && (
                         <span className="ml-auto font-mono text-xs">
-                          {actual ? `P${actual}` : "DNF"} \u00B7 {pt > 0 ? `+${pt}` : pt}
+                          {`${actual ? `P${actual}` : "DNF"} \u00B7 ${pt > 0 ? `+${pt}` : pt}`}
                         </span>
                       )}
                     </li>
@@ -359,12 +359,12 @@ function AuditTrail({
   return (
     <details className="mt-2 text-xs text-muted-foreground">
       <summary className="cursor-pointer">
-        {entries.length} change{entries.length > 1 ? "s" : ""} \u00B7 last {fmt(entries[entries.length - 1]!.created_at)} (Cairo)
+        {`${entries.length} change${entries.length > 1 ? "s" : ""} \u00B7 last ${fmt(entries[entries.length - 1]!.created_at)} (Cairo)`}
       </summary>
       <ul className="mt-1 space-y-0.5 font-mono">
         {entries.map((e, i) => (
           <li key={i}>
-            {fmt(e.created_at)} \u2014 {ACTION_LABEL[e.action] ?? e.action} {describe(e.changes)}
+            {`${fmt(e.created_at)} \u2014 ${ACTION_LABEL[e.action] ?? e.action} ${describe(e.changes)}`}
           </li>
         ))}
       </ul>

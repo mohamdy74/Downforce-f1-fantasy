@@ -1,8 +1,3 @@
-/**
- * Single source of truth for Web Push VAPID keys, Base64URL conversion,
- * top-10 completion guard, and push_sub sync_state key parsing.
- * Safe for both browser and server bundles.
- */
 const envObj =
   typeof process !== "undefined" && process?.env ? process.env : ({} as Record<string, string | undefined>);
 
@@ -12,13 +7,8 @@ export const VAPID_PUBLIC_KEY =
   "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
 
 export const VAPID_PRIVATE_KEY = envObj["VAPID_PRIVATE_KEY"] || "";
-
 export const VAPID_SUBJECT = "mailto:admin@downforce.app";
 
-/**
- * Converts a URL-safe Base64 VAPID public key into a Uint8Array<ArrayBuffer>
- * for pushManager.subscribe({ applicationServerKey }).
- */
 export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -31,7 +21,6 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuf
   return output;
 }
 
-/** A top-10 counts as "submitted" only when all 10 slots are real driver ids (excluding "__none__"). */
 export function isCompleteTop10(top10: unknown): boolean {
   return (
     Array.isArray(top10) &&
@@ -61,13 +50,7 @@ export function parsePushSubscriptionKey(key: string): PushSubscriptionRecord | 
     const p256dh = raw.keys?.p256dh ?? raw.p256dh;
     const auth = raw.keys?.auth ?? raw.auth;
     if (!raw.endpoint || !p256dh || !auth) return null;
-    return {
-      userId,
-      endpoint: raw.endpoint,
-      p256dh,
-      auth,
-      rawKey: key,
-    };
+    return { userId, endpoint: raw.endpoint, p256dh, auth, rawKey: key };
   } catch {
     return null;
   }

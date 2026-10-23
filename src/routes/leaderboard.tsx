@@ -165,7 +165,7 @@ function Leaderboard() {
   if (authLoading) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
-        <p className="text-sm text-muted-foreground">Loading standings\u2026</p>
+        <p className="text-sm text-muted-foreground">Loading standings...</p>
       </main>
     );
   }
@@ -303,7 +303,7 @@ function Leaderboard() {
       )}
 
       <div ref={listRef} className="mt-8 space-y-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading timing tower\u2026</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">Loading timing tower...</p>}
         {!isLoading && !displayBoard.length && (
           <p className="text-sm text-muted-foreground">
             No players yet. Sign in to claim P1.
@@ -339,7 +339,7 @@ function Leaderboard() {
                     {entry.fahl && <FahlBadge />}
                   </div>
                   <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                    {entry.races} scored \u00B7 best {entry.best ?? 0} | avg {entry.races ? (entry.points / entry.races).toFixed(1) : 0}
+                    {`${entry.races} scored \u00B7 best ${entry.best ?? 0} | avg ${entry.races ? (entry.points / entry.races).toFixed(1) : 0}`}
                   </p>
                 </div>
                 {isShowingVirtual && vEntry && (
