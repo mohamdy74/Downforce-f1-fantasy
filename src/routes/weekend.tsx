@@ -60,6 +60,13 @@ const GROUPS: Record<Exclude<Tab, "schedule">, SessionType[]> = {
   race: ["sprint", "race"],
 };
 
+type QualiSegment = "q1" | "q2" | "q3";
+const QUALI_SEGMENTS: { id: QualiSegment; label: string; limit: number; cutoff: number | null }[] = [
+  { id: "q1", label: "Q1", limit: 22, cutoff: 16 },
+  { id: "q2", label: "Q2", limit: 16, cutoff: 10 },
+  { id: "q3", label: "Q3", limit: 10, cutoff: null },
+];
+
 type Status = "upcoming" | "live" | "completed";
 const MIN = 60_000;
 const STAY_MS = 18 * 60 * MIN; // keep showing a weekend until 18h after the race starts
@@ -104,6 +111,171 @@ const STATUS_STYLE: Record<Status, { label: string; color: string }> = {
   live: { label: "Live", color: "var(--color-primary)" },
   completed: { label: "Completed", color: "var(--track-green)" },
 };
+
+/**
+ * Parses a lap time string like "1:34.035" or "94.035" into seconds (94.035).
+ */
+function parseLapSec(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const m = /^(\d+):(\d{1,2}(?:\.\d+)?)$/.exec(s);
+  if (m) {
+    const mins = Number(m[1]);
+    const secs = Number(m[2]);
+    const total = Math.round((mins * 60 + secs) * 1000) / 1000;
+    return Number.isFinite(total) && total > 0 ? total : null;
+  }
+  const num = Number(s);
+  return Number.isFinite(num) && num > 0 ? Math.round(num * 1000) / 1000 : null;
+}
+
+type QualiDisplayRow = {
+  row: ClassRow;
+  position: number;
+  time: string | null;
+  sec: number | null;
+  gapToLeader: string | null;
+  gapToAhead: string | null;
+};
+
+/**
+ * Builds the per-segment classification for Qualifying / Sprint Qualifying:
+ * - Q1: 22 drivers sorted by their Q1 lap time ascending
+ * - Q2: 16 drivers sorted by their Q2 lap time ascending
+ * - Q3: 10 drivers sorted by their Q3 lap time ascending
+ * Computes both Gap to P1 Leader (+X.XXX) and Interval to the car ahead (INT +X.XXX).
+ */
+function buildQualifyingSegmentRows(
+  rows: ClassRow[],
+  segment: QualiSegment,
+  gridDrivers?: Driver[] | undefined,
+): QualiDisplayRow[] {
+  const hasAnySplits = rows.some((r) => Boolean(r.q1 || r.q2 || r.q3));
+
+  // Ensure Q1 has up to 22 drivers even if an upstream feed omitted DNS drivers
+  let pool: ClassRow[] = [...rows];
+  if (segment === "q1" && pool.length < 22 && gridDrivers?.length) {
+    for (const d of gridDrivers) {
+      if (pool.length >= 22) break;
+      const exists = pool.some(
+        (r) =>
+          (r.driverId && r.driverId === d.id) ||
+          (r.code && d.code && r.code.toUpperCase() === d.code.toUpperCase()) ||
+          (r.number != null && d.number != null && r.number === d.number),
+      );
+      if (!exists) {
+        pool.push({
+          position: pool.length + 1,
+          driverId: d.id,
+          code: d.code,
+          name: d.full_name,
+          team: d.team,
+          number: d.number,
+          time: null,
+          q1: null,
+          q2: null,
+          q3: null,
+          gap: null,
+          laps: null,
+          status: "DNS",
+        });
+      }
+    }
+  }
+
+  const getSegTime = (r: ClassRow, seg: QualiSegment): string | null => {
+    if (seg === "q1") {
+      return r.q1?.trim() || (!hasAnySplits || (!r.q2 && !r.q3) ? (r.time?.trim() ?? null) : null);
+    }
+    if (seg === "q2") {
+      return r.q2?.trim() || (!hasAnySplits ? (r.time?.trim() ?? null) : null);
+    }
+    return r.q3?.trim() || (!hasAnySplits ? (r.time?.trim() ?? null) : null);
+  };
+
+  const limit = segment === "q1" ? 22 : segment === "q2" ? 16 : 10;
+
+  let candidates: ClassRow[];
+  if (segment === "q1") {
+    candidates = pool.slice(0, 22);
+  } else if (segment === "q2") {
+    const withQ2 = pool.filter((r) => parseLapSec(getSegTime(r, "q2")) != null);
+    if (withQ2.length >= 16) {
+      candidates = withQ2.slice(0, 16);
+    } else {
+      const chosen = new Set(withQ2);
+      const rest = pool
+        .filter((r) => !chosen.has(r))
+        .sort((a, b) => {
+          const pa = a.position ?? 999;
+          const pb = b.position ?? 999;
+          if (pa !== pb) return pa - pb;
+          const qa = parseLapSec(a.q1) ?? Infinity;
+          const qb = parseLapSec(b.q1) ?? Infinity;
+          return qa - qb;
+        });
+      candidates = [...withQ2, ...rest].slice(0, 16);
+    }
+  } else {
+    const withQ3 = pool.filter((r) => parseLapSec(getSegTime(r, "q3")) != null);
+    if (withQ3.length >= 10) {
+      candidates = withQ3.slice(0, 10);
+    } else {
+      const chosen = new Set(withQ3);
+      const rest = pool
+        .filter((r) => !chosen.has(r))
+        .sort((a, b) => {
+          const pa = a.position ?? 999;
+          const pb = b.position ?? 999;
+          if (pa !== pb) return pa - pb;
+          const qa = parseLapSec(a.q2) ?? parseLapSec(a.q1) ?? Infinity;
+          const qb = parseLapSec(b.q2) ?? parseLapSec(b.q1) ?? Infinity;
+          return qa - qb;
+        });
+      candidates = [...withQ3, ...rest].slice(0, 10);
+    }
+  }
+
+  const decorated = candidates.map((row, idx) => {
+    const time = getSegTime(row, segment);
+    const sec = parseLapSec(time);
+    return { row, time, sec, origPos: row.position ?? idx + 1 };
+  });
+
+  decorated.sort((a, b) => {
+    if (a.sec != null && b.sec != null && a.sec !== b.sec) {
+      return a.sec - b.sec;
+    }
+    if (a.sec != null && b.sec == null) return -1;
+    if (a.sec == null && b.sec != null) return 1;
+    return a.origPos - b.origPos;
+  });
+
+  const sliced = decorated.slice(0, limit);
+  const leaderSec = sliced[0]?.sec ?? null;
+
+  return sliced.map((item, idx) => {
+    const prevSec = idx > 0 ? (sliced[idx - 1]?.sec ?? null) : null;
+    const gapToLeader =
+      idx > 0 && item.sec != null && leaderSec != null
+        ? `+${Math.max(0, item.sec - leaderSec).toFixed(3)}`
+        : null;
+    const gapToAhead =
+      idx > 0 && item.sec != null && prevSec != null
+        ? `+${Math.max(0, item.sec - prevSec).toFixed(3)}`
+        : gapToLeader;
+
+    return {
+      row: item.row,
+      position: idx + 1,
+      time: item.time,
+      sec: item.sec,
+      gapToLeader,
+      gapToAhead,
+    };
+  });
+}
 
 /**
  * Checks whether a session's rows have complete timing data (actual lap times
@@ -467,19 +639,108 @@ function statusLikeState(startsAt: string, type: SessionType, now: number): Sess
 
 function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
   const quali = type === "qualifying" || type === "sprint_qualifying";
+  const { data: gridDrivers } = useQuery(driversQuery);
+  const [pickedSeg, setPickedSeg] = useState<QualiSegment | null>(null);
+
+  if (quali) {
+    const hasQ3 = rows.some((r) => parseLapSec(r.q3) != null);
+    const hasQ2 = rows.some((r) => parseLapSec(r.q2) != null);
+    const defaultSeg: QualiSegment = hasQ3 ? "q3" : hasQ2 ? "q2" : "q1";
+    const activeSeg: QualiSegment = pickedSeg ?? defaultSeg;
+    const segMeta = QUALI_SEGMENTS.find((s) => s.id === activeSeg) ?? QUALI_SEGMENTS[0]!;
+    const qRows = buildQualifyingSegmentRows(rows, activeSeg, gridDrivers);
+
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {QUALI_SEGMENTS.map((seg) => (
+            <button
+              key={seg.id}
+              type="button"
+              onClick={() => setPickedSeg(seg.id)}
+              className={cn(
+                "min-h-9 touch-manipulation rounded-full border px-4 font-mono text-[11px] font-bold uppercase tracking-wider",
+                seg.id === activeSeg
+                  ? "border-primary text-primary"
+                  : "border-border text-muted-foreground",
+              )}
+            >
+              {seg.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-1">
+          {qRows.map((item, i) => {
+            const r = item.row;
+            const sub =
+              item.position > 1 && item.gapToLeader
+                ? [item.gapToLeader, item.gapToAhead ? `INT ${item.gapToAhead}` : null]
+                    .filter(Boolean)
+                    .join(" \u00B7 ")
+                : null;
+            return (
+              <div
+                key={`${activeSeg}-${r.driverId ?? r.number ?? i}`}
+                className={cn(
+                  "tower-row flex items-center gap-3 rounded-md px-3 py-2",
+                  segMeta.cutoff != null &&
+                    i === segMeta.cutoff &&
+                    "mt-3 border-t-2 border-dashed border-primary/40",
+                )}
+                style={{ borderLeftColor: teamColor(r.team) }}
+              >
+                <span
+                  className={cn(
+                    "w-8 shrink-0 text-center font-mono text-sm font-bold tabular-nums",
+                    item.position === 1 && "text-gold",
+                  )}
+                >
+                  {item.position}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-display text-sm font-extrabold italic uppercase">
+                    {r.code ?? r.name ?? (r.number != null ? `#${r.number}` : "\u2014")}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {[r.name, r.team].filter(Boolean).join(" \u00B7 ")}
+                  </span>
+                  {sub && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                      {sub}
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums">
+                  {item.time ? (
+                    item.time
+                  ) : r.status ? (
+                    <span className="text-primary">{r.status}</span>
+                  ) : (
+                    "\u2014"
+                  )}
+                </span>
+              </div>
+            );
+          })}
+          {segMeta.cutoff != null && qRows.length > segMeta.cutoff && (
+            <p className="pt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              {`Dashed line = top ${segMeta.cutoff}`}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1">
       {rows.map((r, i) => {
-        const sub = quali
-          ? [r.q1 && `Q1 ${r.q1}`, r.q2 && `Q2 ${r.q2}`, r.q3 && `Q3 ${r.q3}`, r.gap].filter(Boolean).join(" \u00B7 ")
-          : [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" \u00B7 ");
+        const sub = [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" \u00B7 ");
         return (
           <div
             key={`${r.driverId ?? r.number ?? i}`}
-            className={cn(
-              "tower-row flex items-center gap-3 rounded-md px-3 py-2",
-              quali && i === 10 && "mt-3 border-t-2 border-dashed border-primary/40",
-            )}
+            className="tower-row flex items-center gap-3 rounded-md px-3 py-2"
             style={{ borderLeftColor: teamColor(r.team) }}
           >
             <span
@@ -505,11 +766,6 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
           </div>
         );
       })}
-      {quali && rows.length > 10 && (
-        <p className="pt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Dashed line = top 10
-        </p>
-      )}
     </div>
   );
 }
