@@ -33,7 +33,7 @@ export type OpenF1LapEntry = {
 export type SynthesizedOpenF1Result = {
   position: number | null;
   driver_number: number;
-  duration: number | null;
+  duration: number | Array<number | null> | null;
   gap_to_leader: string | null;
   number_of_laps: number | null;
   dnf: boolean;
@@ -60,16 +60,144 @@ export function hasChequeredFlag(
 }
 
 /**
+ * Infers the [q1EndMs, q2EndMs] segment boundary timestamps for Qualifying or Sprint Qualifying
+ * using:
+ * 1) OpenF1 `/v1/race_control` CHEQUERED flag / session segment end events,
+ * 2) Natural inter-segment track breaks (>= 4.5 min with zero flying laps started across all cars),
+ * 3) Fallback standard session clock offsets from `sessionStartIso` (or first timed lap).
+ */
+export function inferQualifyingSegmentBounds(
+  laps: OpenF1LapEntry[] | null | undefined,
+  raceControl?: OpenF1RaceControlMessage[] | null | undefined,
+  sessionStartIso?: string | null | undefined,
+  isSprintQualifying = false,
+): [number, number] | null {
+  const timedLapStarts: number[] = [];
+  for (const l of laps ?? []) {
+    if (
+      typeof l.lap_duration === "number" &&
+      Number.isFinite(l.lap_duration) &&
+      l.lap_duration > 20 &&
+      l.lap_duration < 300 &&
+      l.date_start
+    ) {
+      const ms = new Date(l.date_start).getTime();
+      if (Number.isFinite(ms) && ms > 0) timedLapStarts.push(ms);
+    }
+  }
+  timedLapStarts.sort((a, b) => a - b);
+
+  // 1) Check race_control for Chequered Flag / Qualifying segment end messages
+  const chequeredMs: number[] = [];
+  for (const m of raceControl ?? []) {
+    if (!m.date) continue;
+    const ms = new Date(m.date).getTime();
+    if (!Number.isFinite(ms) || ms <= 0) continue;
+    const flag = (m.flag ?? "").toUpperCase();
+    const msg = (m.message ?? "").toUpperCase();
+    const isCheq =
+      flag === "CHEQUERED" ||
+      flag === "CHECKERED" ||
+      msg.includes("CHEQUERED FLAG") ||
+      msg.includes("CHECKERED FLAG") ||
+      /Q[123]\s+ENDED|SHOOTOUT.*ENDED/i.test(msg);
+    if (isCheq) {
+      const prev = chequeredMs[chequeredMs.length - 1];
+      // Deduplicate consecutive messages within 6 minutes of the same segment end
+      if (prev == null || ms - prev >= 6 * 60_000) {
+        chequeredMs.push(ms);
+      }
+    }
+  }
+
+  if (chequeredMs.length >= 2) {
+    // Allow 95s grace after Chequered Flag for cars finishing their flying lap started before 0:00
+    return [chequeredMs[0]! + 95_000, chequeredMs[1]! + 95_000];
+  }
+
+  // 2) Detect natural inter-segment breaks (>= 4.5 minutes between flying lap starts)
+  if (timedLapStarts.length >= 10) {
+    const firstLapMs = timedLapStarts[0]!;
+    const minQ1DurationMs = (isSprintQualifying ? 8 : 11) * 60_000;
+    const minBreakMs = 4.2 * 60_000; // 4m12s minimum gap between Q1->Q2 and Q2->Q3 flying laps
+
+    const breaks: Array<{ gapMs: number; afterLapMs: number; beforeLapMs: number }> = [];
+    for (let i = 1; i < timedLapStarts.length; i++) {
+      const prev = timedLapStarts[i - 1]!;
+      const curr = timedLapStarts[i]!;
+      const gap = curr - prev;
+      if (gap >= minBreakMs && prev - firstLapMs >= minQ1DurationMs) {
+        breaks.push({ gapMs: gap, afterLapMs: prev, beforeLapMs: curr });
+      }
+    }
+
+    if (breaks.length >= 2) {
+      // Take the first two valid inter-segment breaks
+      const b1 = breaks[0]!;
+      const b2 = breaks.find((b) => b.afterLapMs - b1.beforeLapMs >= 6 * 60_000) ?? breaks[1]!;
+      return [
+        Math.floor((b1.afterLapMs + b1.beforeLapMs) / 2),
+        Math.floor((b2.afterLapMs + b2.beforeLapMs) / 2),
+      ];
+    }
+    if (breaks.length === 1 && chequeredMs.length === 1) {
+      const c1 = chequeredMs[0]! + 95_000;
+      const b1 = Math.floor((breaks[0]!.afterLapMs + breaks[0]!.beforeLapMs) / 2);
+      if (Math.abs(c1 - b1) >= 8 * 60_000) {
+        return c1 < b1 ? [c1, b1] : [b1, c1];
+      }
+    }
+    if (breaks.length === 1) {
+      const b1 = Math.floor((breaks[0]!.afterLapMs + breaks[0]!.beforeLapMs) / 2);
+      const q2WindowMs = (isSprintQualifying ? 16 : 22) * 60_000;
+      return [b1, b1 + q2WindowMs];
+    }
+  }
+
+  // 3) Fallback to session start clock offsets
+  const anchorMs =
+    (sessionStartIso ? new Date(sessionStartIso).getTime() : NaN) ||
+    (timedLapStarts[0] ? timedLapStarts[0] - 2 * 60_000 : NaN);
+  if (Number.isFinite(anchorMs) && anchorMs > 0) {
+    const q1End = anchorMs + (isSprintQualifying ? 15 : 21) * 60_000;
+    const q2End = anchorMs + (isSprintQualifying ? 30 : 44) * 60_000;
+    return [q1End, q2End];
+  }
+
+  return null;
+}
+
+/**
  * Synthesizes a timed classification table for Practice (FP1/FP2/FP3) and Qualifying
  * (Sprint Qualifying / Qualifying) directly from `/v1/laps` (and optional `/v1/position`),
- * ranking drivers by their fastest `lap_duration` ascending and computing exact gaps to P1.
+ * ranking drivers by their fastest `lap_duration` ascending (or Q3/Q2/Q1 progression)
+ * and computing exact gaps to P1 plus `[q1, q2, q3]` splits for Qualifying.
  */
 export function buildTimedSessionOrderFromLaps(
   laps: OpenF1LapEntry[] | null | undefined,
   positions?: OpenF1PositionEntry[] | null | undefined,
+  options?: {
+    isQualifying?: boolean | undefined;
+    isSprintQualifying?: boolean | undefined;
+    sessionStartIso?: string | null | undefined;
+    raceControl?: OpenF1RaceControlMessage[] | null | undefined;
+  } | undefined,
 ): SynthesizedOpenF1Result[] {
+  const isQualifying = Boolean(options?.isQualifying);
+  const segBounds = isQualifying
+    ? inferQualifyingSegmentBounds(
+        laps,
+        options?.raceControl,
+        options?.sessionStartIso,
+        Boolean(options?.isSprintQualifying),
+      )
+    : null;
+
   const maxLapByDriver = new Map<number, number>();
   const bestLapByDriver = new Map<number, number>();
+  const q1ByDriver = new Map<number, number>();
+  const q2ByDriver = new Map<number, number>();
+  const q3ByDriver = new Map<number, number>();
   const allDriverNums = new Set<number>();
 
   for (const l of laps ?? []) {
@@ -91,15 +219,47 @@ export function buildTimedSessionOrderFromLaps(
       if (l.lap_duration < prev) {
         bestLapByDriver.set(l.driver_number, l.lap_duration);
       }
+
+      if (isQualifying) {
+        const lapMs = l.date_start ? new Date(l.date_start).getTime() : NaN;
+        if (segBounds && Number.isFinite(lapMs) && lapMs > 0) {
+          const [q1End, q2End] = segBounds;
+          if (lapMs <= q1End) {
+            if (l.lap_duration < (q1ByDriver.get(l.driver_number) ?? Infinity)) {
+              q1ByDriver.set(l.driver_number, l.lap_duration);
+            }
+          } else if (lapMs <= q2End) {
+            if (l.lap_duration < (q2ByDriver.get(l.driver_number) ?? Infinity)) {
+              q2ByDriver.set(l.driver_number, l.lap_duration);
+            }
+          } else {
+            if (l.lap_duration < (q3ByDriver.get(l.driver_number) ?? Infinity)) {
+              q3ByDriver.set(l.driver_number, l.lap_duration);
+            }
+          }
+        } else {
+          // No timestamp on lap: store in q1 so it still displays as a valid qualifying time
+          if (l.lap_duration < (q1ByDriver.get(l.driver_number) ?? Infinity)) {
+            q1ByDriver.set(l.driver_number, l.lap_duration);
+          }
+        }
+      }
     }
   }
 
-  const posHint = new Map<number, number>();
-  for (const p of positions ?? []) {
-    if (typeof p.driver_number === "number" && p.driver_number > 0) {
+  // Keep only the latest position per driver from /v1/position
+  const posHint = new Map<number, { position: number; dateMs: number; idx: number }>();
+  if (Array.isArray(positions)) {
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i]!;
+      if (typeof p.driver_number !== "number" || p.driver_number <= 0) continue;
       allDriverNums.add(p.driver_number);
       if (typeof p.position === "number" && p.position > 0) {
-        posHint.set(p.driver_number, p.position);
+        const dateMs = p.date ? new Date(p.date).getTime() : 0;
+        const prev = posHint.get(p.driver_number);
+        if (!prev || (dateMs > 0 && dateMs >= prev.dateMs) || (dateMs === 0 && i >= prev.idx)) {
+          posHint.set(p.driver_number, { position: p.position, dateMs, idx: i });
+        }
       }
     }
   }
@@ -107,29 +267,73 @@ export function buildTimedSessionOrderFromLaps(
   if (allDriverNums.size === 0) return [];
 
   const sorted = [...allDriverNums].sort((a, b) => {
+    if (isQualifying) {
+      // If /v1/position has a full classification and we have segment splits,
+      // sort by Q3 -> Q2 -> Q1 progression first, with posHint tie-breaking
+      const q3a = q3ByDriver.get(a);
+      const q3b = q3ByDriver.get(b);
+      if (q3a != null || q3b != null) {
+        if (q3a != null && q3b != null && q3a !== q3b) return q3a - q3b;
+        if (q3a != null) return -1;
+        if (q3b != null) return 1;
+      }
+      const q2a = q2ByDriver.get(a);
+      const q2b = q2ByDriver.get(b);
+      if (q2a != null || q2b != null) {
+        if (q2a != null && q2b != null && q2a !== q2b) return q2a - q2b;
+        if (q2a != null) return -1;
+        if (q2b != null) return 1;
+      }
+      const q1a = q1ByDriver.get(a);
+      const q1b = q1ByDriver.get(b);
+      if (q1a != null || q1b != null) {
+        if (q1a != null && q1b != null && q1a !== q1b) return q1a - q1b;
+        if (q1a != null) return -1;
+        if (q1b != null) return 1;
+      }
+    }
+
     const ba = bestLapByDriver.get(a) ?? Infinity;
     const bb = bestLapByDriver.get(b) ?? Infinity;
     if (ba !== bb) return ba - bb;
-    const pa = posHint.get(a) ?? 999;
-    const pb = posHint.get(b) ?? 999;
+    const pa = posHint.get(a)?.position ?? 999;
+    const pb = posHint.get(b)?.position ?? 999;
     if (pa !== pb) return pa - pb;
     const la = maxLapByDriver.get(a) ?? 0;
     const lb = maxLapByDriver.get(b) ?? 0;
     return lb - la || a - b;
   });
 
-  const leaderBest = bestLapByDriver.get(sorted[0]!) ?? null;
+  const getDriverHeadlineSec = (num: number): number | null => {
+    if (isQualifying) {
+      return (
+        q3ByDriver.get(num) ??
+        q2ByDriver.get(num) ??
+        q1ByDriver.get(num) ??
+        bestLapByDriver.get(num) ??
+        null
+      );
+    }
+    return bestLapByDriver.get(num) ?? null;
+  };
+
+  const leaderBest = getDriverHeadlineSec(sorted[0]!) ?? null;
 
   return sorted.map((driver_number, idx) => {
-    const best = bestLapByDriver.get(driver_number) ?? null;
+    const headline = getDriverHeadlineSec(driver_number);
     const gap =
-      idx > 0 && best != null && leaderBest != null && best > leaderBest
-        ? `+${(best - leaderBest).toFixed(3)}`
+      idx > 0 && headline != null && leaderBest != null && headline > leaderBest
+        ? `+${(headline - leaderBest).toFixed(3)}`
         : null;
+
+    const q1 = q1ByDriver.get(driver_number) ?? (!isQualifying ? null : headline);
+    const q2 = q2ByDriver.get(driver_number) ?? null;
+    const q3 = q3ByDriver.get(driver_number) ?? null;
+
     return {
       position: idx + 1,
       driver_number,
-      duration: best,
+      duration: isQualifying ? [q1, q2, q3] : headline,
       gap_to_leader: gap,
       number_of_laps: maxLapByDriver.get(driver_number) ?? null,
       dnf: false,

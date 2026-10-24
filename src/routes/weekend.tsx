@@ -105,14 +105,41 @@ const STATUS_STYLE: Record<Status, { label: string; color: string }> = {
   completed: { label: "Completed", color: "var(--track-green)" },
 };
 
-// ---- small local cache for finished sessions (they never change) ----
-const cacheKey = (raceId: string, type: string) => `dfr:session:${raceId}:${type}`;
-function readCache(raceId: string, type: string): SessionPayload | undefined {
+/**
+ * Checks whether a session's rows have complete timing data (actual lap times
+ * and, for Qualifying / Sprint Qualifying, Q1/Q2/Q3 splits).
+ * Position-only snapshots are never locked into localStorage or infinite staleTime.
+ */
+function hasCompleteTiming(rows: ClassRow[] | null | undefined, type: SessionType): boolean {
+  if (!Array.isArray(rows) || rows.length < 5) return false;
+  const withTime = rows.filter((r) => Boolean(r.time && r.time.trim())).length;
+  if (type === "fp1" || type === "fp2" || type === "fp3") {
+    return withTime >= 5;
+  }
+  if (type === "qualifying" || type === "sprint_qualifying") {
+    const withSplits = rows.filter(
+      (r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3)),
+    ).length;
+    return withTime >= 5 && withSplits >= 5;
+  }
+  if (type === "sprint") {
+    return rows.filter((r) => Boolean(r.time) || Boolean(r.gap) || r.laps != null).length >= 5;
+  }
+  return withTime >= 5;
+}
+
+// ---- small local cache for finished sessions with COMPLETE timing ----
+const legacyCacheKey = (raceId: string, type: string) => `dfr:session:${raceId}:${type}`;
+const cacheKey = (raceId: string, type: string) => `dfr:session:v3:${raceId}:${type}`;
+
+function readCache(raceId: string, type: SessionType): SessionPayload | undefined {
   try {
+    // Purge legacy v1/v2 cache keys that may have stored position-only rows without lap times
+    window.localStorage.removeItem(legacyCacheKey(raceId, type));
     const raw = window.localStorage.getItem(cacheKey(raceId, type));
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as SessionPayload;
-    if (parsed.state !== "ready" || !Array.isArray(parsed.rows) || parsed.rows.length < 5) {
+    if (parsed.state !== "ready" || !hasCompleteTiming(parsed.rows, type)) {
       window.localStorage.removeItem(cacheKey(raceId, type));
       return undefined;
     }
@@ -121,10 +148,13 @@ function readCache(raceId: string, type: string): SessionPayload | undefined {
     return undefined;
   }
 }
-function writeCache(raceId: string, type: string, payload: SessionPayload) {
+
+function writeCache(raceId: string, type: SessionType, payload: SessionPayload) {
   try {
-    if (payload.state === "ready" && Array.isArray(payload.rows) && payload.rows.length >= 5) {
+    if (payload.state === "ready" && hasCompleteTiming(payload.rows, type)) {
       window.localStorage.setItem(cacheKey(raceId, type), JSON.stringify(payload));
+    } else {
+      window.localStorage.removeItem(cacheKey(raceId, type));
     }
   } catch {
     /* storage unavailable: ignore */
@@ -354,17 +384,17 @@ function SessionResults({
     retry: 1,
     initialData: () => readCache(raceId, type),
     staleTime: (query) =>
-      query.state.data?.state === "ready" && (query.state.data?.rows.length ?? 0) >= 5
+      query.state.data?.state === "ready" && hasCompleteTiming(query.state.data?.rows, type)
         ? Number.POSITIVE_INFINITY
         : 15_000,
     refetchInterval: (query) =>
-      query.state.data?.state === "ready" && (query.state.data?.rows.length ?? 0) >= 5
+      query.state.data?.state === "ready" && hasCompleteTiming(query.state.data?.rows, type)
         ? false
         : 20_000,
     refetchIntervalInBackground: false,
     queryFn: async () => {
       const r = await getWeekendSession({ data: { raceId, sessionType: type } });
-      if (r.state === "ready" && r.rows.length >= 5) writeCache(raceId, type, r);
+      writeCache(raceId, type, r);
       return r;
     },
   });
@@ -401,7 +431,33 @@ function SessionResults({
       />
     );
 
-  return <ClassTable rows={data.rows} type={type} />;
+  const isTimingComplete = hasCompleteTiming(data.rows, type);
+
+  return (
+    <div className="space-y-2.5">
+      {!isTimingComplete && (
+        <div className="carbon-panel flex items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2">
+          <div className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+            <span className="h-2 w-2 animate-ping rounded-full bg-primary" />
+            <span>
+              {type === "qualifying" || type === "sprint_qualifying"
+                ? "Syncing Q1 / Q2 / Q3 lap times..."
+                : "Syncing official lap times..."}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void q.refetch()}
+            disabled={q.isFetching}
+            className="shrink-0 rounded border border-primary/40 bg-primary/15 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-primary transition hover:bg-primary/25 disabled:opacity-50"
+          >
+            {q.isFetching ? "Syncing..." : "Refresh timing"}
+          </button>
+        </div>
+      )}
+      <ClassTable rows={data.rows} type={type} />
+    </div>
+  );
 }
 
 function statusLikeState(startsAt: string, type: SessionType, now: number): SessionPayload["state"] {
@@ -415,7 +471,7 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
     <div className="space-y-1">
       {rows.map((r, i) => {
         const sub = quali
-          ? [r.q1 && `Q1 ${r.q1}`, r.q2 && `Q2 ${r.q2}`, r.q3 && `Q3 ${r.q3}`].filter(Boolean).join(" \u00B7 ")
+          ? [r.q1 && `Q1 ${r.q1}`, r.q2 && `Q2 ${r.q2}`, r.q3 && `Q3 ${r.q3}`, r.gap].filter(Boolean).join(" \u00B7 ")
           : [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" \u00B7 ");
         return (
           <div

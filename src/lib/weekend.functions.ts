@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type { Json } from "@/integrations/supabase/types";
-import { getJson, toIso as iso, fmtLap } from "./f1-parsers";
+import { getJson, toIso as iso, fmtLap, parseLapTimeSeconds } from "./f1-parsers";
 import {
   buildDriverLookup,
   fetchFromEspnScoreboard,
@@ -89,6 +89,132 @@ const inFlightLiveRace = new Map<string, Promise<LiveRaceTelemetryPayload>>();
 const cachedPoleByRace = new Map<string, string>(); // raceId -> driver_id
 
 type JSess = { date: string; time?: string | undefined };
+
+/**
+ * Verifies that a session classification not only has driver positions (>= 5 rows),
+ * but ALSO has actual lap times (`time`) and, for Qualifying / Sprint Qualifying,
+ * `Q1 / Q2 / Q3` segment splits. Prevents position-only snapshots from locking
+ * the DB or browser cache before full timing telemetry arrives.
+ */
+export function hasCompleteTimingData(
+  rows: ClassRow[] | null | undefined,
+  type: SessionType,
+): boolean {
+  if (!Array.isArray(rows) || rows.length < 5) return false;
+  const withTime = rows.filter((r) => Boolean(r.time && r.time.trim())).length;
+  if (type === "fp1" || type === "fp2" || type === "fp3") {
+    return withTime >= 5;
+  }
+  if (type === "qualifying" || type === "sprint_qualifying") {
+    const withSplits = rows.filter(
+      (r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3)),
+    ).length;
+    return withTime >= 5 && withSplits >= 5;
+  }
+  if (type === "sprint") {
+    const withSprintInfo = rows.filter(
+      (r) => Boolean(r.time) || Boolean(r.gap) || r.laps != null,
+    ).length;
+    return withSprintInfo >= 5;
+  }
+  return withTime >= 5;
+}
+
+/**
+ * Merges timing fields (`time`, `q1`, `q2`, `q3`, `gap`, `laps`) from fallback engine rows
+ * into the primary classification order so that if one API provides official positions
+ * and another provides lap times / Q-splits, the combined result has both.
+ */
+export function mergeClassRows(
+  primary: ClassRow[],
+  type: SessionType,
+  ...fallbacks: ClassRow[][]
+): ClassRow[] {
+  if (!primary.length) {
+    for (const fb of fallbacks) {
+      if (fb.length > 0) return fb;
+    }
+    return [];
+  }
+
+  const isTimedSession =
+    type === "fp1" ||
+    type === "fp2" ||
+    type === "fp3" ||
+    type === "qualifying" ||
+    type === "sprint_qualifying";
+
+  const findMatch = (target: ClassRow, pool: ClassRow[]): ClassRow | undefined => {
+    if (target.driverId) {
+      const m = pool.find((x) => x.driverId === target.driverId);
+      if (m) return m;
+    }
+    if (target.code) {
+      const c = target.code.toUpperCase();
+      const m = pool.find((x) => x.code?.toUpperCase() === c);
+      if (m) return m;
+    }
+    if (target.number != null) {
+      const m = pool.find((x) => x.number === target.number);
+      if (m) return m;
+    }
+    return undefined;
+  };
+
+  const merged = primary.map((row) => {
+    let time = row.time;
+    let q1 = row.q1;
+    let q2 = row.q2;
+    let q3 = row.q3;
+    let gap = row.gap;
+    let laps = row.laps;
+    let status = row.status;
+
+    for (const fb of fallbacks) {
+      if (!fb.length) continue;
+      const m = findMatch(row, fb);
+      if (!m) continue;
+      if (!q1 && m.q1) q1 = m.q1;
+      if (!q2 && m.q2) q2 = m.q2;
+      if (!q3 && m.q3) q3 = m.q3;
+      if (!time && m.time) time = m.time;
+      if (!gap && m.gap) gap = m.gap;
+      if (laps == null && m.laps != null) laps = m.laps;
+      if (!status && m.status) status = m.status;
+    }
+
+    if (isTimedSession && !time) {
+      time = q3 || q2 || q1 || null;
+    }
+
+    return {
+      ...row,
+      time,
+      q1,
+      q2,
+      q3,
+      gap,
+      laps,
+      status,
+    };
+  });
+
+  if (isTimedSession && merged.length > 1) {
+    const p1Sec = parseLapTimeSeconds(merged[0]?.time);
+    if (p1Sec != null) {
+      return merged.map((r, idx) => {
+        if (idx === 0 || r.position === 1) return { ...r, gap: null };
+        if (r.gap) return r;
+        const rSec = parseLapTimeSeconds(r.time);
+        const computedGap =
+          rSec != null && rSec > p1Sec ? `+${(rSec - p1Sec).toFixed(3)}` : null;
+        return { ...r, gap: computedGap };
+      });
+    }
+  }
+
+  return merged;
+}
 
 // ---------------------------------------------------------------- schedule
 
@@ -190,7 +316,8 @@ async function loadRace(admin: Admin, raceId: string): Promise<DbRace | null> {
 
 /**
  * Proactively archives completed sessions (FP1/FP2/FP3/SQ/Sprint/Qualifying)
- * into `weekend_sessions` in the background so they are permanently cached in DB.
+ * into `weekend_sessions` in the background, and automatically upgrades any
+ * previously saved position-only rows once full lap times & Q1/Q2/Q3 splits arrive.
  */
 async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessRow[]) {
   const now = Date.now();
@@ -198,19 +325,25 @@ async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessR
     if (!row.starts_at || !isSessionType(row.session_type) || row.session_type === "race") continue;
     const type = row.session_type as SessionType;
     const end = new Date(row.starts_at).getTime() + SESSION_MINUTES[type] * MIN;
-    const cached = Array.isArray(row.classification) ? row.classification : [];
-    if (now >= end && (row.status !== "completed" || cached.length < 5)) {
+    const cached = Array.isArray(row.classification)
+      ? (row.classification as unknown as ClassRow[])
+      : [];
+    const cachedComplete = hasCompleteTimingData(cached, type);
+
+    if (now >= end && (row.status !== "completed" || !cachedComplete)) {
       const key = `backfill:${race.id}:${type}`;
-      if (now - (attempts.get(key) ?? 0) < 30_000) continue;
+      if (now - (attempts.get(key) ?? 0) < 25_000) continue;
       attempts.set(key, now);
       try {
         const fresh = await fetchClassification(admin, race, type, row.starts_at);
-        if (fresh.length >= 5) {
+        const merged = cached.length >= 5 ? mergeClassRows(fresh, type, cached) : fresh;
+        if (merged.length >= 5) {
+          const isComplete = hasCompleteTimingData(merged, type);
           await admin
             .from("weekend_sessions")
             .update({
-              classification: fresh as unknown as Json,
-              status: "completed",
+              classification: merged as unknown as Json,
+              status: isComplete ? "completed" : "live",
               updated_at: new Date().toISOString(),
             })
             .eq("id", row.id);
@@ -283,7 +416,7 @@ async function fromJolpica(
       };
     }>(`${JOLPICA}/${SEASON}/${race.round}/qualifying/?format=json`);
     const list = j?.MRData.RaceTable.Races?.[0]?.QualifyingResults ?? [];
-    return list.map((r) => {
+    const rows = list.map((r) => {
       const d = resolveDriver(lookup, {
         driverId: r.Driver.driverId,
         code: r.Driver.code,
@@ -303,8 +436,9 @@ async function fromJolpica(
         q1: r.Q1 || null,
         q2: r.Q2 || null,
         q3: r.Q3 || null,
-      };
+      } satisfies ClassRow;
     });
+    return mergeClassRows(rows, "qualifying");
   }
 
   const endpoint = type === "sprint" ? "sprint" : "results";
@@ -407,19 +541,80 @@ async function fromOpenF1(
     type === "fp3" ||
     type === "qualifying" ||
     type === "sprint_qualifying";
+  const isQuali = type === "qualifying" || type === "sprint_qualifying";
+
+  const hasValidDuration = (d: number | Array<number | null> | null): boolean => {
+    if (typeof d === "number") return Number.isFinite(d) && d > 0;
+    if (Array.isArray(d)) return d.some((x) => typeof x === "number" && Number.isFinite(x) && x > 0);
+    return false;
+  };
 
   let res: OfResult[] = Array.isArray(rawRes) ? rawRes : [];
-  if (res.filter((r) => r.position != null).length < 5) {
-    // Mid-session or post-session fallback when session_result is not yet populated
-    const [laps, positions] = await Promise.all([
-      getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${match.session_key}`),
-      getJson<OpenF1PositionEntry[]>(`${OPENF1}/position?session_key=${match.session_key}`),
+  const hasPositions = res.filter((r) => r.position != null).length >= 5;
+  const hasTimes = res.filter((r) => hasValidDuration(r.duration)).length >= 5;
+  const hasQualiSplits =
+    !isQuali ||
+    res.filter(
+      (r) =>
+        Array.isArray(r.duration) &&
+        r.duration.filter((x) => typeof x === "number" && x > 0).length >= 2,
+    ).length >= 5;
+
+  // Fetch /v1/laps whenever positions, lap times, or Q1/Q2/Q3 splits are missing!
+  if (!hasPositions || (isTimedSession && (!hasTimes || !hasQualiSplits))) {
+    const [laps, positions, raceControl] = await Promise.all([
+      getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${match.session_key}`, {
+        timeoutMs: 9_000,
+        retries: 1,
+      }),
+      !hasPositions
+        ? getJson<OpenF1PositionEntry[]>(`${OPENF1}/position?session_key=${match.session_key}`)
+        : Promise.resolve(null),
+      isQuali
+        ? getJson<OpenF1RaceControlMessage[]>(
+            `${OPENF1}/race_control?session_key=${match.session_key}`,
+          )
+        : Promise.resolve(null),
     ]);
+
     const synth = isTimedSession
-      ? buildTimedSessionOrderFromLaps(laps, positions)
+      ? buildTimedSessionOrderFromLaps(laps, positions, {
+          isQualifying: isQuali,
+          isSprintQualifying: type === "sprint_qualifying",
+          sessionStartIso: match.date_start ?? startsAt,
+          raceControl,
+        })
       : buildLiveOrderFromPositions(positions, laps, null);
-    if (synth.length > 0) res = synth;
+
+    if (!hasPositions && synth.length > 0) {
+      res = synth;
+    } else if (hasPositions && synth.length > 0) {
+      // Merge synthesized lap times & Q1/Q2/Q3 splits into the official /v1/session_result positions!
+      const synthByNum = new Map(synth.map((s) => [s.driver_number, s]));
+      res = res.map((r) => {
+        const s = synthByNum.get(r.driver_number);
+        if (!s) return r;
+        let mergedDur = r.duration;
+        if (!hasValidDuration(mergedDur)) {
+          mergedDur = s.duration;
+        } else if (isQuali && Array.isArray(s.duration)) {
+          const origArr = Array.isArray(r.duration) ? r.duration : [r.duration, null, null];
+          mergedDur = [
+            origArr[0] ?? s.duration[0] ?? null,
+            origArr[1] ?? s.duration[1] ?? null,
+            origArr[2] ?? s.duration[2] ?? null,
+          ];
+        }
+        return {
+          ...r,
+          duration: mergedDur,
+          gap_to_leader: r.gap_to_leader ?? s.gap_to_leader,
+          number_of_laps: r.number_of_laps ?? s.number_of_laps,
+        };
+      });
+    }
   }
+
   if (!res.length) return [];
 
   const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
@@ -430,7 +625,7 @@ async function fromOpenF1(
     return v;
   };
 
-  return res
+  const rows = res
     .map((r) => {
       const ofMeta = ofDrvByNum.get(r.driver_number);
       const d = resolveDriver(lookup, {
@@ -463,14 +658,20 @@ async function fromOpenF1(
       } satisfies ClassRow;
     })
     .sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+
+  return mergeClassRows(rows, type);
 }
 
 /**
- * 4-Engine Classification Cascade for Practice 1/2/3, Sprint Qualifying, Sprint, and Qualifying:
- * 1) Jolpica F1 (for official Qualifying / Sprint classifications)
- * 2) OpenF1 (session_result + timed laps synthesizer + position synthesizer)
+ * 4-Engine Classification Cascade + Cross-Engine Timing Merger for Practice 1/2/3,
+ * Sprint Qualifying, Sprint, and Qualifying:
+ * 1) Jolpica F1 (official Qualifying Q1/Q2/Q3 & Sprint classifications)
+ * 2) OpenF1 (session_result + timed laps & Q1/Q2/Q3 synthesizer + position synthesizer)
  * 3) Official F1 Live Timing SignalR & Static stream (zero-auth live & post-session feed)
  * 4) ESPN F1 Live Scoreboard API (zero-auth live & completed weekend feed)
+ *
+ * Automatically merges lap times & Q1/Q2/Q3 splits across all engines so position-only
+ * responses are enriched with full lap times whenever available.
  */
 async function fetchClassification(
   admin: Admin,
@@ -481,23 +682,34 @@ async function fetchClassification(
   const { data: drivers } = await admin.from("drivers").select("id, code, full_name, team, number");
   const lookup = buildDriverLookup((drivers ?? []) as DriverRef[]);
 
+  let jRows: ClassRow[] = [];
   if (type === "qualifying" || type === "sprint") {
-    const jRows = await fromJolpica(race, type, lookup);
-    if (jRows.length >= 5) return jRows;
+    jRows = await fromJolpica(race, type, lookup);
+    if (hasCompleteTimingData(jRows, type)) return jRows;
   }
 
   const ofRows = await fromOpenF1(type, startsAt, lookup);
-  if (ofRows.length >= 5) return ofRows;
+  if (hasCompleteTimingData(ofRows, type)) {
+    return jRows.length >= 5 ? mergeClassRows(jRows, type, ofRows) : ofRows;
+  }
 
   const [f1Live, espnLive] = await Promise.all([
     fetchFromF1LiveTiming(type, startsAt, lookup),
     fetchFromEspnScoreboard(type, startsAt, lookup),
   ]);
 
-  if (f1Live && f1Live.rows.length >= 5) return f1Live.rows;
-  if (espnLive && espnLive.rows.length >= 5) return espnLive.rows;
+  const f1Rows = f1Live?.rows ?? [];
+  const espnRows = espnLive?.rows ?? [];
 
-  return ofRows.length > 0 ? ofRows : (f1Live?.rows ?? espnLive?.rows ?? []);
+  // Pick the best primary ordering (preferring sources with complete timing, then >= 5 positions)
+  const candidates = [jRows, ofRows, f1Rows, espnRows].filter((c) => c.length >= 5);
+  if (!candidates.length) {
+    return ofRows.length > 0 ? ofRows : f1Rows.length > 0 ? f1Rows : espnRows;
+  }
+
+  const completeCandidate = candidates.find((c) => hasCompleteTimingData(c, type));
+  const primary = completeCandidate ?? candidates[0]!;
+  return mergeClassRows(primary, type, jRows, ofRows, f1Rows, espnRows);
 }
 
 /**
@@ -624,17 +836,23 @@ export const getWeekendSession = createServerFn({ method: "POST" })
       }
       const liveRows = await inflight;
       const effectiveRows =
-        liveRows.length > 0 ? liveRows : (mem?.rows.length ? mem.rows : cached);
+        liveRows.length > 0
+          ? cached.length > 0
+            ? mergeClassRows(liveRows, type, cached)
+            : liveRows
+          : mem?.rows.length
+            ? mem.rows
+            : cached;
 
       if (effectiveRows.length > 0) {
         liveSessionCache.set(key, { ts: Date.now(), rows: effectiveRows });
       }
       // Persist latest live classification snapshot to DB so it survives after session ends
-      if (liveRows.length >= 5) {
+      if (effectiveRows.length >= 5) {
         void supabaseAdmin
           .from("weekend_sessions")
           .update({
-            classification: liveRows as unknown as Json,
+            classification: effectiveRows as unknown as Json,
             status: "live",
             updated_at: new Date().toISOString(),
           })
@@ -643,32 +861,42 @@ export const getWeekendSession = createServerFn({ method: "POST" })
       return { state: "live", startsAt: row.starts_at, rows: effectiveRows };
     }
 
-    if (cached.length >= 5 && row.status === "completed") {
+    // Post-session: only serve from DB without re-fetching if it has COMPLETE timing data
+    const cachedIsComplete = hasCompleteTimingData(cached, type);
+    if (cachedIsComplete && row.status === "completed") {
       return { state: "ready", startsAt: row.starts_at, rows: cached };
     }
 
-    if (now - (attempts.get(key) ?? 0) < 12_000 && cached.length >= 5) {
+    if (now - (attempts.get(key) ?? 0) < 12_000 && cachedIsComplete) {
       return { state: "ready", startsAt: row.starts_at, rows: cached };
     }
     attempts.set(key, now);
 
     const fresh = await fetchClassification(supabaseAdmin, race, type, row.starts_at);
-    if (!fresh.length) {
-      if (cached.length > 0) {
-        return { state: "ready", startsAt: row.starts_at, rows: cached };
-      }
+    const merged =
+      fresh.length >= 5
+        ? cached.length >= 5
+          ? mergeClassRows(fresh, type, cached)
+          : fresh
+        : cached.length >= 5
+          ? mergeClassRows(cached, type, fresh)
+          : fresh;
+
+    if (!merged.length) {
       return { state: "pending", startsAt: row.starts_at, rows: [] };
     }
 
+    const isComplete = hasCompleteTimingData(merged, type);
     await supabaseAdmin
       .from("weekend_sessions")
       .update({
-        classification: fresh as unknown as Json,
-        status: "completed",
+        classification: merged as unknown as Json,
+        status: isComplete ? "completed" : "live",
         updated_at: new Date().toISOString(),
       })
       .eq("id", row.id);
-    return { state: "ready", startsAt: row.starts_at, rows: fresh };
+
+    return { state: "ready", startsAt: row.starts_at, rows: merged };
   });
 
 /**
