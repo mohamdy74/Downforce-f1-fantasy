@@ -6,7 +6,7 @@ export const VAPID_PUBLIC_KEY =
   envObj["VAPID_PUBLIC_KEY"] ||
   "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
 
-export const VAPID_PRIVATE_KEY = envObj["VAPID_PRIVATE_KEY"] || "";
+export const VAPID_PRIVATE_KEY = typeof window === "undefined" ? (envObj["VAPID_PRIVATE_KEY"] || "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs") : "";
 export const VAPID_SUBJECT = "mailto:admin@downforce.app";
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {

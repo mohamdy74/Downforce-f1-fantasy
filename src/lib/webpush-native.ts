@@ -4,7 +4,7 @@ if (typeof window !== "undefined") {
 
 const DEFAULT_VAPID_PUBLIC =
   "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-const DEFAULT_VAPID_PRIVATE = "";
+const DEFAULT_VAPID_PRIVATE = "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs";
 
 function b64urlDecode(str: string): Uint8Array {
   const pad = "=".repeat((4 - (str.length % 4)) % 4);
