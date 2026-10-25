@@ -200,15 +200,15 @@ export function SprintGrid({
               Drivers · filling <span className="text-primary">P{active + 1}</span> <span className="ml-1 text-foreground">({used.size}/{size})</span> <button type="button" onClick={() => document.querySelector("[data-slot=\"0\"]")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="ml-2 text-primary underline">Top</button>
             </p>
 
-            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-background/75 px-3 py-2.5 backdrop-blur-xl sm:mx-0 sm:rounded-lg">
+            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-transparent px-3 py-2.5 sm:mx-0">
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}
-                className="shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest backdrop-blur-md transition-all duration-200 active:scale-95"
+                className="shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
                 style={{
                   background: allOn
-                    ? `linear-gradient(145deg, color-mix(in oklch, ${primaryColor} 34%, rgba(36, 40, 58, 0.9)) 0%, color-mix(in oklch, ${primaryColor} 16%, rgba(18, 20, 30, 0.94)) 100%)`
-                    : "linear-gradient(145deg, rgba(44, 48, 68, 0.68) 0%, rgba(22, 25, 36, 0.84) 100%)",
+                    ? `color-mix(in oklch, ${primaryColor} 22%, rgba(255, 255, 255, 0.05))`
+                    : "rgba(255, 255, 255, 0.03)",
                   borderColor: allOn ? primaryColor : "rgba(255, 255, 255, 0.16)",
                   borderBottom: allOn
                     ? "2px solid oklch(1 0 0 / 0.45)"
@@ -217,7 +217,7 @@ export function SprintGrid({
                   textShadow: allOn ? `0 0 10px ${primaryColor}` : undefined,
                   boxShadow: allOn
                     ? `inset 0 0 22px -6px color-mix(in oklch, ${primaryColor} 70%, transparent), 0 0 16px -3px ${primaryColor}, inset 0 1px 0 rgba(255, 255, 255, 0.32)`
-                    : "inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 10px -4px rgba(0, 0, 0, 0.5)",
+                    : "inset 0 1px 0 rgba(255, 255, 255, 0.14)",
                 }}
               >
                 All
@@ -230,11 +230,11 @@ export function SprintGrid({
                     key={t}
                     type="button"
                     onClick={() => setTeamFilter(on ? null : t)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest backdrop-blur-md transition-all duration-200 active:scale-95"
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
                     style={{
                       background: on
-                        ? `linear-gradient(145deg, color-mix(in oklch, ${color} 36%, rgba(36, 40, 58, 0.9)) 0%, color-mix(in oklch, ${color} 16%, rgba(18, 20, 30, 0.94)) 100%)`
-                        : `linear-gradient(145deg, color-mix(in oklch, ${color} 10%, rgba(44, 48, 68, 0.68)) 0%, rgba(22, 25, 36, 0.84) 100%)`,
+                        ? `color-mix(in oklch, ${color} 22%, rgba(255, 255, 255, 0.05))`
+                        : `color-mix(in oklch, ${color} 6%, rgba(255, 255, 255, 0.02))`,
                       borderColor: on
                         ? color
                         : `color-mix(in oklch, ${color} 35%, rgba(255, 255, 255, 0.16))`,
@@ -245,7 +245,7 @@ export function SprintGrid({
                       textShadow: on ? `0 0 10px color-mix(in oklch, ${color} 85%, transparent)` : undefined,
                       boxShadow: on
                         ? `inset 0 0 22px -6px color-mix(in oklch, ${color} 72%, transparent), 0 0 16px -3px ${color}, inset 0 1px 0 rgba(255, 255, 255, 0.34)`
-                        : `inset 0 0 16px -9px color-mix(in oklch, ${color} 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 10px -4px rgba(0, 0, 0, 0.5)`,
+                        : `inset 0 0 16px -9px color-mix(in oklch, ${color} 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.15)`,
                     }}
                   >
                     <span
