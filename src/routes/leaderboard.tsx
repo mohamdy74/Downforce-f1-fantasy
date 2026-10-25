@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
@@ -422,7 +422,7 @@ function Leaderboard() {
         )}
       </div>
 
-      {/* Clean Minimal Segmented Tab Bar (Zero overflow on mobile) */}
+      {/* Clean Minimal Segmented Tab Bar */}
       <div
         role="tablist"
         aria-label="Standings view"
@@ -606,7 +606,7 @@ function Leaderboard() {
         </section>
       )}
 
-      {/* TAB 2: F1 DRIVERS STANDINGS (Minimal Timing Tower) */}
+      {/* TAB 2: F1 DRIVERS STANDINGS */}
       {activeTab === "drivers" && (
         <section className="mt-8">
           {f1Loading ? (
@@ -643,12 +643,6 @@ function Leaderboard() {
                   const gap = index === 0 ? "LEADER" : `-${topDriverPoints - d.points}`;
                   const isOpen = openDriver === d.driverId;
 
-                  const metaParts = [d.team];
-                  if (d.wins > 0) metaParts.push(`${d.wins}W`);
-                  if (d.podiums > 0) metaParts.push(`${d.podiums} POD`);
-                  if (d.poles > 0) metaParts.push(`${d.poles} POLE`);
-                  if (d.fastestLaps > 0) metaParts.push(`${d.fastestLaps} FL`);
-
                   return (
                     <div key={d.driverId}>
                       <button
@@ -683,9 +677,24 @@ function Leaderboard() {
                               </span>
                             )}
                           </div>
-                          <p className="truncate font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                            {metaParts.join(" · ")}
-                          </p>
+
+                          <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                            <span className="truncate">{d.team}</span>
+                            <span className="opacity-40">·</span>
+                            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground/80">
+                              Driver stats
+                              <ChevronDown
+                                className={cn(
+                                  "h-3.5 w-3.5 transition-transform duration-200",
+                                  isOpen && "rotate-180",
+                                )}
+                                style={{
+                                  color: tColor,
+                                  filter: `drop-shadow(0 0 6px ${tColor})`,
+                                }}
+                              />
+                            </span>
+                          </div>
                         </div>
 
                         <div className="shrink-0 text-right">
@@ -759,7 +768,7 @@ function Leaderboard() {
         </section>
       )}
 
-      {/* TAB 3: CONSTRUCTORS STANDINGS (Compact & Minimal: Driver Code + Points only) */}
+      {/* TAB 3: CONSTRUCTORS STANDINGS */}
       {activeTab === "constructors" && (
         <section className="mt-8">
           {f1Loading ? (
@@ -803,7 +812,6 @@ function Leaderboard() {
                         )}
                       </div>
 
-                      {/* Driver Code + Points only (compact inline pills) */}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {c.drivers.map((drv) => (
                           <span
