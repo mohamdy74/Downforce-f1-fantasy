@@ -6,14 +6,14 @@ import { toast } from "sonner";
 import { Countdown } from "@/components/Countdown";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker"; import { SprintGrid } from "@/components/SprintGrid";
 import { LightsOut } from "@/components/LightsOut";
-import { MissingPlayers } from "@/components/MissingPlayers"; import { assertDeadlineOpen, logPredAudit } from "@/lib/reminders.functions";
+import { MissingPlayers } from "@/components/MissingPlayers";
+import { assertDeadlineOpen, logPredAudit } from "@/lib/prediction.functions";
 import { SharePicks } from "@/components/SharePicks";
 import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { isCompleteTop10 } from "@/lib/push-keys";
-import { driversQuery, getTrustedNow, nextRace, racesQuery, type Driver } from "@/lib/queries";
+import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
 
@@ -151,7 +151,7 @@ function Predict() {
   useEffect(() => {
     if (!draftKey || draftChecked.current || prediction === undefined) return;
     draftChecked.current = true;
-    if (isCompleteTop10(prediction?.top10)) return; // already locked in
+    if ((prediction?.top10 ?? []).filter(Boolean).length === 10) return; // already locked in
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
@@ -169,7 +169,7 @@ function Predict() {
   useEffect(() => {
     if (!draftKey || !draftChecked.current) return;
     try {
-      const done = isCompleteTop10(prediction?.top10);
+      const done = (prediction?.top10 ?? []).filter(Boolean).length === 10;
       const empty = top10.every((x) => x === EMPTY) && fastestLap === EMPTY && dnf === EMPTY;
       if (done || empty) window.localStorage.removeItem(draftKey);
       else
@@ -186,12 +186,12 @@ function Predict() {
     }
   }, [draftKey, top10, fastestLap, dnf, prediction]);
 
-  const now = getTrustedNow();
+  const now = Date.now();
   const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
   const poleLocked =
     raceLocked ||
     (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
-  const hasSaved = !!prediction && isCompleteTop10(prediction.top10);
+  const hasSaved = !!prediction && (prediction.top10?.length ?? 0) === 10;
   // Saved picks open in view mode so stray taps while scrolling can't change them.
   const viewOnly = raceLocked || (hasSaved && !editing);
 
@@ -232,10 +232,10 @@ function Predict() {
     );
   }
 
-  // In-page reminder banner — red alert when picks not submitted
+  // In-page status banner when picks are not yet locked in
   const notSubmitted =
-    prediction !== undefined && !isCompleteTop10(prediction?.top10) &&
-    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > now));
+    prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
+    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
   const duplicates = usedInTop10.length !== new Set(usedInTop10).size;
@@ -306,7 +306,7 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && isCompleteTop10(prediction.top10) ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
+    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
     try {
       window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
     } catch {
@@ -356,55 +356,98 @@ function Predict() {
     ? (readPoleAt(user.id, race.id, savedPole) ?? prediction?.updated_at ?? null)
     : null;
 
+  const raceTimeCairo = race.race_at
+    ? new Date(race.race_at).toLocaleString("en-GB", {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Africa/Cairo",
+      })
+    : null;
+
+  function scrollToPicker() {
+    const targetId = poleLocked ? "grid-section" : "pole-section";
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-10">
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
-        Round {race.round}
-      </p>
+    <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+          Round {race.round}
+        </p>
+        <TrackStatus target={race.race_at} />
+      </div>
       <h1 className="mt-1 text-3xl">{race.name}</h1>
       <p className="text-sm text-muted-foreground">
         {race.circuit}
         {race.country ? ` · ${race.country}` : ""}
       </p>
 
-      <TrackStatus target={race.race_at} />
-
-      {/* Reminder banner — red when picks not submitted, shows time left */}
+      {/* Clean, user-friendly Glass Telemetry Banner when picks aren't locked in yet */}
       {notSubmitted && (
-        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 sm:p-4">
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 rounded-full bg-destructive text-destructive-foreground h-8 w-8 flex items-center justify-center font-mono text-sm font-bold">
-              !
-            </div>
+        <div
+          className="carbon-panel mt-4 overflow-hidden rounded-xl border p-3.5 sm:p-4"
+          style={{
+            borderColor: "color-mix(in oklch, var(--gold) 45%, rgba(255, 255, 255, 0.14))",
+            boxShadow:
+              "inset 0 0 28px -12px color-mix(in oklch, var(--gold) 35%, transparent), 0 10px 26px -12px rgba(0, 0, 0, 0.5)",
+          }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-destructive">Picks not submitted</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                You haven&apos;t locked in your predictions for <strong>{race.name}</strong>.
-                {race.race_at ? ` Race starts at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} (Cairo).` : ""}
-              </p>
-              <div className="mt-2 flex items-center gap-2 font-mono text-xs font-bold text-destructive">
-                <span>Time left:</span>
-                <Countdown target={race.race_at} label="Race closes" />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-gold/15 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold animate-pulse" />
+                  Action Needed · {usedInTop10.length}/10 Picked
+                </span>
+                {savedPoleDriver && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-success">
+                    Pole: {savedPoleDriver.code ?? savedPoleDriver.full_name} ✓
+                  </span>
+                )}
               </div>
+              <p className="mt-2 font-display text-base font-extrabold italic uppercase tracking-wide text-foreground">
+                Lock in your grid before lights out
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Complete your Top 10 &amp; bonus picks
+                {raceTimeCairo ? ` before ${raceTimeCairo} (Cairo)` : ""} to score up to{" "}
+                <strong className="text-foreground">52 pts</strong>.
+              </p>
             </div>
-            <Button asChild size="sm" className="shrink-0 h-9 bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              <Link to="/predict">Submit picks →</Link>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={scrollToPicker}
+              className="h-10 shrink-0 rounded-lg px-4 font-display text-xs font-extrabold italic uppercase tracking-wider shadow-md"
+            >
+              Start picking ↓
             </Button>
           </div>
         </div>
       )}
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {race.qualifying_at && (
-          <Countdown target={race.qualifying_at} label="Pole pick closes in" />
-        )}
-        <Countdown target={race.race_at} label="Top 10 / bonus picks close in" />
-      </div>
+      {/* Deadlines row — avoids wasting a huge box when Pole is already locked */}
+      {poleLocked ? (
+        <div className="mt-3">
+          <Countdown target={race.race_at} label="Top 10 & bonus picks close in" />
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {race.qualifying_at && (
+            <Countdown target={race.qualifying_at} label="Pole pick closes in" />
+          )}
+          <Countdown target={race.race_at} label="Top 10 / bonus picks close in" />
+        </div>
+      )}
 
       <MissingPlayers race={race} />
 
       <section
-        className="carbon-panel mt-6 rounded-lg border-l-4 p-4 sm:p-5"
+        id="pole-section"
+        className="carbon-panel mt-6 scroll-mt-16 rounded-lg border-l-4 p-4 sm:p-5"
         style={{ borderLeftColor: "var(--gold)" }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -475,13 +518,15 @@ function Predict() {
         </p>
       </section>
 
-      <SprintGrid size={10}
-        drivers={drivers ?? []}
-        top10={top10}
-        setTop10={setTop10}
-        locked={viewOnly}
-        onRepeat={lastPicks ? repeatLast : undefined}
-      />
+      <div id="grid-section" className="scroll-mt-16">
+        <SprintGrid size={10}
+          drivers={drivers ?? []}
+          top10={top10}
+          setTop10={setTop10}
+          locked={viewOnly}
+          onRepeat={lastPicks ? repeatLast : undefined}
+        />
+      </div>
       {duplicates && (
         <p className="mt-3 text-sm text-destructive">A driver is selected more than once.</p>
       )}
@@ -595,9 +640,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function TrackStatus({ target }: { target: string }) {
-  const [now, setNow] = useState(() => getTrustedNow());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(getTrustedNow()), 30_000);
+    const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
   const left = new Date(target).getTime() - now;
@@ -609,7 +654,7 @@ function TrackStatus({ target }: { target: string }) {
         : { label: "Track open", color: "var(--track-green)" };
   return (
     <div
-      className="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest"
+      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest"
       style={{ borderColor: state.color, color: state.color }}
     >
       <span
@@ -620,4 +665,3 @@ function TrackStatus({ target }: { target: string }) {
     </div>
   );
 }
-
