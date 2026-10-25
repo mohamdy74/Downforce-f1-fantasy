@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, Zap } from "lucide-react";
+import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, X, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { AccountAndOnboarding } from "@/components/AccountAndOnboarding";
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
@@ -36,10 +38,106 @@ export function SiteHeader() {
   const { theme, setTheme } = useTheme();
   const sprintOn = useSprintWeek();
   const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
+
+  useEffect(() => {
+    if (!confirmExitOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setConfirmExitOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmExitOpen]);
+
+  async function handleConfirmExit() {
+    setSigningOut(true);
+    try {
+      await signOut();
+      setConfirmExitOpen(false);
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  const exitConfirmModal =
+    confirmExitOpen && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => !signingOut && setConfirmExitOpen(false)}
+          >
+            <div
+              className="carbon-panel relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-card/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="exit-league-title"
+            >
+              <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-primary/15 blur-2xl" />
+
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary shadow-[0_0_16px_rgba(225,6,0,0.25)]">
+                    <LogOut className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+                      Confirm Action
+                    </p>
+                    <h2 id="exit-league-title" className="mt-0.5 text-lg font-black uppercase tracking-wide text-foreground">
+                      Exit the League?
+                    </h2>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={signingOut}
+                  onClick={() => setConfirmExitOpen(false)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                  aria-label="Close dialog"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="relative mt-3.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Are you sure you want to exit the league? You&apos;ll be signed out on this device, and you can sign back in anytime with your Google account.
+              </p>
+
+              <div className="relative mt-5 grid grid-cols-2 gap-2.5">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={signingOut}
+                  onClick={() => setConfirmExitOpen(false)}
+                  className="h-10 rounded-xl border border-border/80 font-mono text-xs font-bold uppercase tracking-wider"
+                >
+                  No, Stay
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={signingOut}
+                  onClick={handleConfirmExit}
+                  className="h-10 gap-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(225,6,0,0.3)]"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  {signingOut ? "Exiting…" : "Yes, Exit"}
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
@@ -108,12 +206,14 @@ export function SiteHeader() {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Sign out"
-                onClick={() => signOut()}
+                aria-label="Exit league"
+                title="Exit league"
+                onClick={() => setConfirmExitOpen(true)}
                 className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
+              {exitConfirmModal}
             </>
           ) : (
             <Button asChild size="sm" className="ml-1 h-8 px-2.5 text-xs">
