@@ -97,6 +97,9 @@ export function SprintGrid({
     navigator.vibrate?.(15);
   }
 
+  const allOn = teamFilter === null;
+  const primaryColor = "var(--color-primary)";
+
   return (
     <section className="carbon-panel mt-8 rounded-lg">
       <div className="kerb-strip" />
@@ -197,16 +200,25 @@ export function SprintGrid({
               Drivers · filling <span className="text-primary">P{active + 1}</span> <span className="ml-1 text-foreground">({used.size}/{size})</span> <button type="button" onClick={() => document.querySelector("[data-slot=\"0\"]")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="ml-2 text-primary underline">Top</button>
             </p>
 
-            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-1.5 overflow-x-auto bg-background/95 px-3 py-2 backdrop-blur sm:mx-0">
+            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-background/75 px-3 py-2.5 backdrop-blur-xl sm:mx-0 sm:rounded-lg">
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}
-                className={cn(
-                  "shrink-0 rounded-full border px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-widest transition",
-                  teamFilter === null
-                    ? "border-primary text-primary"
-                    : "border-border text-muted-foreground",
-                )}
+                className="shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest backdrop-blur-md transition-all duration-200 active:scale-95"
+                style={{
+                  background: allOn
+                    ? `linear-gradient(145deg, color-mix(in oklch, ${primaryColor} 34%, rgba(36, 40, 58, 0.9)) 0%, color-mix(in oklch, ${primaryColor} 16%, rgba(18, 20, 30, 0.94)) 100%)`
+                    : "linear-gradient(145deg, rgba(44, 48, 68, 0.68) 0%, rgba(22, 25, 36, 0.84) 100%)",
+                  borderColor: allOn ? primaryColor : "rgba(255, 255, 255, 0.16)",
+                  borderBottom: allOn
+                    ? "2px solid oklch(1 0 0 / 0.45)"
+                    : "1.5px solid oklch(1 0 0 / 0.26)",
+                  color: allOn ? "#ffffff" : "var(--color-muted-foreground)",
+                  textShadow: allOn ? `0 0 10px ${primaryColor}` : undefined,
+                  boxShadow: allOn
+                    ? `inset 0 0 22px -6px color-mix(in oklch, ${primaryColor} 70%, transparent), 0 0 16px -3px ${primaryColor}, inset 0 1px 0 rgba(255, 255, 255, 0.32)`
+                    : "inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 10px -4px rgba(0, 0, 0, 0.5)",
+                }}
               >
                 All
               </button>
@@ -218,16 +230,33 @@ export function SprintGrid({
                     key={t}
                     type="button"
                     onClick={() => setTeamFilter(on ? null : t)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-widest transition"
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest backdrop-blur-md transition-all duration-200 active:scale-95"
                     style={{
-                      borderColor: on ? color : "var(--color-border)",
-                      color: on ? color : "var(--color-muted-foreground)",
-                      boxShadow: on ? `0 0 12px -4px ${color}` : undefined,
+                      background: on
+                        ? `linear-gradient(145deg, color-mix(in oklch, ${color} 36%, rgba(36, 40, 58, 0.9)) 0%, color-mix(in oklch, ${color} 16%, rgba(18, 20, 30, 0.94)) 100%)`
+                        : `linear-gradient(145deg, color-mix(in oklch, ${color} 10%, rgba(44, 48, 68, 0.68)) 0%, rgba(22, 25, 36, 0.84) 100%)`,
+                      borderColor: on
+                        ? color
+                        : `color-mix(in oklch, ${color} 35%, rgba(255, 255, 255, 0.16))`,
+                      borderBottom: on
+                        ? "2px solid oklch(1 0 0 / 0.45)"
+                        : "1.5px solid oklch(1 0 0 / 0.28)",
+                      color: on ? "#ffffff" : "var(--color-foreground)",
+                      textShadow: on ? `0 0 10px color-mix(in oklch, ${color} 85%, transparent)` : undefined,
+                      boxShadow: on
+                        ? `inset 0 0 22px -6px color-mix(in oklch, ${color} 72%, transparent), 0 0 16px -3px ${color}, inset 0 1px 0 rgba(255, 255, 255, 0.34)`
+                        : `inset 0 0 16px -9px color-mix(in oklch, ${color} 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 10px -4px rgba(0, 0, 0, 0.5)`,
                     }}
                   >
                     <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: color }}
+                      className="h-2 w-2 shrink-0 rounded-full transition-transform duration-200"
+                      style={{
+                        background: color,
+                        boxShadow: on
+                          ? `0 0 10px ${color}, 0 0 4px #ffffff`
+                          : `0 0 6px ${color}`,
+                        transform: on ? "scale(1.2)" : undefined,
+                      }}
                     />
                     {t}
                   </button>
@@ -238,6 +267,7 @@ export function SprintGrid({
             <div ref={animRef} className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
               {deck.map((d) => {
                 const taken = used.has(d.id);
+                const dColor = teamColor(d.team);
                 return (
                   <button
                     key={d.id}
@@ -248,11 +278,15 @@ export function SprintGrid({
                       "relative flex h-16 flex-col justify-center overflow-hidden rounded-md border bg-background/70 px-2.5 pr-9 text-left transition hover:border-primary active:scale-[0.98]",
                       taken && "opacity-35",
                     )}
-                    style={{ borderLeft: `5px solid ${teamColor(d.team)}` }}
+                    style={{
+                      borderLeft: `5px solid ${dColor}`,
+                      boxShadow: `inset 0 0 24px -8px color-mix(in oklch, ${dColor} 50%, transparent), 0 0 12px -6px ${dColor}`,
+                      borderBottom: "2px solid oklch(1 0 0 / 0.32)",
+                    }}
                   >
                     <span
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 font-display text-lg font-extrabold italic tabular-nums leading-none opacity-70"
-                      style={{ color: teamColor(d.team) }}
+                      style={{ color: dColor }}
                     >
                       {d.number ?? ""}
                     </span>
