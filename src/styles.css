@@ -850,3 +850,7 @@ select option {
   background-color: #ffffff;
   color: #0f172a;
 }
+
+/* Hide Lovable floating badge permanently */
+#lovable-badge, [id*='lovable-badge'], a[href*='lovable.dev'][target='_blank'] { display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+
