@@ -851,6 +851,93 @@ select option {
   color: #0f172a;
 }
 
-/* Hide Lovable floating badge permanently */
-#lovable-badge, [id*='lovable-badge'], a[href*='lovable.dev'][target='_blank'] { display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+/* === DOWNFORCE UI POLISH PACK (6 HIGH-IMPACT MOBILE & TELEMETRY REFINEMENTS) === */
 
+/* 1. Balanced Headlines: prevent orphan single words on multi-line Grand Prix names */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* 2. Global Tabular Numerals: prevent horizontal jitter in timers, gaps, and points */
+.font-mono,
+.tabular-nums,
+.tower-row,
+time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3. Hit Slop: expand touch target area by 8px on all sides without changing visual size */
+.hit-slop {
+  position: relative;
+}
+.hit-slop::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+/* 4. Smooth View Transitions (Page & Tab switches) */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .tab-transition {
+    animation: dfTabFadeIn 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes dfTabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 5. Zero-Layout-Shift Skeleton Shimmer for Standings & Timing Tower */
+@keyframes dfSkeletonPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.22;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  animation: dfSkeletonPulse 1.4s ease-in-out infinite;
+}
+
+.light .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.08) 0%,
+    rgba(15, 23, 42, 0.15) 50%,
+    rgba(15, 23, 42, 0.08) 100%
+  );
+}
+
+/* 6. Permanently hide injected Lovable preview badge */
+#lovable-badge,
+[id^="lovable-badge"],
+a[href*="lovable.dev"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

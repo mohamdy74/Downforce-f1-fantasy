@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState } from "react"; import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useMemo, useRef, useState } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DriverPicker } from "@/components/DriverPicker";
@@ -8,9 +10,6 @@ import { cn } from "@/lib/utils";
 
 export const EMPTY = "__none__";
 
-// NOTE: dead Field export removed (0 imports) — predict.tsx owns a local Field,
-// and SprintGrid consumers (sprint/stewards) never imported it.
-
 // Re-export DriverPicker as DriverSelect for backward compat with sprint.tsx
 export const DriverSelect = DriverPicker;
 
@@ -19,7 +18,6 @@ export function SprintGrid({
   top10,
   setTop10,
   locked,
-  onRepeat,
   size,
 }: {
   size: number;
@@ -34,7 +32,8 @@ export function SprintGrid({
     return i === -1 ? 0 : i;
   });
   const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null);
-  const [teamFilter, setTeamFilter] = useState<string | null>(null); const [animRef] = useAutoAnimate<HTMLDivElement>();
+  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [animRef] = useAutoAnimate<HTMLDivElement>();
   const dragRef = useRef<{ from: number; x: number; y: number; moved: boolean } | null>(null);
   const byId = new Map(drivers.map((d) => [d.id, d]));
   const used = new Set(top10.filter((d) => d !== EMPTY));
@@ -49,14 +48,29 @@ export function SprintGrid({
       next[active] = id;
       const empty = next.findIndex((p, i) => p === EMPTY && i > active);
       const first = next.indexOf(EMPTY);
-      setActive(empty !== -1 ? empty : first !== -1 ? first : active); navigator.vibrate?.(10);
+      setActive(empty !== -1 ? empty : first !== -1 ? first : active);
+      navigator.vibrate?.(10);
       return next;
     });
   }
 
   function clearSlot(i: number) {
+    const snapshot = [...top10];
+    const removedId = top10[i];
+    const removedDriver = removedId && removedId !== EMPTY ? byId.get(removedId) : undefined;
     setTop10((prev) => prev.map((p, idx) => (idx === i ? EMPTY : p)));
     setActive(i);
+    if (removedDriver) {
+      toast(`Cleared P${i + 1} (${removedDriver.code ?? removedDriver.full_name})`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            setTop10(snapshot);
+            setActive(i);
+          },
+        },
+      });
+    }
   }
 
   function slotAt(x: number, y: number): number | null {
@@ -105,16 +119,72 @@ export function SprintGrid({
       <div className="kerb-strip" />
       <div className="p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg sm:text-xl whitespace-nowrap">{size === 10 ? "Starting grid" : "Sprint grid"}</h2>
-          <div className="flex shrink-0 gap-1.5">{!locked && <><Button size="sm" variant="outline" disabled={active <= 0} onClick={() => { if (active <= 0) return; setTop10((p) => { const n = [...p]; [n[active - 1], n[active]] = [n[active]!, n[active - 1]!]; return n; }); setActive(active - 1); navigator.vibrate?.(10); }}>&#8593;</Button><Button size="sm" variant="outline" disabled={active >= size - 1} onClick={() => { if (active >= size - 1) return; setTop10((p) => { const n = [...p]; [n[active + 1], n[active]] = [n[active]!, n[active + 1]!]; return n; }); setActive(active + 1); navigator.vibrate?.(10); }}>&#8595;</Button></>}
-            
+          <h2 className="text-lg sm:text-xl whitespace-nowrap">
+            {size === 10 ? "Starting grid" : "Sprint grid"}
+          </h2>
+          <div className="flex shrink-0 gap-1.5">
+            {!locked && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="hit-slop"
+                  disabled={active <= 0}
+                  aria-label="Move driver up"
+                  onClick={() => {
+                    if (active <= 0) return;
+                    setTop10((p) => {
+                      const n = [...p];
+                      [n[active - 1], n[active]] = [n[active]!, n[active - 1]!];
+                      return n;
+                    });
+                    setActive(active - 1);
+                    navigator.vibrate?.(10);
+                  }}
+                >
+                  &#8593;
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="hit-slop"
+                  disabled={active >= size - 1}
+                  aria-label="Move driver down"
+                  onClick={() => {
+                    if (active >= size - 1) return;
+                    setTop10((p) => {
+                      const n = [...p];
+                      [n[active + 1], n[active]] = [n[active]!, n[active + 1]!];
+                      return n;
+                    });
+                    setActive(active + 1);
+                    navigator.vibrate?.(10);
+                  }}
+                >
+                  &#8595;
+                </Button>
+              </>
+            )}
+
             {!locked && used.size > 0 && (
               <Button
                 size="sm"
                 variant="secondary"
+                className="hit-slop"
                 onClick={() => {
+                  const snapshot = [...top10];
+                  const prevActive = active;
                   setTop10(Array(size).fill(EMPTY));
                   setActive(0);
+                  toast("Grid cleared", {
+                    action: {
+                      label: "Undo",
+                      onClick: () => {
+                        setTop10(snapshot);
+                        setActive(prevActive);
+                      },
+                    },
+                  });
                 }}
               >
                 Clear
@@ -197,7 +267,21 @@ export function SprintGrid({
         {!locked && (
           <>
             <p className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Drivers · filling <span className="text-primary">P{active + 1}</span> <span className="ml-1 text-foreground">({used.size}/{size})</span> <button type="button" onClick={() => document.querySelector("[data-slot=\"0\"]")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="ml-2 text-primary underline">Top</button>
+              Drivers · filling <span className="text-primary">P{active + 1}</span>{" "}
+              <span className="ml-1 tabular-nums text-foreground">
+                ({used.size}/{size})
+              </span>{" "}
+              <button
+                type="button"
+                onClick={() =>
+                  document
+                    .querySelector('[data-slot="0"]')
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                }
+                className="hit-slop ml-2 text-primary underline"
+              >
+                Top
+              </button>
             </p>
 
             <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-transparent px-3 py-2.5 sm:mx-0">

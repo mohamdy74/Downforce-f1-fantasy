@@ -101,7 +101,7 @@ export function SiteHeader() {
                   type="button"
                   disabled={signingOut}
                   onClick={() => setConfirmExitOpen(false)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                  className="hit-slop inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
                   aria-label="Close dialog"
                 >
                   <X className="h-4 w-4" />
@@ -177,7 +177,7 @@ export function SiteHeader() {
               variant="ghost"
               size="icon"
               asChild
-              className="h-8 w-8 shrink-0 text-gold md:hidden"
+              className="hit-slop h-8 w-8 shrink-0 text-gold md:hidden"
               aria-label="Stewards"
             >
               <Link to="/stewards">
@@ -187,7 +187,7 @@ export function SiteHeader() {
           )}
           <Link
             to="/rules"
-            className="rounded-sm px-1.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:hidden [&.active]:text-primary"
+            className="hit-slop rounded-sm px-1.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:hidden [&.active]:text-primary"
           >
             Rules
           </Link>
@@ -196,7 +196,7 @@ export function SiteHeader() {
             size="icon"
             aria-label="Toggle theme"
             onClick={toggleTheme}
-            className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
+            className="hit-slop h-8 w-8 shrink-0 sm:h-9 sm:w-9"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -209,7 +209,7 @@ export function SiteHeader() {
                 aria-label="Exit league"
                 title="Exit league"
                 onClick={() => setConfirmExitOpen(true)}
-                className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
+                className="hit-slop h-8 w-8 shrink-0 sm:h-9 sm:w-9"
               >
                 <LogOut className="h-4 w-4" />
               </Button>

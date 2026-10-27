@@ -319,6 +319,48 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "stats", label: "Stats" },
 ];
 
+function StandingsSkeleton({
+  rows = 6,
+  showPodium = true,
+}: {
+  rows?: number;
+  showPodium?: boolean;
+}) {
+  return (
+    <div aria-busy="true" aria-label="Loading standings">
+      {showPodium && (
+        <div className="grid grid-cols-3 items-end gap-2">
+          {[1, 0, 2].map((i) => (
+            <div key={i} className="text-center">
+              <div className="skeleton-shimmer mx-auto h-4 w-16 rounded" />
+              <div className="skeleton-shimmer mx-auto mt-1.5 h-5 w-10 rounded" />
+              <div
+                className="skeleton-shimmer mt-1.5 rounded-t-md"
+                style={{ height: [96, 72, 56][i] }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={cn("space-y-2", showPodium && "mt-8")}>
+        {Array.from({ length: rows }).map((_, idx) => (
+          <div
+            key={idx}
+            className="tower-row flex items-center gap-3 rounded-md px-3 py-3"
+          >
+            <div className="skeleton-shimmer h-5 w-7 shrink-0 rounded" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="skeleton-shimmer h-4 w-36 rounded" />
+              <div className="skeleton-shimmer h-3 w-24 rounded" />
+            </div>
+            <div className="skeleton-shimmer h-6 w-10 shrink-0 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Leaderboard() {
   const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -328,6 +370,18 @@ function Leaderboard() {
   const [openDriver, setOpenDriver] = useState<string | null>(null);
   const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [syncing, setSyncing] = useState(false);
+
+  function switchTab(nextTab: TabKey) {
+    if (nextTab === activeTab) return;
+    const doc = typeof document !== "undefined" ? (document as Document & { startViewTransition?: (cb: () => void) => void }) : null;
+    if (doc?.startViewTransition) {
+      doc.startViewTransition(() => {
+        setActiveTab(nextTab);
+      });
+    } else {
+      setActiveTab(nextTab);
+    }
+  }
 
   const { data: board, isLoading: boardLoading } = useQuery({
     ...leaderboardQuery,
@@ -414,7 +468,7 @@ function Leaderboard() {
             size="sm"
             disabled={syncing}
             onClick={handleForceSync}
-            className="shrink-0 gap-1.5"
+            className="hit-slop shrink-0 gap-1.5"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
             {syncing ? "Syncing…" : "Sync results"}
@@ -436,7 +490,7 @@ function Leaderboard() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => switchTab(t.key)}
               className={cn(
                 "rounded-md py-2 text-center font-mono text-[11px] font-bold uppercase tracking-wider transition-colors sm:text-xs",
                 isActive
@@ -452,9 +506,9 @@ function Leaderboard() {
 
       {/* TAB 1: LEAGUE STANDINGS */}
       {activeTab === "league" && (
-        <section className="mt-8">
-          {authLoading ? (
-            <p className="text-sm text-muted-foreground">Loading standings…</p>
+        <section className="tab-transition mt-8">
+          {authLoading || (user && boardLoading) ? (
+            <StandingsSkeleton rows={6} showPodium={true} />
           ) : !user ? (
             <div className="carbon-panel rounded-xl border border-border p-6">
               <h2 className="text-2xl">Sign in to view league standings</h2>
@@ -468,7 +522,7 @@ function Leaderboard() {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => setActiveTab("drivers")}
+                  onClick={() => switchTab("drivers")}
                 >
                   View F1 Drivers
                 </Button>
@@ -501,10 +555,7 @@ function Leaderboard() {
               )}
 
               <div ref={listRef} className="mt-8 space-y-2">
-                {boardLoading && (
-                  <p className="text-sm text-muted-foreground">Loading timing tower…</p>
-                )}
-                {!boardLoading && !board?.length && (
+                {!board?.length && (
                   <p className="text-sm text-muted-foreground">
                     No players yet. Sign in to claim P1.
                   </p>
@@ -608,9 +659,9 @@ function Leaderboard() {
 
       {/* TAB 2: F1 DRIVERS STANDINGS */}
       {activeTab === "drivers" && (
-        <section className="mt-8">
+        <section className="tab-transition mt-8">
           {f1Loading ? (
-            <p className="text-sm text-muted-foreground">Loading driver standings…</p>
+            <StandingsSkeleton rows={10} showPodium={true} />
           ) : (
             <>
               {f1Drivers.length >= 3 && (
@@ -681,7 +732,7 @@ function Leaderboard() {
                           <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                             <span className="truncate">{d.team}</span>
                             <span className="opacity-40">·</span>
-                            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground/80">
+                            <span className="hit-slop inline-flex shrink-0 items-center gap-1 font-semibold text-foreground/80">
                               Driver stats
                               <ChevronDown
                                 className={cn(
@@ -770,11 +821,9 @@ function Leaderboard() {
 
       {/* TAB 3: CONSTRUCTORS STANDINGS */}
       {activeTab === "constructors" && (
-        <section className="mt-8">
+        <section className="tab-transition mt-8">
           {f1Loading ? (
-            <p className="text-sm text-muted-foreground">
-              Loading constructor standings…
-            </p>
+            <StandingsSkeleton rows={10} showPodium={false} />
           ) : (
             <div className="space-y-2">
               {f1Constructors.map((c, index) => {
@@ -847,7 +896,7 @@ function Leaderboard() {
 
       {/* TAB 4: MINIMAL SEASON & LEAGUE STATS */}
       {activeTab === "stats" && (
-        <section className="mt-8 space-y-6">
+        <section className="tab-transition mt-8 space-y-6">
           <div>
             <p className="mb-2.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               {SEASON} F1 Season Leaders
