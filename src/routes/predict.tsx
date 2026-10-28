@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,24 +14,24 @@ import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
+import { driversQuery, getTrustedNow, nextRace, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/predict")({
   head: () => ({
     meta: [
-      { title: "Make your picks — DOWNFORCE" },
+      { title: "Make your picks \u2014 DOWNFORCE" },
       {
         name: "description",
         content:
           "Lock in your top 10 finishing order plus pole, fastest lap and DNF picks before the lights go out.",
       },
-      { property: "og:title", content: "Make your picks — DOWNFORCE" },
+      { property: "og:title", content: "Make your picks \u2014 DOWNFORCE" },
       {
         property: "og:description",
         content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix.",
       },
-      { name: "twitter:title", content: "Make your picks — DOWNFORCE" },
+      { name: "twitter:title", content: "Make your picks \u2014 DOWNFORCE" },
       { name: "twitter:description", content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix." },
     ],
   }),
@@ -64,28 +63,47 @@ function writePoleAt(userId: string, raceId: string, driverId: string) {
 }
 
 function fireConfetti() {
-  try {
-    void confetti({
-      particleCount: 55,
-      spread: 68,
-      origin: { y: 0.78 },
-      colors: ["#e10600", "#f59e0b", "#ffffff"],
-      disableForReducedMotion: true,
-    });
-  } catch {
-    /* ignore */
-  }
+  if (typeof window === "undefined") return;
+  void import("canvas-confetti")
+    .then((m) =>
+      m.default({
+        particleCount: 55,
+        spread: 68,
+        origin: { y: 0.78 },
+        colors: ["#e10600", "#f59e0b", "#ffffff"],
+        disableForReducedMotion: true,
+      }),
+    )
+    .catch(() => null);
 }
 
 function Predict() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
   const { data: races } = useQuery(racesQuery);
   const { data: drivers } = useQuery(driversQuery);
 
-  const race = useMemo(() => (races ? nextRace(races) : null), [races]);
+  // Re-evaluate lock states every 30s so the form flips to read-only if the user leaves the tab open
+  const [now, setNow] = useState(() => getTrustedNow());
+  useEffect(() => {
+    const id = setInterval(() => setNow(getTrustedNow()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
-  const { data: prediction } = useQuery({
+  const upcoming = useMemo(() => (races ? nextRace(races, now) : null), [races, now]);
+  const [selectedRaceId, setSelectedRaceId] = useState<string | null>(null);
+  const race = useMemo(() => {
+    if (!races?.length) return null;
+    if (selectedRaceId) return races.find((r) => r.id === selectedRaceId) ?? upcoming ?? races[0]!;
+    return upcoming ?? races[races.length - 1]!;
+  }, [races, selectedRaceId, upcoming]);
+
+  const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
+  const poleLockAt = race?.qualifying_at ?? race?.race_at ?? null;
+  const poleLocked = !!poleLockAt && new Date(poleLockAt).getTime() <= now;
+
+  const { data: prediction, isLoading: predLoading } = useQuery({
     queryKey: ["prediction", race?.id, user?.id],
     enabled: !!race && !!user,
     queryFn: async () => {
@@ -100,659 +118,661 @@ function Predict() {
     },
   });
 
-  const { data: lastPicks } = useQuery({
-    queryKey: ["last-prediction", race?.id, user?.id],
-    enabled: !!race && !!user && !!races,
+  const { data: results } = useQuery({
+    queryKey: ["results", race?.id],
+    enabled: !!race?.has_results,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("predictions")
-        .select("race_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-        .eq("user_id", user!.id)
-        .neq("race_id", race!.id);
+        .from("race_results")
+        .select("*")
+        .eq("race_id", race!.id)
+        .order("position", { ascending: true, nullsFirst: false });
       if (error) throw error;
-      const round = new Map((races ?? []).map((r) => [r.id, r.round]));
-      const prev = (data ?? [])
-        .filter((p) => (round.get(p.race_id) ?? 0) < race!.round)
-        .sort((a, b) => (round.get(b.race_id) ?? 0) - (round.get(a.race_id) ?? 0));
-      return prev[0] ?? null;
+      return data;
     },
   });
 
-  const [top10, setTop10] = useState<string[]>(Array(10).fill(EMPTY));
-  const [pole, setPole] = useState(EMPTY);
-  const [fastestLap, setFastestLap] = useState(EMPTY);
-  const [dnf, setDnf] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [lightsOut, setLightsOut] = useState(false);
-  const [draftSaved, setDraftSaved] = useState(false);
-  const endLights = useCallback(() => setLightsOut(false), []);
+  const { data: score } = useQuery({
+    queryKey: ["score", race?.id, user?.id],
+    enabled: !!race?.has_results && !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("scores")
+        .select("*")
+        .eq("race_id", race!.id)
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  // localStorage cleanup: remove old pole timestamps (run once on mount)
-  useEffect(() => {
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith("dfr:pole-at:"));
-    const cutoff = Date.now() - 90 * 24 * 3600_000; // 90 days ago
-    keys.forEach((k) => {
-      try {
-        const v = JSON.parse(localStorage.getItem(k)!);
-        if (new Date(v.at).getTime() < cutoff) localStorage.removeItem(k);
-      } catch {
-        // Invalid JSON, remove it
-        localStorage.removeItem(k);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!prediction) return;
-    const saved = prediction.top10 ?? [];
-    const newPole = prediction.pole_driver_id ?? EMPTY;
-    if (pole !== newPole) setPole(newPole);
-
-    // A pole-only save has no top 10 yet — keep whatever the player is building.
-    if (saved.length === 0) return;
-    const newTop10 = Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY);
-    if (JSON.stringify(top10) !== JSON.stringify(newTop10)) setTop10(newTop10);
-
-    const newFastestLap = prediction.fastest_lap_driver_id ?? EMPTY;
-    if (fastestLap !== newFastestLap) setFastestLap(newFastestLap);
-
-    const newDnf = prediction.dnf_driver_id ?? EMPTY;
-    if (dnf !== newDnf) setDnf(newDnf);
-  }, [prediction]);
-
-  // ---- Draft autosave: a closed tab, a dead battery or an app switch never loses half-made picks ----
+  // Draft persistence in localStorage per user+race so unfinished picks survive accidental reload
   const draftKey = user && race ? `dfr:draft:${user.id}:${race.id}` : null;
-  const draftChecked = useRef(false);
-  useEffect(() => {
-    if (!draftKey || draftChecked.current || prediction === undefined) return;
-    draftChecked.current = true;
-    if ((prediction?.top10 ?? []).filter(Boolean).length === 10) return; // already locked in
-    try {
-      const raw = window.localStorage.getItem(draftKey);
-      if (!raw) return;
-      const d = JSON.parse(raw) as { top10?: string[]; fl?: string; dnf?: string };
-      const restored = Array.from({ length: 10 }, (_, i) => d.top10?.[i] || EMPTY);
-      if (restored.every((x) => x === EMPTY) && !d.fl && !d.dnf) return;
-      setTop10(restored);
-      if (d.fl) setFastestLap(d.fl);
-      if (d.dnf) setDnf(d.dnf);
-      setDraftSaved(true);
-      toast.info("Draft restored. Press Lock in picks when you're happy.");
-    } catch {
-      /* unreadable draft: ignore */
-    }
-  }, [draftKey, prediction]);
+
+  const [top10, setTop10] = useState<string[]>(Array(10).fill(EMPTY));
+  const [pole, setPole] = useState<string>(EMPTY);
+  const [fl, setFl] = useState<string>(EMPTY);
+  const [dnf, setDnf] = useState<string>(EMPTY);
+  const [savingPole, setSavingPole] = useState(false);
+  const [savingRace, setSavingRace] = useState(false);
+  const [lightsOut, setLightsOut] = useState(false);
+  const hydratedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!draftKey || !draftChecked.current) return;
-    try {
-      const done = (prediction?.top10 ?? []).filter(Boolean).length === 10 && !editing;
-      const empty = top10.every((x) => x === EMPTY) && fastestLap === EMPTY && dnf === EMPTY;
-      if (done || empty) {
-        window.localStorage.removeItem(draftKey);
-        setDraftSaved(false);
-      } else {
-        window.localStorage.setItem(
-          draftKey,
-          JSON.stringify({
-            top10,
-            fl: fastestLap === EMPTY ? "" : fastestLap,
-            dnf: dnf === EMPTY ? "" : dnf,
-          }),
-        );
-        setDraftSaved(true);
+    const key = `${race?.id ?? ""}:${user?.id ?? ""}:${prediction?.id ?? "none"}:${prediction?.updated_at ?? ""}`;
+    if (hydratedKeyRef.current === key) return;
+    if (predLoading) return;
+    hydratedKeyRef.current = key;
+
+    if (prediction) {
+      const padded = [...(prediction.top10 ?? [])];
+      while (padded.length < 10) padded.push(EMPTY);
+      setTop10(padded.slice(0, 10));
+      setPole(prediction.pole_driver_id ?? EMPTY);
+      setFl(prediction.fastest_lap_driver_id ?? EMPTY);
+      setDnf(prediction.dnf_driver_id ?? EMPTY);
+      return;
+    }
+
+    if (draftKey) {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        if (raw) {
+          const d = JSON.parse(raw) as {
+            top10?: string[];
+            pole?: string;
+            fl?: string;
+            dnf?: string;
+          };
+          if (Array.isArray(d.top10) && d.top10.length === 10) setTop10(d.top10);
+          else setTop10(Array(10).fill(EMPTY));
+          setPole(d.pole ?? EMPTY);
+          setFl(d.fl ?? EMPTY);
+          setDnf(d.dnf ?? EMPTY);
+          return;
+        }
+      } catch {
+        /* ignore corrupt draft */
       }
-    } catch {
-      /* storage unavailable: ignore */
     }
-  }, [draftKey, top10, fastestLap, dnf, prediction, editing]);
 
-  const now = Date.now();
-  const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
-  const poleLocked =
-    raceLocked ||
-    (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
-  const hasSaved = !!prediction && (prediction.top10?.length ?? 0) === 10;
-  // Saved picks open in view mode so stray taps while scrolling can't change them.
-  const viewOnly = raceLocked || (hasSaved && !editing);
+    setTop10(Array(10).fill(EMPTY));
+    setPole(EMPTY);
+    setFl(EMPTY);
+    setDnf(EMPTY);
+  }, [prediction, predLoading, draftKey, race?.id, user?.id]);
 
-  const savedTop10Normalized = Array.from({ length: 10 }, (_, i) => prediction?.top10?.[i] ?? EMPTY);
-  const gridDirty =
-    !viewOnly &&
-    (JSON.stringify(top10) !== JSON.stringify(savedTop10Normalized) ||
-      fastestLap !== (prediction?.fastest_lap_driver_id ?? EMPTY) ||
-      dnf !== (prediction?.dnf_driver_id ?? EMPTY));
-
+  // Save draft to localStorage while user has no saved prediction yet (debounced 250ms)
   useEffect(() => {
-    if (!gridDirty) return;
+    if (!draftKey || prediction || predLoading) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ top10, pole, fl, dnf }));
+      } catch {
+        /* ignore quota errors */
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [draftKey, prediction, predLoading, top10, pole, fl, dnf]);
+
+  const savedTop10 = useMemo(() => {
+    const p = [...(prediction?.top10 ?? [])];
+    while (p.length < 10) p.push(EMPTY);
+    return p.slice(0, 10);
+  }, [prediction]);
+  const savedPole = prediction?.pole_driver_id ?? EMPTY;
+  const savedFl = prediction?.fastest_lap_driver_id ?? EMPTY;
+  const savedDnf = prediction?.dnf_driver_id ?? EMPTY;
+
+  const poleDirty = !poleLocked && pole !== savedPole;
+  const raceDirty =
+    !raceLocked &&
+    (fl !== savedFl || dnf !== savedDnf || top10.some((d, i) => d !== savedTop10[i]));
+
+  // Warn before closing tab if the user has unsaved edits to an already-submitted prediction
+  useEffect(() => {
+    if (!prediction || (!poleDirty && !raceDirty)) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
+      e.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [gridDirty]);
+  }, [prediction, poleDirty, raceDirty]);
 
-  if (loading) {
-    return (
-      <Shell>
-        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-        <div className="mt-3 h-8 w-64 animate-pulse rounded bg-muted" />
-        <div className="mt-4 h-12 w-full animate-pulse rounded-md bg-muted/60" />
-        <div className="mt-6 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
-        <div className="mt-4 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
-      </Shell>
-    );
-  }
+  const repeatLast = useCallback(async () => {
+    if (!user || !race || !races) return;
+    const prevRaces = races.filter((r) => r.round < race.round).sort((a, b) => b.round - a.round);
+    if (!prevRaces.length) {
+      toast.error("No earlier round to copy from.");
+      return;
+    }
+    const { data } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("race_id", prevRaces.map((r) => r.id));
+    const latest = prevRaces.map((r) => data?.find((p) => p.race_id === r.id)).find(Boolean);
+    if (!latest) {
+      toast.error("No saved picks found from an earlier round.");
+      return;
+    }
+    const padded = [...(latest.top10 ?? [])];
+    while (padded.length < 10) padded.push(EMPTY);
+    setTop10(padded.slice(0, 10));
+    if (!poleLocked && latest.pole_driver_id) setPole(latest.pole_driver_id);
+    if (latest.fastest_lap_driver_id) setFl(latest.fastest_lap_driver_id);
+    if (latest.dnf_driver_id) setDnf(latest.dnf_driver_id);
+    toast.success("Copied your picks from the previous round \u2014 review & save!");
+  }, [user, race, races, poleLocked]);
 
+  if (authLoading) return null;
   if (!user) {
     return (
-      <Shell>
-        <h1 className="text-3xl">Sign in to predict</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          You need an account so your points can be tracked on the league table.
+      <main className="mx-auto max-w-xl px-4 py-16 text-center">
+        <h1 className="text-3xl">Sign in to make picks</h1>
+        <p className="mt-2 text-muted-foreground">
+          You need an account to lock in predictions before each race.
         </p>
         <Button asChild className="mt-6">
           <Link to="/auth">Continue with Google</Link>
         </Button>
-      </Shell>
+      </main>
     );
   }
 
-  if (!race) {
-    return (
-      <Shell>
-        <h1 className="text-3xl">No race to predict</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          There is no upcoming Grand Prix on the calendar right now.
-        </p>
-      </Shell>
-    );
-  }
-
-  // In-page status banner when picks are not yet locked in
-  const notSubmitted =
-    prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
-    (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
-
-  const usedInTop10 = top10.filter((d) => d !== EMPTY);
-  const duplicates = usedInTop10.length !== new Set(usedInTop10).size;
-  const dnfInTop10 = dnf !== EMPTY && usedInTop10.includes(dnf);
-
-  function repeatLast() {
-    if (!lastPicks) return;
-    const saved = lastPicks.top10 ?? [];
-    setTop10(Array.from({ length: 10 }, (_, i) => saved[i] ?? EMPTY));
-    if (!poleLocked) setPole(lastPicks.pole_driver_id ?? EMPTY);
-    setFastestLap(lastPicks.fastest_lap_driver_id ?? EMPTY);
-    setDnf(lastPicks.dnf_driver_id ?? EMPTY);
-    toast.success("Loaded your picks from the last race.");
-  }
-
-  async function save() {
-    try {
-      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "race" } });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Locked");
-      return;
-    }
-    if (duplicates) {
-      toast.error("Each driver can only appear once in your top 10.");
-      return;
-    }
-    if (dnfInTop10) {
-      toast.error("Your DNF pick can't be one of your top 10 finishers.");
-      return;
-    }
-    if (usedInTop10.length !== 10 && !raceLocked) {
-      toast.error("Pick all 10 positions before submitting.");
-      return;
-    }
-
-    setSaving(true);
-    // Once qualifying has started the pole pick is frozen, so we never send it.
-    // (An upsert would also run the database's "insert" checks against the pole
-    // value and reject a save that only changes the top 10.)
-    const fields = {
-      top10,
-      fastest_lap_driver_id: fastestLap === EMPTY ? null : fastestLap,
-      dnf_driver_id: dnf === EMPTY ? null : dnf,
-      ...(poleLocked ? {} : { pole_driver_id: pole === EMPTY ? null : pole }),
-    };
-
-    let error: { message: string } | null = null;
-    const upd = await supabase
-      .from("predictions")
-      .update(fields)
-      .eq("user_id", user!.id)
-      .eq("race_id", race!.id)
-      .eq("updated_at", prediction?.updated_at ?? new Date(0).toISOString()) // optimistic lock
-      .select("id");
-
-    if (upd.error) {
-      error = upd.error;
-    } else if (!upd.data?.length) {
-      if (prediction?.id) {
-        // Optimistic lock conflict: someone else modified this prediction
-        toast.error("Someone else modified this prediction. Reloading...");
-        queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
-        setSaving(false);
-        return;
-      }
-      const ins = await supabase
-        .from("predictions")
-        .insert({ user_id: user!.id, race_id: race!.id, ...fields });
-      error = ins.error;
-    }
-    setSaving(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Predictions locked in.");
-    logPredAudit({
-      data: {
-        userId: user!.id,
-        raceId: race!.id,
-        predId: prediction?.id ?? user!.id,
-        action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked",
-        changes: { top10: [prediction?.top10 ?? [], top10] },
-      },
-    }).catch(() => null);
-    try {
-      window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
-      setDraftSaved(false);
-    } catch {
-      /* ignore */
-    }
-    if (!poleLocked && pole !== EMPTY && pole !== savedPole) writePoleAt(user!.id, race!.id, pole);
-    setEditing(false);
-    navigator.vibrate?.([12, 40, 18]);
-    setLightsOut(true);
-    fireConfetti();
-    queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
-  }
-
-  // Pole can be saved alone (before the top 10 is ready) until qualifying starts.
   async function savePole() {
-    try {
-      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "pole" } });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Locked");
+    if (!race || !user) return;
+    if (poleLocked) {
+      toast.error("Qualifying has started \u2014 pole pick is locked.");
       return;
     }
     if (pole === EMPTY) {
-      toast.error("Choose a pole driver first.");
+      toast.error("Choose a pole position driver first.");
       return;
     }
-    setSaving(true);
-    const upd = await supabase
-      .from("predictions")
-      .update({ pole_driver_id: pole })
-      .eq("user_id", user!.id)
-      .eq("race_id", race!.id)
-      .select("id");
-    let error = upd.error;
-    if (!error && !upd.data?.length) {
-      const ins = await supabase
-        .from("predictions")
-        .insert({ user_id: user!.id, race_id: race!.id, pole_driver_id: pole, top10: [] });
-      error = ins.error;
+
+    setSavingPole(true);
+    try {
+      await assertDeadlineOpen({ data: { raceId: race.id, kind: "pole" } });
+    } catch (e) {
+      setSavingPole(false);
+      toast.error(e instanceof Error ? e.message : "Qualifying has locked.");
+      return;
     }
-    setSaving(false);
+    const newPole = pole === EMPTY ? null : pole;
+    // Keep existing race picks in the row (or empty placeholder if none saved yet).
+    const payload = {
+      user_id: user.id,
+      race_id: race.id,
+      pole_driver_id: newPole,
+      top10: prediction?.top10 ?? [],
+      fastest_lap_driver_id: prediction?.fastest_lap_driver_id ?? null,
+      dnf_driver_id: prediction?.dnf_driver_id ?? null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: saved, error } = await supabase
+      .from("predictions")
+      .upsert(payload, { onConflict: "user_id,race_id" })
+      .select("id")
+      .single();
+    setSavingPole(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Pole pick saved.");
-    logPredAudit({
+
+    if (newPole) writePoleAt(user.id, race.id, newPole);
+
+    // Server-verified audit log entry (falls back silently if offline)
+    void logPredAudit({
       data: {
-        userId: user!.id,
-        raceId: race!.id,
-        predId: prediction?.id ?? user!.id,
-        action: "pole",
-        changes: { pole: [prediction?.pole_driver_id ?? null, pole] },
+        userId: user.id,
+        raceId: race.id,
+        predId: saved.id,
+        action: prediction ? "update" : "create",
+        changes: { pole: [prediction?.pole_driver_id ?? null, newPole] },
       },
-    }).catch(() => null);
-    writePoleAt(user!.id, race!.id, pole);
-    queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
+    }).catch(() => {});
+
+    toast.success("Pole position locked in!");
+    fireConfetti();
+    await queryClient.invalidateQueries({ queryKey: ["prediction", race.id, user.id] });
+    await queryClient.invalidateQueries({ queryKey: ["pick-status", race.id] });
   }
 
-  const savedPole = prediction?.pole_driver_id ?? null;
-  const poleDirty = (savedPole ?? EMPTY) !== pole;
-  const savedPoleDriver = savedPole ? (drivers ?? []).find((d) => d.id === savedPole) : undefined;
-  const poleSavedAt = savedPole
-    ? (readPoleAt(user.id, race.id, savedPole) ?? prediction?.updated_at ?? null)
-    : null;
+  async function saveRace(e: React.FormEvent) {
+    e.preventDefault();
+    if (!race || !user) return;
+    if (raceLocked) {
+      toast.error("Picks are locked for this race.");
+      return;
+    }
 
-  const raceTimeCairo = race.race_at
-    ? new Date(race.race_at).toLocaleString("en-GB", {
-        weekday: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Africa/Cairo",
-      })
-    : null;
+    const picked = top10.filter((d) => d !== EMPTY);
+    if (picked.length < 10) {
+      toast.error("Fill all 10 finishing positions before saving.");
+      return;
+    }
+    if (new Set(picked).size !== 10) {
+      toast.error("Each driver can only appear once in the top 10.");
+      return;
+    }
 
-  function scrollToPicker() {
-    const targetId = poleLocked ? "grid-section" : "pole-section";
-    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setSavingRace(true);
+    try {
+      await assertDeadlineOpen({ data: { raceId: race.id, kind: "race" } });
+    } catch (err) {
+      setSavingRace(false);
+      toast.error(err instanceof Error ? err.message : "Race picks are locked.");
+      return;
+    }
+    const newFl = fl === EMPTY ? null : fl;
+    const newDnf = dnf === EMPTY ? null : dnf;
+    // If qualifying hasn't started yet, also save whatever is in the pole picker;
+    // once qualifying starts, never overwrite the already-locked pole value.
+    const newPole = poleLocked
+      ? (prediction?.pole_driver_id ?? null)
+      : pole === EMPTY
+        ? (prediction?.pole_driver_id ?? null)
+        : pole;
+
+    const payload = {
+      user_id: user.id,
+      race_id: race.id,
+      top10,
+      pole_driver_id: newPole,
+      fastest_lap_driver_id: newFl,
+      dnf_driver_id: newDnf,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: saved, error } = await supabase
+      .from("predictions")
+      .upsert(payload, { onConflict: "user_id,race_id" })
+      .select("id")
+      .single();
+    setSavingRace(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    if (draftKey) {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const prevPole = prediction?.pole_driver_id ?? null;
+    if (newPole && newPole !== prevPole) writePoleAt(user.id, race.id, newPole);
+
+    const changes: Record<string, unknown> = {};
+    const prevTop = prediction?.top10 ?? [];
+    if (JSON.stringify(prevTop) !== JSON.stringify(top10)) changes["top10"] = [prevTop, top10];
+    if ((prediction?.fastest_lap_driver_id ?? null) !== newFl) {
+      changes["fastest_lap"] = [prediction?.fastest_lap_driver_id ?? null, newFl];
+    }
+    if ((prediction?.dnf_driver_id ?? null) !== newDnf) {
+      changes["dnf"] = [prediction?.dnf_driver_id ?? null, newDnf];
+    }
+    if (!poleLocked && prevPole !== newPole) {
+      changes["pole"] = [prevPole, newPole];
+    }
+    if (Object.keys(changes).length > 0) {
+      void logPredAudit({
+        data: {
+          userId: user.id,
+          raceId: race.id,
+          predId: saved.id,
+          action: prediction ? "update" : "create",
+          changes,
+        },
+      }).catch(() => {});
+    }
+
+    setLightsOut(true);
+    fireConfetti();
+    await queryClient.invalidateQueries({ queryKey: ["prediction", race.id, user.id] });
+    await queryClient.invalidateQueries({ queryKey: ["pick-status", race.id] });
   }
+
+  const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
+  const breakdown = (score?.breakdown ?? null) as {
+    items?: Array<{ pos: number; predicted: string; actual: string | null; delta: number | null; pts: number }>;
+    pole?: number;
+    fastestLap?: number;
+    dnf?: number;
+    podiumBonus?: number;
+    noSubmission?: boolean;
+  } | null;
+
+  const filledCount = top10.filter((d) => d !== EMPTY).length;
+  const poleSaved = !!prediction?.pole_driver_id;
+  const raceSaved = (prediction?.top10?.filter((x) => x && x !== EMPTY).length ?? 0) === 10;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
-          Round {race.round}
-        </p>
-        <TrackStatus target={race.race_at} />
-      </div>
-      <h1 className="mt-1 text-3xl">{race.name}</h1>
-      <p className="text-sm text-muted-foreground">
-        {race.circuit}
-        {race.country ? ` · ${race.country}` : ""}
-      </p>
+    <main className="mx-auto max-w-4xl px-4 py-10 pb-28">
+      {lightsOut && <LightsOut onDone={() => setLightsOut(false)} />}
+      {/* Race selector + dual lock countdowns */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-primary">
+            Season {race?.season} \u00b7 Round {race?.round}
+          </p>
+          <h1 className="text-3xl sm:text-4xl">{race?.name ?? "Loading\u2026"}</h1>
+          <p className="text-sm text-muted-foreground">{race?.circuit}</p>
+        </div>
 
-      {/* Clean, user-friendly Glass Telemetry Banner when picks aren't locked in yet */}
-      {notSubmitted && (
-        <div
-          className="carbon-panel mt-4 overflow-hidden rounded-xl border p-3.5 sm:p-4"
-          style={{
-            borderColor: "color-mix(in oklch, var(--gold) 45%, rgba(255, 255, 255, 0.14))",
-            boxShadow:
-              "inset 0 0 28px -12px color-mix(in oklch, var(--gold) 35%, transparent), 0 10px 26px -12px rgba(0, 0, 0, 0.5)",
-          }}
+        <select
+          value={race?.id ?? ""}
+          onChange={(e) => setSelectedRaceId(e.target.value)}
+          className="h-10 rounded-md border border-border bg-card px-3 font-mono text-xs uppercase"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-gold/15 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gold animate-pulse" />
-                  Action Needed · {usedInTop10.length}/10 Picked
-                </span>
-                {savedPoleDriver && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-success">
-                    Pole: {savedPoleDriver.code ?? savedPoleDriver.full_name} ✓
-                  </span>
-                )}
-              </div>
-              <p className="mt-2 font-display text-base font-extrabold italic uppercase tracking-wide text-foreground">
-                Lock in your grid before lights out
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Complete your Top 10 &amp; bonus picks
-                {raceTimeCairo ? ` before ${raceTimeCairo} (Cairo)` : ""} to score up to{" "}
-                <strong className="text-foreground">52 pts</strong>.
-              </p>
-            </div>
+          {races?.map((r) => (
+            <option key={r.id} value={r.id}>
+              R{String(r.round).padStart(2, "0")} \u00b7 {r.name}
+              {r.has_results ? " \u2713" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={scrollToPicker}
-              className="h-10 shrink-0 rounded-lg px-4 font-display text-xs font-extrabold italic uppercase tracking-wider shadow-md"
-            >
-              Start picking ↓
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Deadlines row — avoids wasting a huge box when Pole is already locked */}
-      {poleLocked ? (
-        <div className="mt-3">
-          <Countdown target={race.race_at} label="Top 10 & bonus picks close in" />
-        </div>
-      ) : (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {race.qualifying_at && (
-            <Countdown target={race.qualifying_at} label="Pole pick closes in" />
+      {/* Status Banner: clearly shows if picks are already saved in DB */}
+      {race && !race.has_results && (
+        <div
+          className={cn(
+            "mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2.5 font-mono text-xs",
+            raceSaved && poleSaved
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              : poleSaved || raceSaved
+                ? "border-gold/40 bg-gold/10 text-gold"
+                : "border-primary/40 bg-primary/10 text-foreground",
           )}
-          <Countdown target={race.race_at} label="Top 10 / bonus picks close in" />
-        </div>
-      )}
-
-      <MissingPlayers race={race} />
-
-      <section
-        id="pole-section"
-        className="carbon-panel mt-6 scroll-mt-16 rounded-lg border-l-4 p-4 sm:p-5"
-        style={{ borderLeftColor: "var(--gold)" }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-gold">
-              Pole position · +3
-            </p>
-            <h2 className="mt-1 text-xl">Who takes pole?</h2>
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <span>
+              POLE:{" "}
+              <strong>
+                {poleSaved
+                  ? `\u2713 SAVED (${byId.get(prediction!.pole_driver_id!)?.code ?? "OK"})`
+                  : poleLocked
+                    ? "\u2717 MISSED"
+                    : "NOT SAVED"}
+              </strong>
+            </span>
+            <span className="opacity-40">|</span>
+            <span>
+              RACE TOP 10:{" "}
+              <strong>
+                {raceSaved
+                  ? "\u2713 SAVED (10/10)"
+                  : raceLocked
+                    ? "\u2717 MISSED (\u221225 PTS)"
+                    : `NOT SAVED (${filledCount}/10 picked)`}
+              </strong>
+            </span>
           </div>
-          <span
-            className={cn(
-              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest",
-              poleLocked
-                ? "border-border text-muted-foreground"
-                : savedPole && !poleDirty
-                  ? "border-success/60 text-success"
-                  : "border-gold/60 text-gold",
+          <div className="flex items-center gap-2">
+            {(poleDirty || raceDirty) && (
+              <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gold">
+                {prediction ? "Unsaved edits" : "Draft auto-saved"}
+              </span>
             )}
-          >
-            {poleLocked
-              ? "Locked"
-              : savedPole && !poleDirty
-                ? "Saved ✓"
-                : poleDirty && pole !== EMPTY
-                  ? "Not saved"
-                  : "No pick yet"}
-          </span>
+            {prediction?.updated_at && (
+              <span className="text-[11px] opacity-75">
+                Last saved {new Date(prediction.updated_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+              </span>
+            )}
+          </div>
         </div>
+      )}
 
-        <div className="mt-4">
-          <DriverPicker
-            drivers={drivers ?? []}
-            value={pole}
-            disabled={poleLocked}
-            onChange={setPole}
-          />
-        </div>
-
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {!poleLocked && (
-            <Button
-              type="button"
-              disabled={saving || !poleDirty || pole === EMPTY}
-              onClick={savePole}
-              className="h-11"
-            >
-              {savedPole && !poleDirty ? "Pole saved ✓" : "Save pole"}
-            </Button>
-          )}
-          {savedPole && (
-            <SharePole
-              raceName={race.name}
-              round={race.round}
-              playerName={(user.user_metadata?.["full_name"] as string | undefined) ?? "Me"}
-              driver={savedPoleDriver}
-              savedAt={poleSavedAt}
-              circuit={[race.circuit, race.country].filter(Boolean).join(" · ")}
+      {race && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {poleLockAt && (
+            <Countdown
+              target={poleLockAt}
+              label={poleLocked ? "Pole pick locked" : "Pole locks (Quali start)"}
             />
           )}
+          <Countdown
+            target={race.race_at}
+            label={raceLocked ? "Race picks locked" : "Race locks (Lights out)"}
+          />
         </div>
+      )}
 
-        <p className="mt-2 text-xs text-muted-foreground">
-          {poleLocked
-            ? "Qualifying has started, so the pole pick is locked."
-            : savedPole && poleDirty
-              ? "Save to update your pole card. The card always shows your saved pick."
-              : "Save it now and finish your top 10 later. You can change it until qualifying starts."}
-        </p>
+      {race && <MissingPlayers race={race} />}
+
+      {race?.has_sprint && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-gold/50 bg-gold/10 px-4 py-3">
+          <p className="font-mono text-xs uppercase tracking-widest text-gold">
+            \u26a1 Sprint weekend \u2014 don&apos;t forget your Sprint Top 8 (+9 pts max)
+          </p>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/sprint">Go to Sprint picks \u2192</Link>
+          </Button>
+        </div>
+      )}
+
+      {/* Results comparison when race is scored */}
+      {race?.has_results && results && (
+        <section className="carbon-panel mt-6 rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl">Your Score</h2>
+            <span className="font-display text-3xl font-black text-gold">
+              {score?.points ?? 0} PTS
+            </span>
+          </div>
+          {breakdown?.noSubmission && (
+            <p className="mt-2 font-mono text-xs uppercase text-destructive">
+              No prediction submitted \u2014 {score?.points ?? -25} pt penalty applied
+            </p>
+          )}
+          {breakdown?.items && (
+            <div className="mt-4 grid gap-1.5 text-sm">
+              {breakdown.items.map((it) => {
+                const pred = byId.get(it.predicted);
+                const act = it.actual ? byId.get(it.actual) : null;
+                return (
+                  <div
+                    key={it.pos}
+                    className="flex items-center justify-between rounded bg-secondary/50 px-3 py-1.5 font-mono text-xs"
+                  >
+                    <span>
+                      P{it.pos} \u00b7 Picked <strong>{pred?.code ?? "\u2014"}</strong>
+                      {act ? ` (actual P${results.find((r) => r.driver_id === it.actual)?.position}: ${act.code})` : " (DNF/out)"}
+                    </span>
+                    <span className={cn(it.pts > 0 && "font-bold text-gold")}>+{it.pts}</span>
+                  </div>
+                );
+              })}
+              <div className="mt-2 flex flex-wrap gap-2 font-mono text-xs">
+                <span className="rounded bg-secondary px-2 py-1">Pole +{breakdown.pole ?? 0}</span>
+                <span className="rounded bg-secondary px-2 py-1">FL +{breakdown.fastestLap ?? 0}</span>
+                <span className="rounded bg-secondary px-2 py-1">DNF +{breakdown.dnf ?? 0}</span>
+                <span className="rounded bg-secondary px-2 py-1">
+                  Podium bonus +{breakdown.podiumBonus ?? 0}
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* STEP 1 \u2014 POLE POSITION (locks at Qualifying start) */}
+      <section className="carbon-panel mt-8 rounded-lg">
+        <div className="kerb-strip" />
+        <div className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-gold">
+                Step 1 \u00b7 Locks at Qualifying \u00b7 +3 pts
+              </p>
+              <h2 className="text-xl">Pole Position Pick</h2>
+            </div>
+            <span
+              className={cn(
+                "rounded px-2 py-0.5 font-mono text-[11px] uppercase",
+                poleLocked
+                  ? "bg-destructive/20 text-destructive"
+                  : prediction?.pole_driver_id
+                    ? "bg-gold/20 text-gold"
+                    : "bg-secondary text-muted-foreground",
+              )}
+            >
+              {poleLocked ? "Locked" : prediction?.pole_driver_id ? "Saved" : "Open"}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Saved on its own \u2014 lock in your Pole pick before Qualifying starts, then come back to set your Race Top 10 after seeing the grid.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <DriverPicker
+                drivers={drivers ?? []}
+                value={pole}
+                onChange={setPole}
+                disabled={poleLocked}
+                placeholder="Choose pole position driver"
+              />
+            </div>
+            {!poleLocked && (
+              <Button
+                type="button"
+                onClick={savePole}
+                disabled={savingPole || pole === EMPTY}
+                className="sm:w-auto"
+              >
+                {savingPole
+                  ? "Saving\u2026"
+                  : prediction?.pole_driver_id
+                    ? poleDirty
+                      ? "Update Pole Pick *"
+                      : "Update Pole Pick"
+                    : "Lock in Pole Pick"}
+              </Button>
+            )}
+          </div>
+          {race && drivers && pole !== EMPTY && (
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <SharePole
+                raceName={race.name}
+                round={race.round}
+                playerName={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email ?? "Driver"}
+                driver={byId.get(pole)}
+                savedAt={
+                  (user && race ? readPoleAt(user.id, race.id, pole) : null) ??
+                  (prediction?.pole_driver_id === pole ? prediction?.updated_at : null) ??
+                  null
+                }
+                circuit={[race.circuit, race.country].filter(Boolean).join(" \u00b7 ")}
+              />
+            </div>
+          )}
+        </div>
       </section>
 
-      <div id="grid-section" className="scroll-mt-16">
+      {/* STEP 2 \u2014 RACE TOP 10 + FL + DNF (locks at Race lights out) */}
+      <form onSubmit={saveRace}>
         <SprintGrid
           size={10}
           drivers={drivers ?? []}
           top10={top10}
           setTop10={setTop10}
-          locked={viewOnly}
-          onRepeat={lastPicks ? repeatLast : undefined}
+          locked={raceLocked}
+          onRepeat={repeatLast}
         />
-      </div>
-      {duplicates && (
-        <p className="mt-3 text-sm text-destructive">A driver is selected more than once.</p>
-      )}
 
-      <section className="carbon-panel mt-6 rounded-lg p-4 sm:p-5">
-        <h2 className="text-xl">Bonus picks</h2>
-        <div className="mt-4 space-y-4">
-          <Field label="Fastest lap (+3)" purple>
-            <DriverPicker
-              drivers={drivers ?? []}
-              value={fastestLap}
-              disabled={viewOnly}
-              onChange={setFastestLap}
-            />
+        <section className="carbon-panel mt-6 grid gap-4 rounded-lg p-5 sm:grid-cols-2">
+          <Field label="Fastest Lap" badge="+2 PTS" purple disabled={raceLocked}>
+            <DriverPicker drivers={drivers ?? []} value={fl} onChange={setFl} disabled={raceLocked} />
           </Field>
-          <Field label="Driver to DNF (+1) — Aston Martin & Cadillac excluded">
-            <DriverPicker
-              drivers={(drivers ?? []).filter((d) => !/aston|cadillac/i.test(d.team ?? ""))}
-              value={dnf}
-              disabled={viewOnly}
-              exclude={usedInTop10}
-              onChange={setDnf}
-            />
-            {dnfInTop10 && (
-              <p className="mt-1.5 text-sm text-destructive">
-                Your DNF pick can't be one of your top 10 finishers.
-              </p>
-            )}
+          <Field label="DNF Driver" badge="+3 PTS" disabled={raceLocked}>
+            <DriverPicker drivers={drivers ?? []} value={dnf} onChange={setDnf} disabled={raceLocked} />
           </Field>
-        </div>
-      </section>
+        </section>
 
-      {hasSaved && viewOnly && prediction && (
-        <div className="mt-6">
-          <SharePicks
-            raceName={race.name}
-            round={race.round}
-            playerName={(user.user_metadata?.["full_name"] as string | undefined) ?? "Me"}
-            drivers={drivers ?? []}
-            top10={prediction.top10}
-            pole={prediction.pole_driver_id}
-            fastestLap={prediction.fastest_lap_driver_id}
-            dnf={prediction.dnf_driver_id}
-            lockedAt={prediction.updated_at}
-          />
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          {race && drivers && (
+            <SharePicks
+              raceName={race.name}
+              round={race.round}
+              playerName={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email ?? "Driver"}
+              drivers={drivers}
+              top10={top10}
+              pole={pole === EMPTY ? null : pole}
+              fastestLap={fl === EMPTY ? null : fl}
+              dnf={dnf === EMPTY ? null : dnf}
+              lockedAt={prediction?.updated_at ?? null}
+            />
+          )}
+          {!raceLocked && (
+            <Button type="submit" size="lg" disabled={savingRace} className="ml-auto">
+              {savingRace
+                ? "Locking in\u2026"
+                : raceSaved
+                  ? raceDirty
+                    ? "Save Changes *"
+                    : "Update Race Picks"
+                  : `Lock in Race Picks (${filledCount}/10)`}
+            </Button>
+          )}
         </div>
-      )}
+      </form>
 
-      <div
-        className={
-          viewOnly
-            ? "mt-4"
-            : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3"
-        }
-      >
-        {!viewOnly && draftSaved && gridDirty && (
-          <div className="mb-1.5 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gold">
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-              Draft auto-saved on device · Not locked in yet
+      {/* Sticky mobile save bar so the user never forgets to submit after picking 10 drivers */}
+      {!raceLocked && (filledCount === 10 || raceDirty) && (!raceSaved || raceDirty) && (
+        <div className="fixed inset-x-0 bottom-16 z-30 border-t border-primary/50 bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+            <span className="font-mono text-xs font-bold uppercase text-gold">
+              {raceSaved ? "Unsaved changes!" : "10/10 selected \u2014 tap to save!"}
             </span>
-            <span className="tabular-nums text-muted-foreground">{usedInTop10.length}/10</span>
-          </div>
-        )}
-        {raceLocked ? (
-          <Button size="lg" className="h-12 w-full text-base" disabled>
-            Picks locked — race started
-          </Button>
-        ) : viewOnly ? (
-          <Button
-            size="lg"
-            variant="outline"
-            className="h-12 w-full text-base"
-            onClick={() => setEditing(true)}
-          >
-            Edit picks
-          </Button>
-        ) : (
-          <div className="flex gap-2">
-            {hasSaved && (
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 text-base"
-                disabled={saving}
-                onClick={() => {
-                  queryClient.invalidateQueries({ queryKey: ["prediction", race.id, user.id] });
-                  setEditing(false);
-                }}
-              >
-                Cancel
-              </Button>
-            )}
-            <Button size="lg" className="h-12 flex-1 text-base" disabled={saving} onClick={save}>
-              {saving ? "Saving…" : "Lock in picks"}
+            <Button
+              type="button"
+              size="sm"
+              disabled={savingRace}
+              onClick={(e) => void saveRace(e as unknown as React.FormEvent)}
+            >
+              {savingRace ? "Saving\u2026" : "Save Race Picks"}
             </Button>
           </div>
-        )}
-      </div>
-      {lightsOut && <LightsOut onDone={endLights} />}
+        </div>
+      )}
     </main>
   );
 }
 
 function Field({
   label,
-  children,
+  badge,
   purple,
+  children,
 }: {
   label: string;
+  badge: string;
+  purple?: boolean | undefined;
+  disabled?: boolean | undefined;
   children: React.ReactNode;
-  purple?: boolean;
 }) {
   return (
     <div>
-      <p
-        className={cn(
-          "mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest",
-          purple ? "text-purple" : "text-muted-foreground",
-        )}
-      >
-        {label}
-      </p>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="font-display text-sm font-bold uppercase tracking-wider">{label}</label>
+        <span
+          className={cn(
+            "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold",
+            purple ? "bg-purple-500/20 text-purple" : "bg-gold/20 text-gold",
+          )}
+        >
+          {badge}
+        </span>
+      </div>
       {children}
-    </div>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-3xl px-4 py-16">{children}</main>;
-}
-
-function TrackStatus({ target }: { target: string }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  const left = new Date(target).getTime() - now;
-  const state =
-    left <= 0
-      ? { label: "Locked · Formation lap", color: "var(--color-primary)" }
-      : left < 2 * 3600_000
-        ? { label: "Closing soon", color: "var(--gold)" }
-        : { label: "Track open", color: "var(--track-green)" };
-  return (
-    <div
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest"
-      style={{ borderColor: state.color, color: state.color }}
-    >
-      <span
-        className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full"
-        style={{ background: state.color, boxShadow: `0 0 10px ${state.color}` }}
-      />
-      {state.label}
     </div>
   );
 }

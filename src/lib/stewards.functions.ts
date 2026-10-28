@@ -1,9 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { type ResultRow } from "./scoring";
-import { extractSubscribedUserIds, findStalePushKeysForEndpoint, isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
-import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
-import { type SprintResultRow } from "./sprintScoring";
+import type { Json } from "@/integrations/supabase/types";
+import { scorePrediction, NO_SUBMISSION_PENALTY, type ResultRow } from "./scoring";
+import { scoreSprint, type SprintResultRow } from "./sprintScoring";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
 
@@ -31,7 +30,15 @@ export const savePushSubscription = createServerFn({ method: "POST" })
       .select("key")
       .like("key", `${prefix}%`);
 
-    const staleKeys = findStalePushKeysForEndpoint(existing, context.userId, data.endpoint);
+    const staleKeys: string[] = [];
+    for (const r of existing ?? []) {
+      try {
+        const parsed = JSON.parse(r.key.slice(prefix.length)) as { endpoint?: string };
+        if (parsed.endpoint === data.endpoint) staleKeys.push(r.key);
+      } catch {
+        staleKeys.push(r.key);
+      }
+    }
     if (staleKeys.length > 0) {
       await supabaseAdmin.from("sync_state").delete().in("key", staleKeys);
     }
@@ -63,7 +70,13 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
         sb.from("sync_state").select("key").like("key", "push_sub:%"),
       ]);
 
-    const pushUserIds = extractSubscribedUserIds(subRows);
+    const pushUserIds = Array.from(
+      new Set(
+        (subRows ?? [])
+          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
+          .filter((x): x is string => !!x),
+      ),
+    );
 
     return {
       profiles: profiles ?? [],
@@ -88,24 +101,23 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       | "manual_results"
       | "nudge_missing_push"
       | "test_my_push";
-    raceId?: string;
-    userId?: string;
-    points?: number;
-    name?: string;
-    minutes?: number;
-    isoTime?: string;
-    target?: "qualifying" | "race";
-    pole?: string | null;
-    fl?: string | null;
-    dnf?: string | null;
-    top10?: string[];
-    dnfs?: string[];
-    title?: string;
-    body?: string;
+    raceId?: string | undefined;
+    userId?: string | undefined;
+    points?: number | undefined;
+    name?: string | undefined;
+    minutes?: number | undefined;
+    isoTime?: string | undefined;
+    target?: "qualifying" | "race" | undefined;
+    pole?: string | null | undefined;
+    fl?: string | null | undefined;
+    dnf?: string | null | undefined;
+    top10?: string[] | undefined;
+    dnfs?: string[] | undefined;
+    title?: string | undefined;
+    body?: string | undefined;
   }) => d)
   .handler(async ({ data: d, context }) => {
     const sb = await requireSteward(context);
-    const { sendNativeWebPush } = await import("./webpush-native");
 
     if ((d.action === "override_score" || d.action === "remove_penalty") && d.userId && d.raceId) {
       const pts = d.action === "remove_penalty" ? 0 : (d.points ?? 0);
@@ -114,7 +126,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           user_id: d.userId,
           race_id: d.raceId,
           points: pts,
-          breakdown: { stewardOverride: true, total: pts },
+          breakdown: { stewardOverride: true, total: pts } as unknown as Json,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,race_id" },
@@ -141,9 +153,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     if (d.action === "set_exact_deadline" && d.raceId && d.isoTime) {
       const parsed = new Date(d.isoTime);
       if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date/time format");
-      const updateData = d.target === "qualifying"
-        ? { qualifying_at: parsed.toISOString() }
-        : { race_at: parsed.toISOString() };
+      const updateData =
+        d.target === "qualifying"
+          ? { qualifying_at: parsed.toISOString() }
+          : { race_at: parsed.toISOString() };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
@@ -157,9 +170,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       if (!r) throw new Error("Race not found");
       const cur = (d.target === "qualifying" ? r.qualifying_at : r.race_at) ?? r.race_at;
       const nextIso = new Date(new Date(cur).getTime() + d.minutes * 60_000).toISOString();
-      const updateData = d.target === "qualifying"
-        ? { qualifying_at: nextIso }
-        : { race_at: nextIso };
+      const updateData =
+        d.target === "qualifying"
+          ? { qualifying_at: nextIso }
+          : { race_at: nextIso };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
       if (error) throw new Error(error.message);
       await sb
@@ -193,7 +207,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         race_id: d.raceId,
         prediction_id: predId,
         action: "stewards",
-        changes: { pole: d.pole ?? null, fl: d.fl ?? null, dnf: d.dnf ?? null, top10: [[], d.top10 ?? []] },
+        changes: { pole: d.pole ?? null, fl: d.fl ?? null, dnf: d.dnf ?? null, top10: [[], d.top10 ?? []] } as unknown as Json,
       });
       return { ok: true, msg: "Player picks saved & logged by Stewards." };
     }
@@ -232,23 +246,67 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         sb.from("scores").select("user_id, breakdown").eq("race_id", d.raceId),
       ]);
 
-      const scoreRows = buildRaceScoreRows({
-        raceId: d.raceId!,
-        raceAt: raceRow?.race_at ?? null,
-        profiles: (profiles ?? []) as ProfileRecord[],
-        results: rows as ResultRow[],
-        predictions: (preds ?? []) as PredictionRecord[],
-        sprintResults: (sprintResults ?? []) as SprintResultRow[],
-        sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
-        existingScores: (existingScores ?? []) as ScoreRecord[],
-        mode: "manual_results",
-        manualPoleWinner: d.pole,
-      });
+      const stewardLockedUsers = new Set(
+        (existingScores ?? [])
+          .filter((s) => {
+            const b = s.breakdown as Record<string, unknown> | null;
+            return b && b["stewardOverride"] === true;
+          })
+          .map((s) => s.user_id),
+      );
+
+      const byU = new Map((preds ?? []).map((p) => [p.user_id, p]));
+      const sprintByU = new Map((sprintPreds ?? []).map((p) => [p.user_id, p]));
+      const sprintFor = (uid: string) =>
+        sprintResults?.length
+          ? scoreSprint(sprintByU.get(uid) ?? null, sprintResults as SprintResultRow[])
+          : null;
+
+      const scoreRows: Array<{
+        user_id: string;
+        race_id: string;
+        points: number;
+        breakdown: Json;
+        updated_at: string;
+      }> = [];
+      for (const p of profiles ?? []) {
+        if (stewardLockedUsers.has(p.id)) continue;
+        if (raceRow?.race_at && new Date(p.created_at) > new Date(raceRow.race_at)) continue;
+
+        const sprint = sprintFor(p.id);
+        const pr = byU.get(p.id);
+        const validTop10 = (pr?.top10 ?? []).filter((x) => x && x !== "__none__");
+        if (!pr || validTop10.length < 10) {
+          const poleHit = pr?.pole_driver_id && pr.pole_driver_id === d.pole ? 3 : 0;
+          const total = NO_SUBMISSION_PENALTY + poleHit + (sprint?.total ?? 0);
+          scoreRows.push({
+            user_id: p.id,
+            race_id: d.raceId!,
+            points: total,
+            breakdown: { noSubmission: true, pole: poleHit, ...(sprint ? { sprint } : {}), total } as unknown as Json,
+            updated_at: new Date().toISOString(),
+          });
+        } else {
+          const b = scorePrediction(
+            { top10: validTop10, pole_driver_id: pr.pole_driver_id, fastest_lap_driver_id: pr.fastest_lap_driver_id, dnf_driver_id: pr.dnf_driver_id },
+            rows as ResultRow[],
+          );
+          const total = b.total + (sprint?.total ?? 0);
+          scoreRows.push({
+            user_id: p.id,
+            race_id: d.raceId!,
+            points: total,
+            breakdown: { ...b, ...(sprint ? { sprint } : {}), total } as unknown as Json,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
       if (scoreRows.length) await sb.from("scores").upsert(scoreRows, { onConflict: "user_id,race_id" });
       return { ok: true, msg: `Manual results saved & ${scoreRows.length} players scored (including Sprint)!` };
     }
 
     if (d.action === "test_my_push") {
+      const { sendNativeWebPush } = await import("./webpush-native");
       const { data: subRows } = await sb
         .from("sync_state")
         .select("key")
@@ -261,10 +319,11 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       }
       let sent = 0;
       for (const r of subRows) {
-        const sub = parsePushSubscriptionKey(r.key);
-        if (!sub) continue;
+        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
+        if (!m) continue;
+        const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
         const res = await sendNativeWebPush(sub, {
-          title: "🏎️ Stewards Test Alert",
+          title: "\ud83c\udfce\ufe0f Stewards Test Alert",
           body: "Push notifications are 100% working on your device!",
           tag: "dfr-test-" + Date.now(),
           url: "/stewards",
@@ -278,6 +337,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     }
 
     if (d.action === "nudge_missing_push" && d.raceId) {
+      const { sendNativeWebPush } = await import("./webpush-native");
       const [{ data: subRows }, { data: preds }, { data: profiles }] = await Promise.all([
         sb.from("sync_state").select("key").like("key", "push_sub:%"),
         sb.from("predictions").select("user_id, top10").eq("race_id", d.raceId),
@@ -286,13 +346,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
       const completedUsers = new Set(
         (preds ?? [])
-          .filter((p) => isCompleteTop10(p.top10))
+          .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
           .map((p) => p.user_id),
       );
 
       const missingUsers = (profiles ?? []).filter((p) => !completedUsers.has(p.id));
       const payloadObj = {
-        title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
+        title: d.title || "\u23f0 DOWNFORCE \u2014 Picks Reminder!",
         body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
         tag: "dfr-stewards-" + Date.now(),
         url: "/predict",
@@ -302,12 +362,15 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       const deadKeys: string[] = [];
 
       const tasks = (subRows ?? []).map(async (r) => {
-        const parsed = parsePushSubscriptionKey(r.key);
-        if (!parsed || completedUsers.has(parsed.userId)) return;
+        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
+        if (!m) return;
+        const uid = m[1]!;
+        if (completedUsers.has(uid)) return;
         try {
-          const res = await sendNativeWebPush(parsed, payloadObj);
+          const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+          const res = await sendNativeWebPush(sub, payloadObj);
           if (res.ok) {
-            reachedUserIds.add(parsed.userId);
+            reachedUserIds.add(uid);
           } else if (res.status === 404 || res.status === 410) {
             deadKeys.push(r.key);
           }
@@ -341,7 +404,6 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
     return { ok: false, msg: "Unknown action" };
   });
-
 
 export const updateMyProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

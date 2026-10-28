@@ -23,19 +23,19 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
     meta: [
-      { title: "Standings — DOWNFORCE" },
+      { title: "Standings \u2014 DOWNFORCE" },
       {
         name: "description",
         content:
           "Live DOWNFORCE prediction league standings, official F1 Drivers & Constructors rankings, and season stats.",
       },
-      { property: "og:title", content: "Standings — DOWNFORCE" },
+      { property: "og:title", content: "Standings \u2014 DOWNFORCE" },
       {
         property: "og:description",
         content:
           "See who is leading the DOWNFORCE league and the official 2026 F1 Championship.",
       },
-      { name: "twitter:title", content: "Standings — DOWNFORCE" },
+      { name: "twitter:title", content: "Standings \u2014 DOWNFORCE" },
       {
         name: "twitter:description",
         content:
@@ -121,7 +121,7 @@ const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
   LIN: { officialRank: 11, code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 38, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 11, dnfs: 0, bestFinish: 6 },
   COL: { officialRank: 12, code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 27, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 3, bestFinish: 6 },
   BEA: { officialRank: 13, code: "BEA", fullName: "Oliver Bearman", team: "Haas", number: 87, points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 5, bestFinish: 5 },
-  HUL: { officialRank: 14, code: "HUL", fullName: "Nico Hülkenberg", team: "Audi Revolut", number: 27, points: 13, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 8 },
+  HUL: { officialRank: 14, code: "HUL", fullName: "Nico H\u00fclkenberg", team: "Audi Revolut", number: 27, points: 13, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 8 },
   BOR: { officialRank: 15, code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi Revolut", number: 5, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 8 },
   OCO: { officialRank: 16, code: "OCO", fullName: "Esteban Ocon", team: "Haas", number: 31, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 8 },
   ALO: { officialRank: 17, code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 6, bestFinish: 8 },
@@ -387,7 +387,7 @@ const f1StandingsQuery = queryOptions({
     }
 
     for (const d of sortedDrivers) {
-      if (!d.team || d.team === "—") continue;
+      if (!d.team || d.team === "\u2014") continue;
       const t = byTeam.get(d.team);
       if (!t) continue;
 
@@ -426,7 +426,7 @@ const f1StandingsQuery = queryOptions({
       const maxTeamGain = (jolpicaTeamRound - SNAPSHOT_COMPLETED_ROUNDS) * 60;
       for (const jt of jolpicaTeamLists) {
         const cName = teamLabel(jt?.Constructor?.name);
-        if (!cName || cName === "—") continue;
+        if (!cName || cName === "\u2014") continue;
         const existing = byTeam.get(cName);
         const snap = OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT[cName];
         if (!existing || !snap) continue;
@@ -614,7 +614,7 @@ function Leaderboard() {
           <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {activeTab === "league"
               ? `${scored} league race${scored === 1 ? "" : "s"} scored`
-              : `${f1Data?.roundsCompleted ?? 18} races completed · ${Math.max(0, TOTAL_2026_F1_ROUNDS - (f1Data?.roundsCompleted ?? 18))} races remaining`}
+              : `${f1Data?.roundsCompleted ?? 18} races completed \u00b7 ${Math.max(0, TOTAL_2026_F1_ROUNDS - (f1Data?.roundsCompleted ?? 18))} races remaining`}
           </p>
         </div>
         {user && (
@@ -627,7 +627,7 @@ function Leaderboard() {
             className="hit-slop shrink-0 gap-1.5"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-            {syncing ? "Syncing…" : "Sync results"}
+            {syncing ? "Syncing\u2026" : "Sync results"}
           </Button>
         )}
       </div>
@@ -746,7 +746,7 @@ function Leaderboard() {
                           {entry.fahl && <FahlBadge />}
                         </div>
                         <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                          {entry.races} scored · best {entry.best ?? 0} | avg{" "}
+                          {entry.races} scored \u00b7 best {entry.best ?? 0} | avg{" "}
                           {entry.races ? (entry.points / entry.races).toFixed(1) : 0}
                         </p>
                       </div>
@@ -757,7 +757,7 @@ function Leaderboard() {
                             entry.change > 0 ? "text-gold" : "text-primary",
                           )}
                         >
-                          {entry.change > 0 ? `▲${entry.change}` : `▼${-entry.change}`}
+                          {entry.change > 0 ? `\u25b2${entry.change}` : `\u25bc${-entry.change}`}
                         </span>
                       )}
                       <span className="font-mono text-xl font-bold tabular-nums">
@@ -799,7 +799,7 @@ function Leaderboard() {
                                 R{r.round}
                               </p>
                               <p className="font-mono text-sm font-bold tabular-nums">
-                                {entry.byRound[r.round] ?? "–"}
+                                {entry.byRound[r.round] ?? "\u2013"}
                               </p>
                             </div>
                           ))}
@@ -887,7 +887,7 @@ function Leaderboard() {
 
                           <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                             <span className="truncate">{d.team}</span>
-                            <span className="opacity-40">·</span>
+                            <span className="opacity-40">\u00b7</span>
                             <span className="hit-slop inline-flex shrink-0 items-center gap-1 font-semibold text-foreground/80">
                               Driver stats
                               <ChevronDown
@@ -953,7 +953,7 @@ function Leaderboard() {
                               Best
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">
-                              {d.bestFinish != null ? `P${d.bestFinish}` : "–"}
+                              {d.bestFinish != null ? `P${d.bestFinish}` : "\u2013"}
                             </p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
@@ -1012,7 +1012,7 @@ function Leaderboard() {
                         </p>
                         {metaParts.length > 0 && (
                           <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {metaParts.join(" · ")}
+                            {metaParts.join(" \u00b7 ")}
                           </span>
                         )}
                       </div>
@@ -1090,7 +1090,7 @@ function Leaderboard() {
                       {stat.label}
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
-                      {stat.d ? stat.d.code : "–"}
+                      {stat.d ? stat.d.code : "\u2013"}
                     </p>
                     <p className="truncate font-mono text-[10px] uppercase text-muted-foreground">
                       {stat.d?.team ?? ""}
@@ -1116,7 +1116,7 @@ function Leaderboard() {
                       League Leader
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
-                      {board[0]?.name ?? "–"}
+                      {board[0]?.name ?? "\u2013"}
                     </p>
                   </div>
                   <span className="font-mono text-lg font-bold tabular-nums text-gold">
@@ -1130,7 +1130,7 @@ function Leaderboard() {
                       Best Round
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
-                      {bestSingleRoundEntry?.name ?? "–"}
+                      {bestSingleRoundEntry?.name ?? "\u2013"}
                     </p>
                   </div>
                   <span className="font-mono text-lg font-bold tabular-nums">
@@ -1144,7 +1144,7 @@ function Leaderboard() {
                       Best Average
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
-                      {bestAverageEntry?.name ?? "–"}
+                      {bestAverageEntry?.name ?? "\u2013"}
                     </p>
                   </div>
                   <span className="font-mono text-lg font-bold tabular-nums">

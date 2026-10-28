@@ -40,10 +40,7 @@ export function SprintGrid({
     clientY: number;
   } | null>(null);
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
-  const [gridAnimRef] = useAutoAnimate<HTMLDivElement>({
-    duration: 220,
-    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-  });
+  const [gridAnimRef] = useAutoAnimate<HTMLDivElement>();
   const [animRef] = useAutoAnimate<HTMLDivElement>();
   const dragRef = useRef<{
     from: number;
@@ -99,19 +96,19 @@ export function SprintGrid({
 
   function onDown(e: React.PointerEvent, i: number) {
     if (locked || top10[i] === EMPTY) return;
-    const fromGrip = !!(e.target as HTMLElement | null)?.closest("[data-grip]");
+    const isGrip = !!(e.target as HTMLElement).closest("[data-grip]");
+    const isMouse = e.pointerType === "mouse";
     const target = e.currentTarget as HTMLElement;
     dragRef.current = {
       from: i,
       x: e.clientX,
       y: e.clientY,
       moved: false,
-      fromGrip,
+      fromGrip: isGrip || isMouse,
       pointerId: e.pointerId,
       target,
     };
-    // Only capture pointer immediately on mouse or explicit grip handle so mobile vertical scroll is never hijacked
-    if (fromGrip || e.pointerType === "mouse") {
+    if (isGrip || isMouse) {
       try {
         target.setPointerCapture(e.pointerId);
       } catch {
@@ -123,26 +120,13 @@ export function SprintGrid({
   function onMove(e: React.PointerEvent) {
     const d = dragRef.current;
     if (!d) return;
-    const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
-    const dist = Math.hypot(dx, dy);
-
+    // On touch devices, only initiate drag when grabbing the grip handle so normal vertical scrolling never hijacks picks
+    if (!d.fromGrip) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8) return;
     if (!d.moved) {
-      if (dist < 8) return;
-      // On touch outside the grip handle, if the user is scrolling vertically, cancel drag so page scrolls smoothly
-      if (!d.fromGrip && e.pointerType !== "mouse" && Math.abs(dy) > Math.abs(dx) * 1.25) {
-        dragRef.current = null;
-        return;
-      }
       d.moved = true;
-      try {
-        d.target.setPointerCapture(d.pointerId);
-      } catch {
-        /* ignore */
-      }
       navigator.vibrate?.(8);
     }
-
     setDrag({
       from: d.from,
       over: slotAt(e.clientX, e.clientY),
@@ -184,38 +168,29 @@ export function SprintGrid({
       <div className="kerb-strip" />
       <div className="p-3 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg sm:text-xl whitespace-nowrap">
+          <h2 className="whitespace-nowrap text-lg sm:text-xl">
             {size === 10 ? "Starting grid" : "Sprint grid"}
           </h2>
-          <div className="flex flex-wrap shrink-0 items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {!locked && onRepeat && (
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
-                className="hit-slop gap-1.5 border-gold/45 bg-gold/10 font-mono text-[11px] font-bold uppercase tracking-wider text-gold hover:border-gold hover:bg-gold/20"
+                className="hit-slop gap-1.5 border-gold/45 bg-gold/10 font-mono text-[11px] font-bold uppercase tracking-wider text-gold hover:bg-gold/20"
                 onClick={() => {
-                  const snapshot = [...top10];
-                  const hadPicks = used.size > 0;
                   onRepeat();
-                  navigator.vibrate?.([10, 30, 12]);
-                  if (hadPicks) {
-                    toast("Loaded last round's picks", {
-                      action: {
-                        label: "Undo",
-                        onClick: () => setTop10(snapshot),
-                      },
-                    });
-                  }
+                  navigator.vibrate?.(12);
                 }}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Repeat last
+                Repeat Last
               </Button>
             )}
-
             {!locked && (
               <>
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
                   className="hit-slop"
@@ -235,6 +210,7 @@ export function SprintGrid({
                   &#8593;
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
                   className="hit-slop"
@@ -258,6 +234,7 @@ export function SprintGrid({
 
             {!locked && used.size > 0 && (
               <Button
+                type="button"
                 size="sm"
                 variant="secondary"
                 className="hit-slop"
@@ -283,7 +260,7 @@ export function SprintGrid({
           </div>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tap a slot, then a driver. Use the grip handle or drag a car onto another slot to swap positions.
+          Tap a slot, then a driver. Drag the grip handle <span className="font-mono text-xs text-foreground/80">\u22ee\u22ee</span> to swap positions.
         </p>
 
         <div
@@ -296,7 +273,7 @@ export function SprintGrid({
             const color = d ? teamColor(d.team) : "transparent";
             return (
               <button
-                key={d ? `driver-${d.id}` : `slot-${i}`}
+                key={d ? `slot-${d.id}` : `empty-slot-${i}`}
                 type="button"
                 data-slot={i}
                 disabled={locked}
@@ -312,12 +289,12 @@ export function SprintGrid({
                   setDrag(null);
                 }}
                 className={cn(
-                  "flex h-16 select-none items-center gap-2 overflow-hidden rounded-md border bg-background/70 pr-2 text-left transition",
+                  "flex h-16 select-none items-center gap-2 overflow-hidden rounded-md border bg-background/70 pr-1.5 text-left transition",
                   i % 2 === 1 && "mt-5",
                   isActive && "border-primary ring-2 ring-primary/70",
                   !d && !isActive && "border-dashed",
-                  drag?.from === i && "drag-ghost",
-                  drag && drag.over === i && drag.from !== i && "drop-target",
+                  drag?.from === i && "drag-ghost scale-[0.97]",
+                  drag && drag.over === i && drag.from !== i && "drop-target scale-[1.02]",
                 )}
                 style={{
                   borderLeft: `5px solid ${color}`,
@@ -352,12 +329,12 @@ export function SprintGrid({
                     {d ? d.team : isActive ? "Pick a driver" : "Empty"}
                   </span>
                 </span>
-                {!locked && d && (
+                {d && !locked && (
                   <span
                     data-grip="true"
                     aria-hidden="true"
                     style={{ touchAction: "none" }}
-                    className="flex h-10 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground active:text-primary"
+                    className="hit-slop flex h-10 w-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
                   >
                     <GripVertical className="h-4 w-4" />
                   </span>
@@ -367,18 +344,19 @@ export function SprintGrid({
           })}
         </div>
 
+        {/* Floating GPU-accelerated Drag Preview Pill */}
         {drag && draggedDriver && (
           <div
             aria-hidden="true"
-            className="pointer-events-none fixed left-0 top-0 z-50 flex items-center gap-2 rounded-md border border-primary bg-card/95 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.75)] backdrop-blur-md"
+            className="pointer-events-none fixed left-0 top-0 z-[120] flex items-center gap-2 rounded-lg border border-gold bg-card/95 px-3 py-1.5 shadow-2xl backdrop-blur-md"
             style={{
-              transform: `translate3d(${drag.clientX - 56}px, ${drag.clientY - 28}px, 0)`,
+              transform: `translate3d(${drag.clientX - 48}px, ${drag.clientY - 54}px, 0)`,
               borderLeft: `4px solid ${teamColor(draggedDriver.team)}`,
+              willChange: "transform",
             }}
           >
-            <span className="font-mono text-xs font-bold text-primary">
-              P{drag.from + 1}
-              {drag.over != null && drag.over !== drag.from ? ` \u2192 P${drag.over + 1}` : ""}
+            <span className="rounded bg-gold px-1.5 py-0.5 font-mono text-[10px] font-bold text-gold-foreground">
+              P{drag.over != null ? drag.over + 1 : drag.from + 1}
             </span>
             <span className="font-display text-sm font-extrabold italic uppercase">
               {draggedDriver.code ?? draggedDriver.full_name}
@@ -389,7 +367,7 @@ export function SprintGrid({
         {!locked && (
           <>
             <p className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Drivers · filling <span className="text-primary">P{active + 1}</span>{" "}
+              Drivers \u00b7 filling <span className="text-primary">P{active + 1}</span>{" "}
               <span className="ml-1 tabular-nums text-foreground">
                 ({used.size}/{size})
               </span>{" "}

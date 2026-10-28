@@ -144,7 +144,7 @@ export function SiteHeader() {
                   className="h-10 gap-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(225,6,0,0.3)]"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  {signingOut ? "Exiting…" : "Yes, Exit"}
+                  {signingOut ? "Exiting\u2026" : "Yes, Exit"}
                 </Button>
               </div>
             </div>
@@ -162,7 +162,7 @@ export function SiteHeader() {
           className="flex items-center justify-center gap-2 border-b border-gold/40 bg-gold/15 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-gold"
         >
           <WifiOff className="h-3.5 w-3.5 shrink-0" />
-          <span>Offline Telemetry · Cached data active · Drafts saved on device</span>
+          <span>Offline Telemetry \u00b7 Cached data active \u00b7 Drafts saved on device</span>
         </div>
       )}
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4">
@@ -303,7 +303,7 @@ export function FahlBadge() {
       className="fahl-badge inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black not-italic leading-4"
       style={{ fontFamily: "Cairo, sans-serif" }}
     >
-      👑 فحل الجولة
+      \ud83d\udc51 \u0641\u062d\u0644 \u0627\u0644\u062c\u0648\u0644\u0629
     </span>
   );
 }

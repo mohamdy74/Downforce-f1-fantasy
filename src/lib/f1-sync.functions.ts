@@ -4,7 +4,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { NO_SUBMISSION_PENALTY, scorePrediction, type ResultRow } from "./scoring";
 import { scoreSprint, type SprintResultRow } from "./sprintScoring";
-import { sendNativeWebPush } from "./webpush-native";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -17,23 +16,25 @@ type ErgastRace = {
   round: string;
   raceName: string;
   date: string;
-  time?: string;
+  time?: string | undefined;
   Circuit: {
     circuitName: string;
-    Location: { locality?: string; country?: string };
+    Location: { locality?: string | undefined; country?: string | undefined };
   };
-  Qualifying?: ErgastSession;
-  Sprint?: ErgastSession;
-  SprintQualifying?: ErgastSession;
-  SprintShootout?: ErgastSession;
-  Results?: Array<{
-    position: string;
-    grid: string;
-    status: string;
-    Driver: { driverId: string; code?: string; givenName: string; familyName: string };
-    Constructor?: { name: string };
-    FastestLap?: { rank?: string };
-  }>;
+  Qualifying?: ErgastSession | undefined;
+  Sprint?: ErgastSession | undefined;
+  SprintQualifying?: ErgastSession | undefined;
+  SprintShootout?: ErgastSession | undefined;
+  Results?:
+    | Array<{
+        position: string;
+        grid: string;
+        status: string;
+        Driver: { driverId: string; code?: string | undefined; givenName: string; familyName: string };
+        Constructor?: { name: string } | undefined;
+        FastestLap?: { rank?: string | undefined } | undefined;
+      }>
+    | undefined;
 };
 
 function toIso(session: { date: string; time?: string | undefined } | undefined): string | null {
@@ -117,8 +118,8 @@ export const syncF1Data = createServerFn({ method: "POST" })
                 DriverStandings: Array<{
                   Driver: {
                     driverId: string;
-                    code?: string;
-                    permanentNumber?: string;
+                    code?: string | undefined;
+                    permanentNumber?: string | undefined;
                     givenName: string;
                     familyName: string;
                   };
@@ -278,6 +279,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
 export async function checkAndSendPushReminders(
   supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
 ) {
+  const { sendNativeWebPush } = await import("./webpush-native");
   const now = Date.now();
   const { data: upcomingRaces } = await supabaseAdmin
     .from("races")
@@ -335,11 +337,11 @@ export async function checkAndSendPushReminders(
         );
 
         const payloadObj = {
-          title: `⏰ ${race.name} — Lock Alert!`,
+          title: `\u23f0 ${race.name} \u2014 Lock Alert!`,
           body:
             t.type === "pole"
               ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
-              : `Race locks ${w.text}! Submit your Top 10 now to avoid the −25 penalty.`,
+              : `Race locks ${w.text}! Submit your Top 10 now to avoid the \u221225 penalty.`,
           tag: stateKey,
           url: "/predict",
         };
@@ -421,7 +423,7 @@ async function scoreAllRaces() {
     resultsByRace.set(r.race_id, list);
   }
 
-  const predsByRace = new Map<string, typeof allPredictions>();
+  const predsByRace = new Map<string, NonNullable<typeof allPredictions>>();
   for (const p of allPredictions ?? []) {
     const list = predsByRace.get(p.race_id) ?? [];
     list.push(p);
@@ -435,14 +437,14 @@ async function scoreAllRaces() {
     sprintResultsByRace.set(sr.race_id, list);
   }
 
-  const sprintPredsByRace = new Map<string, typeof allSprintPreds>();
+  const sprintPredsByRace = new Map<string, NonNullable<typeof allSprintPreds>>();
   for (const sp of allSprintPreds ?? []) {
     const list = sprintPredsByRace.get(sp.race_id) ?? [];
     list.push(sp);
     sprintPredsByRace.set(sp.race_id, list);
   }
 
-  const existingScoresByRace = new Map<string, typeof allExistingScores>();
+  const existingScoresByRace = new Map<string, NonNullable<typeof allExistingScores>>();
   for (const es of allExistingScores ?? []) {
     const list = existingScoresByRace.get(es.race_id) ?? [];
     list.push(es);
@@ -500,7 +502,7 @@ async function scoreAllRaces() {
             noSubmission: true,
             ...(sprint ? { sprint } : {}),
             total: NO_SUBMISSION_PENALTY + (sprint?.total ?? 0),
-          },
+          } as unknown as Json,
           updated_at: nowIso,
         });
         continue;
@@ -524,9 +526,9 @@ async function scoreAllRaces() {
         user_id: profile.id,
         race_id: race.id,
         points: total,
-        breakdown: poleOnly
+        breakdown: (poleOnly
           ? { noSubmission: true, poleOnly: true, pole: breakdown.pole, ...(sprint ? { sprint } : {}), total }
-          : { ...breakdown, ...(sprint ? { sprint } : {}), total },
+          : { ...breakdown, ...(sprint ? { sprint } : {}), total }) as unknown as Json,
         updated_at: nowIso,
       });
     }
@@ -542,7 +544,13 @@ const RACE_DONE_MS = 80 * 60 * 1000; // 80 minutes after lights out
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 type OF1Session = { session_key: number; session_name: string; date_start: string };
-type OF1Result = { position: number | null; driver_number: number; dnf?: boolean; dns?: boolean; dsq?: boolean };
+type OF1Result = {
+  position: number | null;
+  driver_number: number;
+  dnf?: boolean | undefined;
+  dns?: boolean | undefined;
+  dsq?: boolean | undefined;
+};
 
 async function openF1Fallback(officialRounds: Set<number>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -631,12 +639,14 @@ async function openF1Fallback(officialRounds: Set<number>) {
 
 type ErgastSprintRace = {
   round: string;
-  SprintResults?: Array<{
-    position: string;
-    grid: string;
-    status: string;
-    Driver: { driverId: string };
-  }>;
+  SprintResults?:
+    | Array<{
+        position: string;
+        grid: string;
+        status: string;
+        Driver: { driverId: string };
+      }>
+    | undefined;
 };
 
 async function syncSprintResults(roundToId: Map<number, string>) {
