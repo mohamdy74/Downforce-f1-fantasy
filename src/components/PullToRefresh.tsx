@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -7,12 +8,16 @@ const MAX_PULL = 120;
 
 export function PullToRefresh() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef(0);
   const isPulling = useRef(false);
   const pullRef = useRef(0);
   const refreshingRef = useRef(false);
+  const lastRefreshTime = useRef(0);
+
+  const MIN_REFRESH_INTERVAL = 5000;
 
   useEffect(() => {
     if (!("ontouchstart" in window)) return;
@@ -60,20 +65,30 @@ export function PullToRefresh() {
       if (!isPulling.current) return;
       isPulling.current = false;
 
+      const now = Date.now();
+      if (now - lastRefreshTime.current < MIN_REFRESH_INTERVAL) {
+        pullRef.current = 0;
+        setPullDistance(0);
+        return;
+      }
+
       if (pullRef.current >= PULL_THRESHOLD && !refreshingRef.current) {
         refreshingRef.current = true;
         setIsRefreshing(true);
         pullRef.current = PULL_THRESHOLD;
         setPullDistance(PULL_THRESHOLD);
+        lastRefreshTime.current = now;
 
         await router.invalidate();
+        await queryClient.invalidateQueries({ queryKey: ["races"] });
+        await queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
 
         setTimeout(() => {
           refreshingRef.current = false;
           setIsRefreshing(false);
           pullRef.current = 0;
           setPullDistance(0);
-        }, 500);
+        }, 400);
       } else if (pullRef.current > 0) {
         pullRef.current = 0;
         setPullDistance(0);

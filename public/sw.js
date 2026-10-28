@@ -1,9 +1,55 @@
-self.addEventListener("install", () => {
+const CACHE_NAME = "dfr:v1";
+const PRECACHE_ASSETS = [
+  "/",
+  "/favicon.svg",
+  "/favicon.png",
+  "/apple-touch-icon.png",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/manifest.webmanifest",
+  "/assets/fonts/archivo-roman-var.woff2",
+  "/assets/fonts/archivo-italic-var.woff2",
+  "/assets/fonts/barlow-400.woff2",
+  "/assets/fonts/barlow-600.woff2",
+  "/assets/fonts/barlow-700.woff2",
+  "/assets/fonts/barlow-700-italic.woff2",
+  "/assets/fonts/barlow-semicondensed-600.woff2",
+  "/assets/fonts/barlow-semicondensed-700.woff2",
+  "/assets/fonts/cairo-badge-var.woff2",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS);
+    })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((name) => {
+          if (name !== CACHE_NAME) {
+            return caches.delete(name);
+          }
+        })
+      );
+    })
+  );
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      return cachedResponse || fetch(event.request);
+    })
+  );
 });
 
 self.addEventListener("push", (event) => {
