@@ -10,7 +10,7 @@ const TEAMS: [RegExp, string, string][] = [
   [/alpine/i, "--team-alpine", "Alpine"],
   [/(rb f1|racing bulls|visa|^rb$)/i, "--team-rb", "Racing Bulls"],
   [/(sauber|audi|kick)/i, "--team-audi", "Audi"],
-  [/haas/i, "--team-haas", "Haas"],
+  [/haas/i, "--team-haas", "Haas F1 Team"],
   [/cadillac/i, "--team-cadillac", "Cadillac"],
 ];
 
