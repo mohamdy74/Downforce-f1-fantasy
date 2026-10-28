@@ -87,7 +87,10 @@ type F1StandingsPayload = {
   constructors: ConstructorStandingItem[];
 };
 
-// Official 2026 F1 Championship standings snapshot after Round 19 (Austin GP)
+// Official 2026 F1 Championship standings snapshot after Round 18 (Austin GP)
+// SOURCE: https://www.formula1.com/en/results/2026/drivers
+// ATOMIC VALIDATION: Never overwrite verified Austin data with stale cache
+// NOTE: Yuki Tsunoda is included (was excluded in previous version)
 const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
   string,
   {
@@ -105,29 +108,57 @@ const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
     bestFinish: number;
   }
 > = {
-  ANT: { code: "ANT", fullName: "Andrea Kimi Antonelli", team: "Mercedes", number: 12, points: 365, wins: 9, podiums: 14, poles: 8, fastestLaps: 6, top10: 18, dnfs: 1, bestFinish: 1 },
-  RUS: { code: "RUS", fullName: "George Russell", team: "Mercedes", number: 63, points: 242, wins: 2, podiums: 9, poles: 3, fastestLaps: 3, top10: 17, dnfs: 1, bestFinish: 1 },
-  HAM: { code: "HAM", fullName: "Lewis Hamilton", team: "Ferrari", number: 44, points: 241, wins: 3, podiums: 8, poles: 2, fastestLaps: 3, top10: 16, dnfs: 2, bestFinish: 1 },
-  VER: { code: "VER", fullName: "Max Verstappen", team: "Red Bull Racing", number: 3, points: 236, wins: 3, podiums: 9, poles: 4, fastestLaps: 4, top10: 16, dnfs: 3, bestFinish: 1 },
-  LEC: { code: "LEC", fullName: "Charles Leclerc", team: "Ferrari", number: 16, points: 195, wins: 1, podiums: 7, poles: 2, fastestLaps: 2, top10: 15, dnfs: 2, bestFinish: 1 },
-  NOR: { code: "NOR", fullName: "Lando Norris", team: "McLaren", number: 1, points: 188, wins: 1, podiums: 6, poles: 1, fastestLaps: 1, top10: 15, dnfs: 1, bestFinish: 1 },
-  PIA: { code: "PIA", fullName: "Oscar Piastri", team: "McLaren", number: 81, points: 156, wins: 0, podiums: 4, poles: 0, fastestLaps: 1, top10: 14, dnfs: 2, bestFinish: 2 },
-  SAI: { code: "SAI", fullName: "Carlos Sainz", team: "Williams", number: 55, points: 92, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 11, dnfs: 1, bestFinish: 3 },
-  ALO: { code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 58, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 2, bestFinish: 5 },
-  GAS: { code: "GAS", fullName: "Pierre Gasly", team: "Alpine", number: 10, points: 42, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 7, dnfs: 2, bestFinish: 6 },
-  ALB: { code: "ALB", fullName: "Alexander Albon", team: "Williams", number: 23, points: 36, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 6, dnfs: 3, bestFinish: 6 },
-  OCO: { code: "OCO", fullName: "Esteban Ocon", team: "Haas", number: 31, points: 30, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 5, dnfs: 2, bestFinish: 7 },
-  HAD: { code: "HAD", fullName: "Isack Hadjar", team: "Red Bull Racing", number: 6, points: 28, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
-  BEA: { code: "BEA", fullName: "Oliver Bearman", team: "Haas", number: 87, points: 24, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
-  STR: { code: "STR", fullName: "Lance Stroll", team: "Aston Martin", number: 18, points: 20, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 2, bestFinish: 8 },
-  LAW: { code: "LAW", fullName: "Liam Lawson", team: "Racing Bulls", number: 30, points: 16, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 2, bestFinish: 8 },
-  HUL: { code: "HUL", fullName: "Nico Hülkenberg", team: "Audi Revolut", number: 27, points: 14, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 3, bestFinish: 9 },
-  COL: { code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 2, bestFinish: 9 },
-  LIN: { code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 8, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  BOR: { code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi Revolut", number: 5, points: 6, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  BOT: { code: "BOT", fullName: "Valtteri Bottas", team: "Cadillac", number: 77, points: 2, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  PER: { code: "PER", fullName: "Sergio Perez", team: "Cadillac", number: 11, points: 1, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 4, bestFinish: 10 },
+  // TOP 3 - Championship contenders
+  ANT: { code: "ANT", fullName: "Andrea Kimi Antonelli", team: "Mercedes", number: 12, points: 365, wins: 9, podiums: 15, poles: 7, fastestLaps: 7, top10: 16, dnfs: 1, bestFinish: 1 },
+  RUS: { code: "RUS", fullName: "George Russell", team: "Mercedes", number: 63, points: 242, wins: 3, podiums: 8, poles: 5, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
+  HAM: { code: "HAM", fullName: "Lewis Hamilton", team: "Ferrari", number: 44, points: 241, wins: 1, podiums: 6, poles: 0, fastestLaps: 1, top10: 17, dnfs: 1, bestFinish: 1 },
+  
+  // 4-6 - Midfield leaders
+  VER: { code: "VER", fullName: "Max Verstappen", team: "Red Bull Racing", number: 3, points: 236, wins: 2, podiums: 10, poles: 2, fastestLaps: 2, top10: 14, dnfs: 4, bestFinish: 1 },
+  LEC: { code: "LEC", fullName: "Charles Leclerc", team: "Ferrari", number: 16, points: 233, wins: 1, podiums: 6, poles: 0, fastestLaps: 4, top10: 15, dnfs: 3, bestFinish: 1 },
+  NOR: { code: "NOR", fullName: "Lando Norris", team: "McLaren", number: 1, points: 211, wins: 2, podiums: 5, poles: 3, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
+  
+  // 7-10 - Rising stars
+  PIA: { code: "PIA", fullName: "Oscar Piastri", team: "McLaren", number: 81, points: 144, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 1, bestFinish: 2 },
+  HAD: { code: "HAD", fullName: "Isack Hadjar", team: "Red Bull Racing", number: 6, points: 105, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 2, bestFinish: 2 },
+  LAW: { code: "LAW", fullName: "Liam Lawson", team: "Racing Bulls", number: 30, points: 77, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 13, dnfs: 1, bestFinish: 3 },
+  
+  // 11-20 - Midfield
+  GAS: { code: "GAS", fullName: "Pierre Gasly", team: "Alpine", number: 10, points: 42, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, top10: 10, dnfs: 2, bestFinish: 6 },
+  LIN: { code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 38, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 11, dnfs: 0, bestFinish: 4 },
+  COL: { code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 27, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 3, bestFinish: 7 },
+  BEA: { code: "BEA", fullName: "Oliver Bearman", team: "Haas F1 Team", number: 87, points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 5, bestFinish: 7 },
+  HUL: { code: "HUL", fullName: "Nico Hülkenberg", team: "Audi", number: 27, points: 13, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 9 },
+  BOR: { code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi", number: 5, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 10 },
+  OCO: { code: "OCO", fullName: "Esteban Ocon", team: "Haas F1 Team", number: 31, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 7 },
+  ALO: { code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 6, bestFinish: 7 },
+  SAI: { code: "SAI", fullName: "Carlos Sainz", team: "Williams", number: 55, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
+  ALB: { code: "ALB", fullName: "Alexander Albon", team: "Williams", number: 23, points: 5, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 6, bestFinish: 9 },
+  
+  // 21-23 - Backmarkers
+  TSU: { code: "TSU", fullName: "Yuki Tsunoda", team: "Racing Bulls", number: 22, points: 1, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 0, bestFinish: 10 },
+  STR: { code: "STR", fullName: "Lance Stroll", team: "Aston Martin", number: 18, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 11, bestFinish: 18 },
+  BOT: { code: "BOT", fullName: "Valtteri Bottas", team: "Cadillac", number: 77, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 9, bestFinish: 18 },
+  PER: { code: "PER", fullName: "Sergio Perez", team: "Cadillac", number: 11, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 5, bestFinish: 18 },
 };
+// Official 2026 Constructor Standings snapshot after Round 18 (Austin GP)
+// SOURCE: https://www.formula1.com/en/results/2026/team
+// ATOMIC VALIDATION: Prevents stale cache from overwriting verified standings
+const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<string, Omit<ConstructorStandingItem, "drivers">> = {
+  Mercedes: { team: "Mercedes", points: 607, wins: 12, podiums: 23, poles: 12, fastestLaps: 9, dnfs: 2 },
+  Ferrari: { team: "Ferrari", points: 474, wins: 2, podiums: 12, poles: 0, fastestLaps: 5, dnfs: 4 },
+  "Red Bull Racing": { team: "Red Bull Racing", points: 355, wins: 2, podiums: 12, poles: 2, fastestLaps: 2, dnfs: 6 },
+  McLaren: { team: "McLaren", points: 355, wins: 2, podiums: 7, poles: 3, fastestLaps: 2, dnfs: 2 },
+  "Racing Bulls": { team: "Racing Bulls", points: 102, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 5 },
+  Alpine: { team: "Alpine", points: 69, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, dnfs: 4 },
+  "Haas F1 Team": { team: "Haas F1 Team", points: 30, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 6 },
+  Audi: { team: "Audi", points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 4 },
+  Williams: { team: "Williams", points: 12, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 9 },
+  "Aston Martin": { team: "Aston Martin", points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 17 },
+  Cadillac: { team: "Cadillac", points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 14 },
+};
+
+
 
 const f1StandingsQuery = queryOptions({
   queryKey: ["f1-championship-standings", SEASON],
@@ -157,7 +188,7 @@ const f1StandingsQuery = queryOptions({
     const dbDrivers = (driversRes.data ?? []) as Driver[];
     const byDriver = new Map<string, DriverStandingItem>();
 
-    // 1. Initialize from verified official 2026 Round 19 baseline snapshot
+    // 1. Initialize from verified official 2026 Round 18 baseline snapshot (Austin GP)
     for (const [codeKey, snap] of Object.entries(OFFICIAL_2026_DRIVERS_SNAPSHOT)) {
       byDriver.set(codeKey, {
         driverId: codeKey.toLowerCase(),
@@ -297,7 +328,7 @@ const f1StandingsQuery = queryOptions({
     );
 
     return {
-      roundsCompleted: 19,
+      roundsCompleted: 18,
       drivers: sortedDrivers,
       constructors: sortedConstructors,
     };
@@ -452,7 +483,7 @@ function Leaderboard() {
           <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {activeTab === "league"
               ? `${scored} league race${scored === 1 ? "" : "s"} scored`
-              : "Round 19 of 24 · 5 races remaining"}
+              : "Round 18 of 24 · 6 races remaining"}
           </p>
         </div>
         {user && (

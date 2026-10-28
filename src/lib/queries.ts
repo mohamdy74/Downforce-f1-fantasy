@@ -90,17 +90,18 @@ const AUSTIN_2026_DRIVERS_FALLBACK: Driver[] = [
   { id: "alonso", code: "ALO", full_name: "Fernando Alonso", team: "Aston Martin", number: 14 },
   { id: "gasly", code: "GAS", full_name: "Pierre Gasly", team: "Alpine", number: 10 },
   { id: "albon", code: "ALB", full_name: "Alexander Albon", team: "Williams", number: 23 },
-  { id: "ocon", code: "OCO", full_name: "Esteban Ocon", team: "Haas", number: 31 },
+  { id: "ocon", code: "OCO", full_name: "Esteban Ocon", team: "Haas F1 Team", number: 31 },
   { id: "stroll", code: "STR", full_name: "Lance Stroll", team: "Aston Martin", number: 18 },
   { id: "lawson", code: "LAW", full_name: "Liam Lawson", team: "Racing Bulls", number: 30 },
-  { id: "hulkenberg", code: "HUL", full_name: "Nico Hulkenberg", team: "Audi Revolut", number: 27 },
+  { id: "hulkenberg", code: "HUL", full_name: "Nico Hulkenberg", team: "Audi", number: 27 },
   { id: "colapinto", code: "COL", full_name: "Franco Colapinto", team: "Alpine", number: 43 },
   { id: "lindblad", code: "LIN", full_name: "Arvid Lindblad", team: "Racing Bulls", number: 41 },
-  { id: "bortoleto", code: "BOR", full_name: "Gabriel Bortoleto", team: "Audi Revolut", number: 5 },
+  { id: "bortoleto", code: "BOR", full_name: "Gabriel Bortoleto", team: "Audi", number: 5 },
   { id: "bottas", code: "BOT", full_name: "Valtteri Bottas", team: "Cadillac", number: 77 },
   { id: "perez", code: "PER", full_name: "Sergio Perez", team: "Cadillac", number: 11 },
   { id: "hadjar", code: "HAD", full_name: "Isack Hadjar", team: "Red Bull Racing", number: 6 },
-  { id: "bearman", code: "BEA", full_name: "Oliver Bearman", team: "Haas", number: 87 },
+  { id: "bearman", code: "BEA", full_name: "Oliver Bearman", team: "Haas F1 Team", number: 87 },
+  { id: "tsunoda", code: "TSU", full_name: "Yuki Tsunoda", team: "Racing Bulls", number: 22 },
 ];
 
 export const driversQuery = queryOptions({
