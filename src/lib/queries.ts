@@ -60,8 +60,8 @@ export type Driver = {
 
 export const racesQuery = queryOptions({
   queryKey: ["races", SEASON],
-  staleTime: 15 * 60_000,
-  gcTime: 30 * 60_000,
+  staleTime: 0,
+  gcTime: 5 * 60_000,
   queryFn: async (): Promise<Race[]> => {
     void syncServerClock();
     const { data, error } = await supabase
@@ -80,8 +80,8 @@ export const racesQuery = queryOptions({
 
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
-  staleTime: 30 * 60_000,
-  gcTime: 60 * 60_000,
+  staleTime: 0,
+  gcTime: 5 * 60_000,
   queryFn: async (): Promise<Driver[]> => {
     const { data, error } = await supabase
       .from("drivers")
@@ -180,7 +180,7 @@ export function computeLeaderboardEntries(
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  staleTime: 2 * 60_000,
+  staleTime: 0,
   queryFn: async (): Promise<LeaderboardEntry[]> => {
     const { data: sData } = await supabase.auth.getSession();
     if (!sData.session) return [];

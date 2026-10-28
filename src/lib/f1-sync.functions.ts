@@ -67,14 +67,14 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
     const userId = context.userId;
     const lastCall = userSyncCalls.get(userId) ?? 0;
-    const minInterval = data.force ? 5_000 : 5 * 60_000;
+    const minInterval = data.force ? 1_000 : 10 * 1000;
 
     if (Date.now() - lastCall < minInterval) {
       if (!data.force) return { skipped: true as const };
       throw new Error("Please wait a few seconds before syncing again.");
     }
     if (userSyncCalls.size > 500) {
-      const cutoff = Date.now() - 10 * 60_000;
+      const cutoff = Date.now() - 5 * 60_000;
       for (const [k, ts] of userSyncCalls) {
         if (ts < cutoff) userSyncCalls.delete(k);
       }
@@ -94,7 +94,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
     if (!data.force && state?.synced_at) {
       const age = Date.now() - new Date(state.synced_at).getTime();
-      if (age < STALE_MS) return { skipped: true as const };
+      if (age < 5 * 1000) return { skipped: true as const };
     }
 
     inFlightSyncLock = true;
