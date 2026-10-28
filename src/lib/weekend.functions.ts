@@ -348,8 +348,8 @@ async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessR
             })
             .eq("id", row.id);
         }
-      } catch {
-        /* ignore background backfill error */
+      } catch (error) {
+        console.error("[weekend.functions] Background backfill failed:", error);
       }
     }
   }

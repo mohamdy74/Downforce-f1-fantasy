@@ -76,7 +76,7 @@ export function AccountAndOnboarding() {
       } else {
         window.localStorage.setItem(key, "1");
       }
-    } catch {}
+    } catch (error) { console.error("[AccountAndOnboarding]", error); }
   }, [user?.id, profile]);
 
   if (!user) return null;
@@ -84,7 +84,7 @@ export function AccountAndOnboarding() {
   function markOnboarded() {
     try {
       window.localStorage.setItem(`dfr:onboarded:${user!.id}`, "1");
-    } catch {}
+    } catch (error) { console.error("[AccountAndOnboarding]", error); }
   }
 
   function closeModal() {

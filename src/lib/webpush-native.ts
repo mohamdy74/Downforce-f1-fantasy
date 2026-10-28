@@ -2,9 +2,15 @@ if (typeof window !== "undefined") {
   throw new Error("Security violation: webpush-native is a Server-Only module and must never be imported in browser code.");
 }
 
+// SECURITY: VAPID keys should be loaded from environment variables in production.
+// These defaults are for development only and MUST NOT be used in production.
+// Set VITE_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in your environment.
+// WARNING: The private key below is EXPOSED in source code - rotate it immediately if this repo is public.
 const DEFAULT_VAPID_PUBLIC =
+  (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) ||
   "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-const DEFAULT_VAPID_PRIVATE = "SowWFCNDsBlHZ3SW6l-nm3qjvEW-kG0DkVZTq8dIjJs";
+const DEFAULT_VAPID_PRIVATE =
+  (process.env["VAPID_PRIVATE_KEY"] as string | undefined) || "";
 
 function b64urlDecode(str: string): Uint8Array {
   const pad = "=".repeat((4 - (str.length % 4)) % 4);
@@ -167,9 +173,14 @@ export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
 ): Promise<{ ok: boolean; status: number }> {
-  const pub = process.env["VITE_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || DEFAULT_VAPID_PUBLIC;
-  const priv = process.env["VAPID_PRIVATE_KEY"] || DEFAULT_VAPID_PRIVATE;
-  if (!pub || !priv) return { ok: false, status: 0 };
+  const pub = (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || (process.env["VAPID_PUBLIC_KEY"] as string | undefined) || DEFAULT_VAPID_PUBLIC;
+  const priv = (process.env["VAPID_PRIVATE_KEY"] as string | undefined) || DEFAULT_VAPID_PRIVATE;
+  
+  // SECURITY: Refuse to send if private key is not properly configured
+  if (!pub || !priv || priv === "") {
+    console.error("[WebPush] VAPID keys not configured. Set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY environment variables.");
+    return { ok: false, status: 0 };
+  }
   const payloadStr = JSON.stringify(payloadObj);
 
   const [authHeader, encryptedBody] = await Promise.all([

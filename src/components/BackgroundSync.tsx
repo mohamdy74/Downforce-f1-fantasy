@@ -32,7 +32,8 @@ export function BackgroundSync() {
           queryClient.invalidateQueries({ queryKey: ["drivers"] }),
           queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
         ]);
-      } catch {
+      } catch (error) {
+        console.error("Background sync failed:", error);
         running = false;
       }
     };

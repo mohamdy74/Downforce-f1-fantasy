@@ -330,7 +330,9 @@ export async function checkAndSendPushReminders(
                 const res = await sendNativeWebPush(sub, payloadObj);
                 if (res.ok) totalSent++;
                 else if (res.status === 404 || res.status === 410) deadKeys.push(sub.rawKey);
-              } catch {}
+              } catch (error) {
+                console.error("[f1-sync.functions] Push notification failed:", error);
+              }
             }),
           );
         }

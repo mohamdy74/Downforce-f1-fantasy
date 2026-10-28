@@ -100,9 +100,9 @@ export function PullToRefresh() {
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     return () => {
-      document.removeEventListener("touchstart", handleTouchStart);
-      document.removeEventListener("touchmove", handleTouchMove);
-      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchstart", handleTouchStart, { capture: false });
+      document.removeEventListener("touchmove", handleTouchMove, { capture: false });
+      document.removeEventListener("touchend", handleTouchEnd, { capture: false });
     };
   }, [router]);
 

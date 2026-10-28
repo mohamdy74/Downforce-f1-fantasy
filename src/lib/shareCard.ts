@@ -77,7 +77,10 @@ function teamHex(team: string | null | undefined) {
 type Ctx = CanvasRenderingContext2D;
 
 function spaced(ctx: Ctx, px: number) {
-  if ("letterSpacing" in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${px}px`;
+  // CanvasRenderingContext2D doesn't have letterSpacing, but some custom implementations might
+  if ("letterSpacing" in ctx) {
+    (ctx as { letterSpacing?: string }).letterSpacing = `${px}px`;
+  }
 }
 
 function fit(ctx: Ctx, text: string, maxW: number, make: (size: number) => string, start: number, min = 18) {

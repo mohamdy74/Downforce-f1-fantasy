@@ -119,13 +119,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         },
         { onConflict: "user_id,race_id" },
       );
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`Database error: ${error.message}`);
       return { ok: true, msg: `Score locked to ${pts} pts (protected from auto-sync overwrite).` };
     }
 
     if (d.action === "rename_player" && d.userId && d.name) {
       const { error } = await sb.from("profiles").update({ display_name: d.name.trim() }).eq("id", d.userId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`Database error: ${error.message}`);
       return { ok: true, msg: "Player display name updated." };
     }
 
@@ -134,7 +134,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       await sb.from("predictions").delete().eq("user_id", d.userId);
       await sb.from("sprint_predictions").delete().eq("user_id", d.userId);
       const { error } = await sb.from("profiles").delete().eq("id", d.userId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`Database error: ${error.message}`);
       return { ok: true, msg: "Player and associated records removed." };
     }
 
@@ -145,7 +145,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         ? { qualifying_at: parsed.toISOString() }
         : { race_at: parsed.toISOString() };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`Database error: ${error.message}`);
       await sb
         .from("sync_state")
         .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
@@ -161,7 +161,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         ? { qualifying_at: nextIso }
         : { race_at: nextIso };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`Database error: ${error.message}`);
       await sb
         .from("sync_state")
         .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
@@ -182,10 +182,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       let predId = existing?.id ?? d.userId;
       if (existing?.id) {
         const { error } = await sb.from("predictions").update(payload).eq("id", existing.id);
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(`Database error: ${error.message}`);
       } else {
         const { data: ins, error } = await sb.from("predictions").insert(payload).select("id").single();
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(`Database error: ${error.message}`);
         if (ins?.id) predId = ins.id;
       }
       await sb.from("prediction_logs").insert({
@@ -311,7 +311,9 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           } else if (res.status === 404 || res.status === 410) {
             deadKeys.push(r.key);
           }
-        } catch {}
+        } catch (error) {
+          console.error("[stewards.functions] Push notification failed:", error);
+        }
       });
 
       await Promise.allSettled(tasks);
