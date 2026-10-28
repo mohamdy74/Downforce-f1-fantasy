@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { GripVertical, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function SprintGrid({
   setTop10,
   locked,
   size,
+  onRepeat,
 }: {
   size: number;
   drivers: Driver[];
@@ -31,10 +33,27 @@ export function SprintGrid({
     const i = top10.indexOf(EMPTY);
     return i === -1 ? 0 : i;
   });
-  const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null);
+  const [drag, setDrag] = useState<{
+    from: number;
+    over: number | null;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [gridAnimRef] = useAutoAnimate<HTMLDivElement>({
+    duration: 220,
+    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+  });
   const [animRef] = useAutoAnimate<HTMLDivElement>();
-  const dragRef = useRef<{ from: number; x: number; y: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    from: number;
+    x: number;
+    y: number;
+    moved: boolean;
+    fromGrip: boolean;
+    pointerId: number;
+    target: HTMLElement;
+  } | null>(null);
   const byId = new Map(drivers.map((d) => [d.id, d]));
   const used = new Set(top10.filter((d) => d !== EMPTY));
   const sorted = useMemo(() => sortByTeam(drivers), [drivers]);
@@ -80,16 +99,58 @@ export function SprintGrid({
 
   function onDown(e: React.PointerEvent, i: number) {
     if (locked || top10[i] === EMPTY) return;
-    dragRef.current = { from: i, x: e.clientX, y: e.clientY, moved: false };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const fromGrip = !!(e.target as HTMLElement | null)?.closest("[data-grip]");
+    const target = e.currentTarget as HTMLElement;
+    dragRef.current = {
+      from: i,
+      x: e.clientX,
+      y: e.clientY,
+      moved: false,
+      fromGrip,
+      pointerId: e.pointerId,
+      target,
+    };
+    // Only capture pointer immediately on mouse or explicit grip handle so mobile vertical scroll is never hijacked
+    if (fromGrip || e.pointerType === "mouse") {
+      try {
+        target.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
   }
+
   function onMove(e: React.PointerEvent) {
     const d = dragRef.current;
     if (!d) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8) return;
-    d.moved = true;
-    setDrag({ from: d.from, over: slotAt(e.clientX, e.clientY) });
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (!d.moved) {
+      if (dist < 8) return;
+      // On touch outside the grip handle, if the user is scrolling vertically, cancel drag so page scrolls smoothly
+      if (!d.fromGrip && e.pointerType !== "mouse" && Math.abs(dy) > Math.abs(dx) * 1.25) {
+        dragRef.current = null;
+        return;
+      }
+      d.moved = true;
+      try {
+        d.target.setPointerCapture(d.pointerId);
+      } catch {
+        /* ignore */
+      }
+      navigator.vibrate?.(8);
+    }
+
+    setDrag({
+      from: d.from,
+      over: slotAt(e.clientX, e.clientY),
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
   }
+
   function onUp(e: React.PointerEvent, i: number) {
     const d = dragRef.current;
     dragRef.current = null;
@@ -113,16 +174,45 @@ export function SprintGrid({
 
   const allOn = teamFilter === null;
   const primaryColor = "var(--color-primary)";
+  const draggedDriver =
+    drag != null && top10[drag.from] && top10[drag.from] !== EMPTY
+      ? byId.get(top10[drag.from]!)
+      : undefined;
 
   return (
     <section className="carbon-panel mt-8 rounded-lg">
       <div className="kerb-strip" />
       <div className="p-3 sm:p-5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg sm:text-xl whitespace-nowrap">
             {size === 10 ? "Starting grid" : "Sprint grid"}
           </h2>
-          <div className="flex shrink-0 gap-1.5">
+          <div className="flex flex-wrap shrink-0 items-center gap-1.5">
+            {!locked && onRepeat && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="hit-slop gap-1.5 border-gold/45 bg-gold/10 font-mono text-[11px] font-bold uppercase tracking-wider text-gold hover:border-gold hover:bg-gold/20"
+                onClick={() => {
+                  const snapshot = [...top10];
+                  const hadPicks = used.size > 0;
+                  onRepeat();
+                  navigator.vibrate?.([10, 30, 12]);
+                  if (hadPicks) {
+                    toast("Loaded last round's picks", {
+                      action: {
+                        label: "Undo",
+                        onClick: () => setTop10(snapshot),
+                      },
+                    });
+                  }
+                }}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Repeat last
+              </Button>
+            )}
+
             {!locked && (
               <>
                 <Button
@@ -193,17 +283,20 @@ export function SprintGrid({
           </div>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tap a slot, then a driver. Drag a car onto another slot to swap positions.
+          Tap a slot, then a driver. Use the grip handle or drag a car onto another slot to swap positions.
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-x-2.5 gap-y-2 sm:gap-x-3">
+        <div
+          ref={gridAnimRef}
+          className="mt-4 grid grid-cols-2 gap-x-2.5 gap-y-2 sm:gap-x-3"
+        >
           {top10.map((id, i) => {
             const d = id !== EMPTY ? byId.get(id) : undefined;
             const isActive = i === active && !locked;
             const color = d ? teamColor(d.team) : "transparent";
             return (
               <button
-                key={i}
+                key={d ? `driver-${d.id}` : `slot-${i}`}
                 type="button"
                 data-slot={i}
                 disabled={locked}
@@ -252,17 +345,46 @@ export function SprintGrid({
                       </span>
                     )}
                     <span className="min-w-0 truncate font-display text-base font-extrabold italic uppercase leading-tight">
-                      {d ? (d.code ?? d.full_name) : "—"}
+                      {d ? (d.code ?? d.full_name) : "\u2014"}
                     </span>
                   </span>
                   <span className="block truncate text-[11px] font-medium text-muted-foreground">
                     {d ? d.team : isActive ? "Pick a driver" : "Empty"}
                   </span>
                 </span>
+                {!locked && d && (
+                  <span
+                    data-grip="true"
+                    aria-hidden="true"
+                    style={{ touchAction: "none" }}
+                    className="flex h-10 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground active:text-primary"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+
+        {drag && draggedDriver && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed left-0 top-0 z-50 flex items-center gap-2 rounded-md border border-primary bg-card/95 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.75)] backdrop-blur-md"
+            style={{
+              transform: `translate3d(${drag.clientX - 56}px, ${drag.clientY - 28}px, 0)`,
+              borderLeft: `4px solid ${teamColor(draggedDriver.team)}`,
+            }}
+          >
+            <span className="font-mono text-xs font-bold text-primary">
+              P{drag.from + 1}
+              {drag.over != null && drag.over !== drag.from ? ` \u2192 P${drag.over + 1}` : ""}
+            </span>
+            <span className="font-display text-sm font-extrabold italic uppercase">
+              {draggedDriver.code ?? draggedDriver.full_name}
+            </span>
+          </div>
+        )}
 
         {!locked && (
           <>

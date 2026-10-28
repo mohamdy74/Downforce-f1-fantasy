@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, X, Zap } from "lucide-react";
+import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, WifiOff, X, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -40,10 +40,24 @@ export function SiteHeader() {
   const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setOffline(!window.navigator.onLine);
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!confirmExitOpen) return;
@@ -141,6 +155,16 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+      {offline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-center gap-2 border-b border-gold/40 bg-gold/15 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-gold"
+        >
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span>Offline Telemetry · Cached data active · Drafts saved on device</span>
+        </div>
+      )}
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4">
         <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
           <LogoHorizontal className="h-7 w-auto max-w-[140px] sm:h-10 sm:max-w-none" />

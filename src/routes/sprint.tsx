@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import confetti from "canvas-confetti";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Countdown } from "@/components/Countdown";
@@ -8,8 +9,9 @@ import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
-import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
+import { driversQuery, racesQuery } from "@/lib/queries";
+import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
+import { assertDeadlineOpen } from "@/lib/prediction.functions";
 import {
   SPRINT_MAX_POINTS,
   SPRINT_SLOTS,
@@ -39,6 +41,20 @@ export const Route = createFileRoute("/sprint")({
   component: Sprint,
 });
 
+function fireConfetti() {
+  try {
+    void confetti({
+      particleCount: 45,
+      spread: 62,
+      origin: { y: 0.78 },
+      colors: ["#e10600", "#f59e0b", "#ffffff"],
+      disableForReducedMotion: true,
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function Sprint() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
@@ -47,9 +63,9 @@ function Sprint() {
 
   const race = useMemo(() => (races ? sprintWeekend(races) : null), [races]);
 
-  const [now, setNow] = useState(() => getTrustedNow());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(getTrustedNow()), 30_000);
+    const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
 
@@ -69,6 +85,24 @@ function Sprint() {
         .maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: lastSprintPicks } = useQuery({
+    queryKey: ["last-sprint-prediction", race?.id, user?.id],
+    enabled: !!race && !!user && !!races,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sprint_predictions")
+        .select("race_id, top8, pole_driver_id")
+        .eq("user_id", user!.id)
+        .neq("race_id", race!.id);
+      if (error) throw error;
+      const round = new Map((races ?? []).map((r) => [r.id, r.round]));
+      const prev = (data ?? [])
+        .filter((p) => (round.get(p.race_id) ?? 0) < race!.round && (p.top8?.length ?? 0) > 0)
+        .sort((a, b) => (round.get(b.race_id) ?? 0) - (round.get(a.race_id) ?? 0));
+      return prev[0] ?? null;
     },
   });
 
@@ -107,6 +141,7 @@ function Sprint() {
   const [pole, setPole] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
 
   useEffect(() => {
     if (!prediction) return;
@@ -117,8 +152,61 @@ function Sprint() {
     setTop8(Array.from({ length: SPRINT_SLOTS }, (_, i) => saved[i] ?? EMPTY));
   }, [prediction?.id, prediction?.updated_at]);
 
+  // ---- Draft autosave for Sprint ----
+  const draftKey = user && race ? `dfr:sprint-draft:${user.id}:${race.id}` : null;
+  const draftChecked = useRef(false);
+  useEffect(() => {
+    if (!draftKey || draftChecked.current || prediction === undefined) return;
+    draftChecked.current = true;
+    if ((prediction?.top8 ?? []).filter(Boolean).length === SPRINT_SLOTS) return;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { top8?: string[] };
+      const restored = Array.from({ length: SPRINT_SLOTS }, (_, i) => d.top8?.[i] || EMPTY);
+      if (restored.every((x) => x === EMPTY)) return;
+      setTop8(restored);
+      setDraftSaved(true);
+      toast.info("Sprint draft restored.");
+    } catch {
+      /* ignore */
+    }
+  }, [draftKey, prediction]);
+
+  useEffect(() => {
+    if (!draftKey || !draftChecked.current) return;
+    try {
+      const done = (prediction?.top8 ?? []).filter(Boolean).length === SPRINT_SLOTS && !editing;
+      const empty = top8.every((x) => x === EMPTY);
+      if (done || empty) {
+        window.localStorage.removeItem(draftKey);
+        setDraftSaved(false);
+      } else {
+        window.localStorage.setItem(draftKey, JSON.stringify({ top8 }));
+        setDraftSaved(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [draftKey, top8, prediction, editing]);
+
   const hasSaved = (prediction?.top8?.length ?? 0) === SPRINT_SLOTS;
   const viewOnly = sprintLocked || (hasSaved && !editing);
+
+  const savedTop8Normalized = Array.from(
+    { length: SPRINT_SLOTS },
+    (_, i) => prediction?.top8?.[i] ?? EMPTY,
+  );
+  const gridDirty = !viewOnly && JSON.stringify(top8) !== JSON.stringify(savedTop8Normalized);
+
+  useEffect(() => {
+    if (!gridDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [gridDirty]);
 
   if (loading) {
     return (
@@ -177,7 +265,23 @@ function Sprint() {
     .sort((a, b) => a.position! - b.position!);
   const actualPole = (results ?? []).find((r) => r.pole)?.driver_id ?? null;
 
-  async function save() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  function repeatLastSprint() {
+    if (!lastSprintPicks) return;
+    const saved = lastSprintPicks.top8 ?? [];
+    setTop8(Array.from({ length: SPRINT_SLOTS }, (_, i) => saved[i] ?? EMPTY));
+    if (!poleLocked && lastSprintPicks.pole_driver_id) {
+      setPole(lastSprintPicks.pole_driver_id);
+    }
+    toast.success("Loaded your picks from the last sprint.");
+  }
+
+  async function save() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (duplicates) {
       toast.error("Each driver can only appear once in your sprint top 8.");
       return;
@@ -221,13 +325,26 @@ function Sprint() {
       toast.error(error.message);
       return;
     }
+    try {
+      if (draftKey) window.localStorage.removeItem(draftKey);
+      setDraftSaved(false);
+    } catch {
+      /* ignore */
+    }
     toast.success("Sprint picks locked in.");
     setEditing(false);
     navigator.vibrate?.([12, 40, 18]);
+    fireConfetti();
     queryClient.invalidateQueries({ queryKey: ["sprint-prediction", race!.id, user!.id] });
   }
 
-  async function savePole() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint_pole" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  async function savePole() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint_pole" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (pole === EMPTY) {
       toast.error("Choose a sprint pole driver first.");
       return;
@@ -339,12 +456,24 @@ function Sprint() {
         top10={top8}
         setTop10={setTop8}
         locked={viewOnly}
+        onRepeat={lastSprintPicks ? repeatLastSprint : undefined}
       />
       {duplicates && (
         <p className="mt-3 text-sm text-destructive">A driver is selected more than once.</p>
       )}
 
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3">
+        {!viewOnly && draftSaved && gridDirty && (
+          <div className="mb-1.5 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gold">
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+              Sprint draft auto-saved on device
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {used.length}/{SPRINT_SLOTS}
+            </span>
+          </div>
+        )}
         {sprintLocked ? (
           <Button size="lg" className="h-12 w-full text-base" disabled>
             Sprint picks locked — sprint started
