@@ -1,27 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-import { type ResultRow } from "./scoring";
-import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
-import { type SprintResultRow } from "./sprintScoring";
-import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
-import {
-  buildDriverLookup,
-  fetchFromEspnScoreboard,
-  fetchFromF1LiveTiming,
-  getCachedOpenF1Drivers,
-  getCachedOpenF1Sessions,
-  resolveDriver,
-  type DriverRef,
-} from "./f1-live-sources";
-import { isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
-import {
-  buildLiveOrderFromPositions,
-  hasChequeredFlag,
-  type OpenF1LapEntry,
-  type OpenF1PositionEntry,
-  type OpenF1RaceControlMessage,
-} from "./liveStandings";
+import type { Json } from "@/integrations/supabase/types";
+import { NO_SUBMISSION_PENALTY, scorePrediction, type ResultRow } from "./scoring";
+import { scoreSprint, type SprintResultRow } from "./sprintScoring";
+import { sendNativeWebPush } from "./webpush-native";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -34,25 +17,47 @@ type ErgastRace = {
   round: string;
   raceName: string;
   date: string;
-  time?: string | undefined;
+  time?: string;
   Circuit: {
     circuitName: string;
-    Location: { locality?: string | undefined; country?: string | undefined };
+    Location: { locality?: string; country?: string };
   };
-  Qualifying?: ErgastSession | undefined;
-  Sprint?: ErgastSession | undefined;
-  SprintQualifying?: ErgastSession | undefined;
-  SprintShootout?: ErgastSession | undefined;
+  Qualifying?: ErgastSession;
+  Sprint?: ErgastSession;
+  SprintQualifying?: ErgastSession;
+  SprintShootout?: ErgastSession;
   Results?: Array<{
     position: string;
     grid: string;
     status: string;
-    Driver: { driverId: string; code?: string | undefined; givenName: string; familyName: string };
-    Constructor?: { name: string } | undefined;
-    FastestLap?: { rank?: string | undefined } | undefined;
-  }> | undefined;
+    Driver: { driverId: string; code?: string; givenName: string; familyName: string };
+    Constructor?: { name: string };
+    FastestLap?: { rank?: string };
+  }>;
 };
 
+function toIso(session: { date: string; time?: string | undefined } | undefined): string | null {
+  if (!session?.date) return null;
+  return new Date(`${session.date}T${session.time ?? "12:00:00Z"}`).toISOString();
+}
+
+async function getJson<T>(url: string, timeoutMs = 6000): Promise<T | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const userSyncCalls = new Map<string, number>();
 let inFlightSyncLock = false;
@@ -60,7 +65,7 @@ let inFlightSyncLock = false;
 export const syncF1Data = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ({
-    force: Boolean((input as { force?: boolean | undefined } | null)?.force),
+    force: Boolean((input as { force?: boolean } | null)?.force),
   }))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -84,6 +89,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
       return { skipped: true as const };
     }
 
+    // Always check if 2h / 30m push reminders need to go out
     await checkAndSendPushReminders(supabaseAdmin).catch(() => {});
 
     const { data: state } = await supabaseAdmin
@@ -99,151 +105,174 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
     inFlightSyncLock = true;
     try {
-    // ---- Calendar (preserving Steward custom deadline overrides!) ----
-    const calendar = await getJson<{
-      MRData: { RaceTable: { Races: ErgastRace[] } };
-    }>(`${API}/${SEASON}/races/?format=json&limit=40`);
-    const races = calendar?.MRData.RaceTable.Races ?? [];
-
-    if (races.length) {
-      const [{ data: existingRaces }, { data: overrideRows }] = await Promise.all([
-        supabaseAdmin
-          .from("races")
-          .select("id, round, race_at, qualifying_at")
-          .eq("season", SEASON),
-        supabaseAdmin
-          .from("sync_state")
-          .select("key")
-          .like("key", "deadline_override:%"),
+      // ---- Parallel Fetch: Calendar + Driver Standings ----
+      const [calendar, standings] = await Promise.all([
+        getJson<{
+          MRData: { RaceTable: { Races: ErgastRace[] } };
+        }>(`${API}/${SEASON}/races/?format=json&limit=40`),
+        getJson<{
+          MRData: {
+            StandingsTable: {
+              StandingsLists: Array<{
+                DriverStandings: Array<{
+                  Driver: {
+                    driverId: string;
+                    code?: string;
+                    permanentNumber?: string;
+                    givenName: string;
+                    familyName: string;
+                  };
+                  Constructors: Array<{ name: string }>;
+                }>;
+              }>;
+            };
+          };
+        }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`),
       ]);
 
-      const overriddenIds = new Set(
-        (overrideRows ?? []).map((r) => r.key.replace("deadline_override:", "")),
-      );
-      const existingByRound = new Map((existingRaces ?? []).map((r) => [r.round, r]));
+      const races = calendar?.MRData.RaceTable.Races ?? [];
 
-      await supabaseAdmin.from("races").upsert(
-        races.map((r) => {
-          const rd = Number(r.round);
-          const ex = existingByRound.get(rd);
-          const keepCustomDeadline = ex && overriddenIds.has(ex.id);
-          return {
-            season: Number(r.season),
-            round: rd,
-            name: r.raceName,
-            circuit: r.Circuit.circuitName,
-            country: r.Circuit.Location.country ?? null,
-            locality: r.Circuit.Location.locality ?? null,
-            race_at: keepCustomDeadline ? ex.race_at : toIso({ date: r.date, time: r.time })!,
-            qualifying_at: keepCustomDeadline ? ex.qualifying_at : toIso(r.Qualifying),
-            has_sprint: !!r.Sprint,
-            sprint_at: toIso(r.Sprint),
-            sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
-          };
-        }),
-        { onConflict: "season,round" },
-      );
-    }
+      if (races.length) {
+        const [{ data: existingRaces }, { data: overrideRows }] = await Promise.all([
+          supabaseAdmin
+            .from("races")
+            .select("id, round, race_at, qualifying_at")
+            .eq("season", SEASON),
+          supabaseAdmin
+            .from("sync_state")
+            .select("key")
+            .like("key", "deadline_override:%"),
+        ]);
 
-    // ---- Drivers ----
-    const standings = await getJson<{
-      MRData: {
-        StandingsTable: {
-          StandingsLists: Array<{
-            DriverStandings: Array<{
-              Driver: {
-                driverId: string;
-                code?: string | undefined;
-                permanentNumber?: string | undefined;
-                givenName: string;
-                familyName: string;
-              };
-              Constructors: Array<{ name: string }>;
-            }>;
-          }>;
-        };
-      };
-    }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`);
+        const overriddenIds = new Set(
+          (overrideRows ?? []).map((r) => r.key.replace("deadline_override:", "")),
+        );
+        const existingByRound = new Map((existingRaces ?? []).map((r) => [r.round, r]));
 
-    const entries = (
-      standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
-    ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
-    if (entries.length) {
-      await supabaseAdmin.from("drivers").upsert(
-        entries.map((e) => ({
-          id: e.Driver.driverId,
-          code: e.Driver.code ?? null,
-          full_name: `${e.Driver.givenName} ${e.Driver.familyName}`,
-          team: e.Constructors[0]?.name ?? null,
-          number: e.Driver.permanentNumber ? Number(e.Driver.permanentNumber) : null,
-          active: true,
-        })),
-        { onConflict: "id" },
-      );
-    }
-
-    // ---- Results ----
-    const racesWithResults: ErgastRace[] = [];
-    const pageSize = 100;
-    let offset = 0;
-    let total = Infinity;
-    while (offset < total && offset < 2000) {
-      const page = await getJson<{
-        MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
-      }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${offset}`);
-      if (!page) break;
-      total = Number(page.MRData.total);
-      for (const race of page.MRData.RaceTable.Races) {
-        const existing = racesWithResults.find((r) => r.round === race.round);
-        if (existing) existing.Results = [...(existing.Results ?? []), ...(race.Results ?? [])];
-        else racesWithResults.push(race);
+        await supabaseAdmin.from("races").upsert(
+          races.map((r) => {
+            const rd = Number(r.round);
+            const ex = existingByRound.get(rd);
+            const keepCustomDeadline = ex && overriddenIds.has(ex.id);
+            return {
+              season: Number(r.season),
+              round: rd,
+              name: r.raceName,
+              circuit: r.Circuit.circuitName,
+              country: r.Circuit.Location.country ?? null,
+              locality: r.Circuit.Location.locality ?? null,
+              race_at: keepCustomDeadline ? ex.race_at : toIso({ date: r.date, time: r.time })!,
+              qualifying_at: keepCustomDeadline ? ex.qualifying_at : toIso(r.Qualifying),
+              has_sprint: !!r.Sprint,
+              sprint_at: toIso(r.Sprint),
+              sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
+            };
+          }),
+          { onConflict: "season,round" },
+        );
       }
-      offset += pageSize;
-    }
 
-    const { data: dbRaces } = await supabaseAdmin
-      .from("races")
-      .select("id, round")
-      .eq("season", SEASON);
-    const roundToId = new Map((dbRaces ?? []).map((r) => [r.round, r.id]));
+      // ---- Drivers ----
+      const entries = (
+        standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
+      ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
+      if (entries.length) {
+        await supabaseAdmin.from("drivers").upsert(
+          entries.map((e) => ({
+            id: e.Driver.driverId,
+            code: e.Driver.code ?? null,
+            full_name: `${e.Driver.givenName} ${e.Driver.familyName}`,
+            team: e.Constructors[0]?.name ?? null,
+            number: e.Driver.permanentNumber ? Number(e.Driver.permanentNumber) : null,
+            active: true,
+          })),
+          { onConflict: "id" },
+        );
+      }
 
-    for (const race of racesWithResults) {
-      const raceId = roundToId.get(Number(race.round));
-      if (!raceId || !race.Results?.length) continue;
+      // ---- Results ----
+      const racesWithResults: ErgastRace[] = [];
+      const pageSize = 100;
+      let offset = 0;
+      let total = Infinity;
+      while (offset < total && offset < 2000) {
+        const page = await getJson<{
+          MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
+        }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${offset}`);
+        if (!page) break;
+        total = Number(page.MRData.total);
+        for (const race of page.MRData.RaceTable.Races) {
+          const existing = racesWithResults.find((r) => r.round === race.round);
+          if (existing) existing.Results = [...(existing.Results ?? []), ...(race.Results ?? [])];
+          else racesWithResults.push(race);
+        }
+        offset += pageSize;
+      }
 
-      const rows = race.Results.map((res) => {
-        const status = res.status ?? "";
-        const finished = isClassifiedFinishStatus(status, true);
-        return {
-          race_id: raceId,
-          driver_id: res.Driver.driverId,
-          position: finished ? Number(res.position) : null,
-          status,
-          finished,
-          fastest_lap: res.FastestLap?.rank === "1",
-          pole: res.grid === "1",
-        };
-      });
+      const { data: dbRaces } = await supabaseAdmin
+        .from("races")
+        .select("id, round")
+        .eq("season", SEASON);
+      const roundToId = new Map((dbRaces ?? []).map((r) => [r.round, r.id]));
+
+      const allRaceResultRows: Array<{
+        race_id: string;
+        driver_id: string;
+        position: number | null;
+        status: string;
+        finished: boolean;
+        fastest_lap: boolean;
+        pole: boolean;
+      }> = [];
+      const completedRaceIds: string[] = [];
+
+      for (const race of racesWithResults) {
+        const raceId = roundToId.get(Number(race.round));
+        if (!raceId || !race.Results?.length) continue;
+
+        completedRaceIds.push(raceId);
+        for (const res of race.Results) {
+          const status = res.status ?? "";
+          const finished = /finished|lapped|\+\d+ lap/i.test(status);
+          allRaceResultRows.push({
+            race_id: raceId,
+            driver_id: res.Driver.driverId,
+            position: finished ? Number(res.position) : null,
+            status,
+            finished,
+            fastest_lap: res.FastestLap?.rank === "1",
+            pole: res.grid === "1",
+          });
+        }
+      }
+
+      if (allRaceResultRows.length > 0 && completedRaceIds.length > 0) {
+        await Promise.all([
+          supabaseAdmin
+            .from("race_results")
+            .upsert(allRaceResultRows, { onConflict: "race_id,driver_id" }),
+          supabaseAdmin
+            .from("races")
+            .update({ has_results: true })
+            .in("id", completedRaceIds),
+        ]);
+      }
+
+      await syncSprintResults(roundToId);
+      await openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round))));
+      await scoreAllRaces();
 
       await supabaseAdmin
-        .from("race_results")
-        .upsert(rows, { onConflict: "race_id,driver_id" });
-      await supabaseAdmin.from("races").update({ has_results: true }).eq("id", raceId);
+        .from("sync_state")
+        .upsert(
+          { key: `season-${SEASON}`, synced_at: new Date().toISOString() },
+          { onConflict: "key" },
+        );
+
+      return { skipped: false as const, races: races.length, scored: racesWithResults.length };
+    } finally {
+      inFlightSyncLock = false;
     }
-
-    await syncSprintResults(roundToId);
-    await openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round))));
-    await scoreAllRaces();
-
-    await supabaseAdmin
-      .from("sync_state")
-      .upsert(
-        { key: `season-${SEASON}`, synced_at: new Date().toISOString() },
-        { onConflict: "key" },
-      );
-
-    return { skipped: false as const, races: races.length, scored: racesWithResults.length };
-    } finally { inFlightSyncLock = false; }
   });
 
 export async function checkAndSendPushReminders(
@@ -300,39 +329,32 @@ export async function checkAndSendPushReminders(
             .filter((p) =>
               t.type === "pole"
                 ? !!p.pole_driver_id
-                : isCompleteTop10(p.top10),
+                : (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10,
             )
             .map((p) => p.user_id),
         );
 
         const payloadObj = {
-          title: `\u23F0 ${race.name} \u2014 Lock Alert!`,
+          title: `⏰ ${race.name} — Lock Alert!`,
           body:
             t.type === "pole"
               ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
-              : `Race locks ${w.text}! Submit your Top 10 now to avoid the \u221225 penalty.`,
+              : `Race locks ${w.text}! Submit your Top 10 now to avoid the −25 penalty.`,
           tag: stateKey,
           url: "/predict",
         };
 
-        const { sendNativeWebPush } = await import("./webpush-native");
         const deadKeys: string[] = [];
-        const pendingSubs = subRows.flatMap((r) => {
-          const parsed = parsePushSubscriptionKey(r.key);
-          return parsed && !doneUsers.has(parsed.userId) ? [parsed] : [];
-        });
-        const BATCH_SIZE = 25;
-        for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
-          const batch = pendingSubs.slice(i, i + BATCH_SIZE);
-          await Promise.allSettled(
-            batch.map(async (sub) => {
-              try {
-                const res = await sendNativeWebPush(sub, payloadObj);
-                if (res.ok) totalSent++;
-                else if (res.status === 404 || res.status === 410) deadKeys.push(sub.rawKey);
-              } catch {}
-            }),
-          );
+        for (const r of subRows) {
+          const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
+          if (!m) continue;
+          if (doneUsers.has(m[1]!)) continue;
+          try {
+            const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
+            const res = await sendNativeWebPush(sub, payloadObj);
+            if (res.ok) totalSent++;
+            else if (res.status === 404 || res.status === 410) deadKeys.push(r.key);
+          } catch {}
         }
         if (deadKeys.length > 0) {
           await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
@@ -356,67 +378,171 @@ async function scoreAllRaces() {
     .eq("has_results", true);
   if (!races?.length) return;
 
+  const raceIds = races.map((r) => r.id);
+
+  // Batch-fetch all scoring inputs across all completed races in 1 parallel round-trip (6 queries instead of N*6)
+  const [
+    { data: allProfiles },
+    { data: allResults },
+    { data: allPredictions },
+    { data: allSprintResults },
+    { data: allSprintPreds },
+    { data: allExistingScores },
+  ] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id, created_at"),
+    supabaseAdmin
+      .from("race_results")
+      .select("race_id, driver_id, position, finished, fastest_lap, pole")
+      .in("race_id", raceIds),
+    supabaseAdmin
+      .from("predictions")
+      .select("race_id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
+      .in("race_id", raceIds),
+    supabaseAdmin
+      .from("sprint_results")
+      .select("race_id, driver_id, position, finished, pole")
+      .in("race_id", raceIds),
+    supabaseAdmin
+      .from("sprint_predictions")
+      .select("race_id, user_id, top8, pole_driver_id")
+      .in("race_id", raceIds),
+    supabaseAdmin
+      .from("scores")
+      .select("race_id, user_id, breakdown")
+      .in("race_id", raceIds),
+  ]);
+
+  if (!allProfiles?.length || !allResults?.length) return;
+
+  const resultsByRace = new Map<string, ResultRow[]>();
+  for (const r of allResults) {
+    const list = resultsByRace.get(r.race_id) ?? [];
+    list.push(r as ResultRow);
+    resultsByRace.set(r.race_id, list);
+  }
+
+  const predsByRace = new Map<string, typeof allPredictions>();
+  for (const p of allPredictions ?? []) {
+    const list = predsByRace.get(p.race_id) ?? [];
+    list.push(p);
+    predsByRace.set(p.race_id, list);
+  }
+
+  const sprintResultsByRace = new Map<string, SprintResultRow[]>();
+  for (const sr of allSprintResults ?? []) {
+    const list = sprintResultsByRace.get(sr.race_id) ?? [];
+    list.push(sr as SprintResultRow);
+    sprintResultsByRace.set(sr.race_id, list);
+  }
+
+  const sprintPredsByRace = new Map<string, typeof allSprintPreds>();
+  for (const sp of allSprintPreds ?? []) {
+    const list = sprintPredsByRace.get(sp.race_id) ?? [];
+    list.push(sp);
+    sprintPredsByRace.set(sp.race_id, list);
+  }
+
+  const existingScoresByRace = new Map<string, typeof allExistingScores>();
+  for (const es of allExistingScores ?? []) {
+    const list = existingScoresByRace.get(es.race_id) ?? [];
+    list.push(es);
+    existingScoresByRace.set(es.race_id, list);
+  }
+
+  const allScoreRows: Array<{
+    user_id: string;
+    race_id: string;
+    points: number;
+    breakdown: Json;
+    updated_at: string;
+  }> = [];
+  const nowIso = new Date().toISOString();
+
   for (const race of races) {
-    const [
-      { data: profiles },
-      { data: results },
-      { data: predictions },
-      { data: sprintResults },
-      { data: sprintPreds },
-      { data: existingScores },
-    ] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id, created_at").lt("created_at", race.race_at),
-      supabaseAdmin
-        .from("race_results")
-        .select("driver_id, position, finished, fastest_lap, pole")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("predictions")
-        .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("sprint_results")
-        .select("driver_id, position, finished, pole")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("sprint_predictions")
-        .select("user_id, top8, pole_driver_id")
-        .eq("race_id", race.id),
-      supabaseAdmin.from("scores").select("user_id, breakdown").eq("race_id", race.id),
-    ]);
+    const results = resultsByRace.get(race.id);
+    if (!results?.length) continue;
 
-    if (!profiles?.length || !results?.length) continue;
+    const raceTimeMs = new Date(race.race_at).getTime();
+    const predictions = predsByRace.get(race.id) ?? [];
+    const sprintResults = sprintResultsByRace.get(race.id) ?? [];
+    const sprintPreds = sprintPredsByRace.get(race.id) ?? [];
+    const existingScores = existingScoresByRace.get(race.id) ?? [];
 
-    const rows = buildRaceScoreRows({
-      raceId: race.id,
-      raceAt: race.race_at,
-      profiles: (profiles ?? []) as ProfileRecord[],
-      results: results as ResultRow[],
-      predictions: (predictions ?? []) as PredictionRecord[],
-      sprintResults: (sprintResults ?? []) as SprintResultRow[],
-      sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
-      existingScores: (existingScores ?? []) as ScoreRecord[],
-      mode: "auto_sync",
-    });
+    // Never overwrite a score that was manually overridden or waived by FIA Stewards
+    const stewardLockedUsers = new Set(
+      existingScores
+        .filter((s) => {
+          const b = s.breakdown as Record<string, unknown> | null;
+          return b && b["stewardOverride"] === true;
+        })
+        .map((s) => s.user_id),
+    );
 
-    if (rows.length) {
-      await supabaseAdmin.from("scores").upsert(rows, { onConflict: "user_id,race_id" });
+    const byUser = new Map(predictions.map((p) => [p.user_id, p]));
+    const sprintByUser = new Map(sprintPreds.map((p) => [p.user_id, p]));
+    const sprintFor = (userId: string) =>
+      sprintResults.length
+        ? scoreSprint(sprintByUser.get(userId) ?? null, sprintResults)
+        : null;
+
+    for (const profile of allProfiles) {
+      if (stewardLockedUsers.has(profile.id)) continue;
+      if (new Date(profile.created_at).getTime() >= raceTimeMs) continue;
+
+      const sprint = sprintFor(profile.id);
+      const prediction = byUser.get(profile.id);
+      if (!prediction) {
+        allScoreRows.push({
+          user_id: profile.id,
+          race_id: race.id,
+          points: NO_SUBMISSION_PENALTY + (sprint?.total ?? 0),
+          breakdown: {
+            noSubmission: true,
+            ...(sprint ? { sprint } : {}),
+            total: NO_SUBMISSION_PENALTY + (sprint?.total ?? 0),
+          },
+          updated_at: nowIso,
+        });
+        continue;
+      }
+
+      const validTop10 = (prediction.top10 ?? []).filter((x) => x && x !== "__none__");
+      const breakdown = scorePrediction(
+        {
+          top10: validTop10,
+          pole_driver_id: prediction.pole_driver_id,
+          fastest_lap_driver_id: prediction.fastest_lap_driver_id,
+          dnf_driver_id: prediction.dnf_driver_id,
+        },
+        results,
+      );
+
+      const poleOnly = validTop10.length < 10;
+      const raceTotal = poleOnly ? NO_SUBMISSION_PENALTY + breakdown.pole : breakdown.total;
+      const total = raceTotal + (sprint?.total ?? 0);
+      allScoreRows.push({
+        user_id: profile.id,
+        race_id: race.id,
+        points: total,
+        breakdown: poleOnly
+          ? { noSubmission: true, poleOnly: true, pole: breakdown.pole, ...(sprint ? { sprint } : {}), total }
+          : { ...breakdown, ...(sprint ? { sprint } : {}), total },
+        updated_at: nowIso,
+      });
     }
+  }
+
+  if (allScoreRows.length > 0) {
+    await supabaseAdmin.from("scores").upsert(allScoreRows, { onConflict: "user_id,race_id" });
   }
 }
 
 const OPENF1 = "https://api.openf1.org/v1";
-const RACE_MIN_START_MS = 40 * 60 * 1000;
-const RACE_MAX_DONE_MS = 180 * 60 * 1000;
+const RACE_DONE_MS = 80 * 60 * 1000; // 80 minutes after lights out
 const FALLBACK_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
-type OF1Result = {
-  position: number | null;
-  driver_number: number;
-  dnf?: boolean | undefined;
-  dns?: boolean | undefined;
-  dsq?: boolean | undefined;
-};
+type OF1Session = { session_key: number; session_name: string; date_start: string };
+type OF1Result = { position: number | null; driver_number: number; dnf?: boolean; dns?: boolean; dsq?: boolean };
 
 async function openF1Fallback(officialRounds: Set<number>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -427,151 +553,79 @@ async function openF1Fallback(officialRounds: Set<number>) {
     .select("id, round, race_at, qualifying_at")
     .eq("season", SEASON)
     .eq("has_results", false)
-    .lte("race_at", new Date(now - RACE_MIN_START_MS).toISOString())
+    .lte("race_at", new Date(now - RACE_DONE_MS).toISOString())
     .gte("race_at", new Date(now - FALLBACK_WINDOW_MS).toISOString());
   const races = (pending ?? []).filter((r) => !officialRounds.has(r.round));
   if (!races.length) return;
 
-  const { data: drivers } = await supabaseAdmin
-    .from("drivers")
-    .select("id, code, full_name, team, number");
-  const lookup = buildDriverLookup((drivers ?? []) as DriverRef[]);
-  const sessions = await getCachedOpenF1Sessions(SEASON);
+  const sessions = await getJson<OF1Session[]>(`${OPENF1}/sessions?year=${SEASON}`);
+  const { data: drivers } = await supabaseAdmin.from("drivers").select("id, code");
+  const byCode = new Map((drivers ?? []).filter((d) => d.code).map((d) => [d.code!, d.id]));
+  if (!sessions?.length || !byCode.size) return;
 
   const near = (name: string, iso: string | null) => {
-    if (!iso || !sessions.length) return undefined;
+    if (!iso) return undefined;
     const t = new Date(iso).getTime();
     return sessions.find(
-      (s) => s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 12 * 3600_000,
+      (s) => s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 6 * 3600_000,
     );
   };
 
   for (const race of races) {
-    let poleDriverId: string | undefined;
-    const { data: qSess } = await supabaseAdmin
-      .from("weekend_sessions")
-      .select("classification")
-      .eq("race_id", race.id)
-      .eq("session_type", "qualifying")
-      .maybeSingle();
-    if (qSess && Array.isArray(qSess.classification)) {
-      const p1 = (
-        qSess.classification as Array<{
-          position?: number | undefined;
-          driverId?: string | undefined;
-          code?: string | undefined;
-          name?: string | undefined;
-          number?: number | undefined;
-        }>
-      ).find((r) => r.position === 1);
-      if (p1) {
-        const d = resolveDriver(lookup, {
-          driverId: p1.driverId,
-          code: p1.code,
-          name: p1.name,
-          number: p1.number,
-        });
-        if (lookup.byId.has(d.id)) poleDriverId = d.id;
-      }
-    }
-
-    const raceElapsedMs = now - new Date(race.race_at).getTime();
-    let finalRows: Array<{
-      race_id: string;
-      driver_id: string;
-      position: number | null;
-      status: string;
-      finished: boolean;
-      fastest_lap: boolean;
-      pole: boolean;
-    }> = [];
-
     const rs = near("Race", race.race_at);
-    if (rs) {
-      const [rawResults, ofDrivers, laps, raceControl] = await Promise.all([
-        getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
-        getCachedOpenF1Drivers(rs.session_key),
-        getJson<OpenF1LapEntry[]>(`${OPENF1}/laps?session_key=${rs.session_key}`),
-        getJson<OpenF1RaceControlMessage[]>(`${OPENF1}/race_control?session_key=${rs.session_key}`),
-      ]);
-      const isFinished = hasChequeredFlag(raceControl) || raceElapsedMs >= RACE_MAX_DONE_MS;
-      if (isFinished) {
-        let results: OF1Result[] = Array.isArray(rawResults) ? rawResults : [];
-        if (results.filter((r) => r.position != null).length < 10) {
-          const positions = await getJson<OpenF1PositionEntry[]>(
-            `${OPENF1}/position?session_key=${rs.session_key}`,
-          );
-          const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
-          if (synth.length >= 10) results = synth;
-        }
-        if (results.length >= 10) {
-          const ofDrvByNum = new Map(ofDrivers.map((d) => [d.driver_number, d]));
-          let flNum: number | undefined;
-          let best = Infinity;
-          for (const l of laps ?? []) {
-            if (l.lap_duration && l.lap_duration > 0 && l.lap_duration < best) {
-              best = l.lap_duration;
-              flNum = l.driver_number;
-            }
-          }
-          finalRows = results.flatMap((r) => {
-            const ofMeta = ofDrvByNum.get(r.driver_number);
-            const d = resolveDriver(lookup, {
-              code: ofMeta?.name_acronym,
-              name: ofMeta?.full_name,
-              number: r.driver_number,
-            });
-            if (!lookup.byId.has(d.id)) return [];
-            const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
-            return [
-              {
-                race_id: race.id,
-                driver_id: d.id,
-                position: finished ? r.position : null,
-                status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
-                finished,
-                fastest_lap: r.driver_number === flNum,
-                pole: poleDriverId ? d.id === poleDriverId : false,
-              },
-            ];
-          });
-        }
+    if (!rs) continue;
+    const [results, ofDrivers, laps] = await Promise.all([
+      getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${rs.session_key}`),
+      getJson<Array<{ driver_number: number; name_acronym: string }>>(
+        `${OPENF1}/drivers?session_key=${rs.session_key}`,
+      ),
+      getJson<Array<{ driver_number: number; lap_duration: number | null }>>(
+        `${OPENF1}/laps?session_key=${rs.session_key}`,
+      ),
+    ]);
+    if (!results || results.length < 10 || !ofDrivers) continue;
+
+    const numToId = new Map<number, string>();
+    for (const d of ofDrivers) {
+      const id = byCode.get(d.name_acronym);
+      if (id) numToId.set(d.driver_number, id);
+    }
+
+    let poleNum: number | undefined;
+    const qs = near("Qualifying", race.qualifying_at);
+    if (qs) {
+      const q = await getJson<OF1Result[]>(`${OPENF1}/session_result?session_key=${qs.session_key}`);
+      poleNum = q?.find((r) => r.position === 1)?.driver_number;
+    }
+    let flNum: number | undefined;
+    let best = Infinity;
+    for (const l of laps ?? []) {
+      if (l.lap_duration && l.lap_duration < best) {
+        best = l.lap_duration;
+        flNum = l.driver_number;
       }
     }
 
-    if (finalRows.length < 10) {
-      const [f1Snap, espnSnap] = await Promise.all([
-        fetchFromF1LiveTiming("race", race.race_at, lookup),
-        fetchFromEspnScoreboard("race", race.race_at, lookup),
-      ]);
-      const chosen =
-        f1Snap && (f1Snap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) && f1Snap.rows.length >= 10
-          ? f1Snap
-          : espnSnap && (espnSnap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) && espnSnap.rows.length >= 10
-            ? espnSnap
-            : null;
-      if (chosen) {
-        finalRows = chosen.rows
-          .filter((r) => r.driverId && lookup.byId.has(r.driverId))
-          .map((r) => {
-            const finished = !r.status && r.position != null;
-            return {
-              race_id: race.id,
-              driver_id: r.driverId!,
-              position: finished ? r.position : null,
-              status: finished ? "Finished" : "Retired",
-              finished,
-              fastest_lap: chosen.fastestLapDriverId ? r.driverId === chosen.fastestLapDriverId : false,
-              pole: poleDriverId ? r.driverId === poleDriverId : false,
-            };
-          });
-      }
-    }
+    const rows = results.flatMap((r) => {
+      const driver_id = numToId.get(r.driver_number);
+      if (!driver_id) return [];
+      const finished = r.position != null && !r.dnf && !r.dns && !r.dsq;
+      return [
+        {
+          race_id: race.id,
+          driver_id,
+          position: finished ? r.position : null,
+          status: finished ? "Finished" : r.dsq ? "Disqualified" : "Retired",
+          finished,
+          fastest_lap: r.driver_number === flNum,
+          pole: r.driver_number === poleNum,
+        },
+      ];
+    });
+    if (rows.length < 10) continue;
 
-    if (finalRows.length >= 10) {
-      await supabaseAdmin.from("race_results").upsert(finalRows, { onConflict: "race_id,driver_id" });
-      await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
-    }
+    await supabaseAdmin.from("race_results").upsert(rows, { onConflict: "race_id,driver_id" });
+    await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
   }
 }
 
@@ -582,7 +636,7 @@ type ErgastSprintRace = {
     grid: string;
     status: string;
     Driver: { driverId: string };
-  }> | undefined;
+  }>;
 };
 
 async function syncSprintResults(roundToId: Map<number, string>) {
@@ -606,21 +660,33 @@ async function syncSprintResults(roundToId: Map<number, string>) {
     offset += pageSize;
   }
 
+  const allSprintRows: Array<{
+    race_id: string;
+    driver_id: string;
+    position: number | null;
+    status: string;
+    finished: boolean;
+    pole: boolean;
+  }> = [];
+
   for (const race of byRound.values()) {
     const raceId = roundToId.get(Number(race.round));
     if (!raceId || !race.SprintResults?.length) continue;
-    const rows = race.SprintResults.map((res) => {
+    for (const res of race.SprintResults) {
       const status = res.status ?? "";
-      const finished = isClassifiedFinishStatus(status, true);
-      return {
+      const finished = /finished|lapped|\+\d+ lap/i.test(status);
+      allSprintRows.push({
         race_id: raceId,
         driver_id: res.Driver.driverId,
         position: finished ? Number(res.position) : null,
         status,
         finished,
         pole: res.grid === "1",
-      };
-    });
-    await supabaseAdmin.from("sprint_results").upsert(rows, { onConflict: "race_id,driver_id" });
+      });
+    }
+  }
+
+  if (allSprintRows.length > 0) {
+    await supabaseAdmin.from("sprint_results").upsert(allSprintRows, { onConflict: "race_id,driver_id" });
   }
 }

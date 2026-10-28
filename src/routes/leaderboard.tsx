@@ -63,6 +63,7 @@ type DriverStandingItem = {
   dnfs: number;
   racesEntered: number;
   bestFinish: number | null;
+  officialRank: number;
 };
 
 type ConstructorStandingItem = {
@@ -73,6 +74,7 @@ type ConstructorStandingItem = {
   poles: number;
   fastestLaps: number;
   dnfs: number;
+  officialRank: number;
   drivers: {
     driverId: string;
     code: string;
@@ -87,10 +89,11 @@ type F1StandingsPayload = {
   constructors: ConstructorStandingItem[];
 };
 
-// Official 2026 F1 Championship standings snapshot after Round 19 (Austin GP)
+// Verified official 2026 FIA Formula 1 World Drivers' Championship standings after the United States GP (5 races remaining)
 const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
   string,
   {
+    officialRank: number;
     code: string;
     fullName: string;
     team: string;
@@ -105,59 +108,181 @@ const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
     bestFinish: number;
   }
 > = {
-  ANT: { code: "ANT", fullName: "Andrea Kimi Antonelli", team: "Mercedes", number: 12, points: 365, wins: 9, podiums: 14, poles: 8, fastestLaps: 6, top10: 18, dnfs: 1, bestFinish: 1 },
-  RUS: { code: "RUS", fullName: "George Russell", team: "Mercedes", number: 63, points: 242, wins: 2, podiums: 9, poles: 3, fastestLaps: 3, top10: 17, dnfs: 1, bestFinish: 1 },
-  HAM: { code: "HAM", fullName: "Lewis Hamilton", team: "Ferrari", number: 44, points: 241, wins: 3, podiums: 8, poles: 2, fastestLaps: 3, top10: 16, dnfs: 2, bestFinish: 1 },
-  VER: { code: "VER", fullName: "Max Verstappen", team: "Red Bull Racing", number: 3, points: 236, wins: 3, podiums: 9, poles: 4, fastestLaps: 4, top10: 16, dnfs: 3, bestFinish: 1 },
-  LEC: { code: "LEC", fullName: "Charles Leclerc", team: "Ferrari", number: 16, points: 195, wins: 1, podiums: 7, poles: 2, fastestLaps: 2, top10: 15, dnfs: 2, bestFinish: 1 },
-  NOR: { code: "NOR", fullName: "Lando Norris", team: "McLaren", number: 1, points: 188, wins: 1, podiums: 6, poles: 1, fastestLaps: 1, top10: 15, dnfs: 1, bestFinish: 1 },
-  PIA: { code: "PIA", fullName: "Oscar Piastri", team: "McLaren", number: 81, points: 156, wins: 0, podiums: 4, poles: 0, fastestLaps: 1, top10: 14, dnfs: 2, bestFinish: 2 },
-  SAI: { code: "SAI", fullName: "Carlos Sainz", team: "Williams", number: 55, points: 92, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 11, dnfs: 1, bestFinish: 3 },
-  ALO: { code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 58, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 2, bestFinish: 5 },
-  GAS: { code: "GAS", fullName: "Pierre Gasly", team: "Alpine", number: 10, points: 42, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 7, dnfs: 2, bestFinish: 6 },
-  ALB: { code: "ALB", fullName: "Alexander Albon", team: "Williams", number: 23, points: 36, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 6, dnfs: 3, bestFinish: 6 },
-  OCO: { code: "OCO", fullName: "Esteban Ocon", team: "Haas", number: 31, points: 30, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 5, dnfs: 2, bestFinish: 7 },
-  HAD: { code: "HAD", fullName: "Isack Hadjar", team: "Red Bull Racing", number: 6, points: 28, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
-  BEA: { code: "BEA", fullName: "Oliver Bearman", team: "Haas", number: 87, points: 24, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
-  STR: { code: "STR", fullName: "Lance Stroll", team: "Aston Martin", number: 18, points: 20, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 2, bestFinish: 8 },
-  LAW: { code: "LAW", fullName: "Liam Lawson", team: "Racing Bulls", number: 30, points: 16, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 2, bestFinish: 8 },
-  HUL: { code: "HUL", fullName: "Nico Hülkenberg", team: "Audi Revolut", number: 27, points: 14, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 3, bestFinish: 9 },
-  COL: { code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 2, bestFinish: 9 },
-  LIN: { code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 8, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  BOR: { code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi Revolut", number: 5, points: 6, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  BOT: { code: "BOT", fullName: "Valtteri Bottas", team: "Cadillac", number: 77, points: 2, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 3, bestFinish: 10 },
-  PER: { code: "PER", fullName: "Sergio Perez", team: "Cadillac", number: 11, points: 1, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 4, bestFinish: 10 },
+  ANT: { officialRank: 1, code: "ANT", fullName: "Andrea Kimi Antonelli", team: "Mercedes", number: 12, points: 365, wins: 9, podiums: 15, poles: 7, fastestLaps: 7, top10: 16, dnfs: 1, bestFinish: 1 },
+  RUS: { officialRank: 2, code: "RUS", fullName: "George Russell", team: "Mercedes", number: 63, points: 242, wins: 3, podiums: 8, poles: 5, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
+  HAM: { officialRank: 3, code: "HAM", fullName: "Lewis Hamilton", team: "Ferrari", number: 44, points: 241, wins: 1, podiums: 6, poles: 0, fastestLaps: 1, top10: 17, dnfs: 1, bestFinish: 1 },
+  VER: { officialRank: 4, code: "VER", fullName: "Max Verstappen", team: "Red Bull Racing", number: 3, points: 236, wins: 2, podiums: 10, poles: 2, fastestLaps: 2, top10: 14, dnfs: 4, bestFinish: 1 },
+  LEC: { officialRank: 5, code: "LEC", fullName: "Charles Leclerc", team: "Ferrari", number: 16, points: 233, wins: 1, podiums: 6, poles: 0, fastestLaps: 4, top10: 15, dnfs: 3, bestFinish: 1 },
+  NOR: { officialRank: 6, code: "NOR", fullName: "Lando Norris", team: "McLaren", number: 1, points: 211, wins: 2, podiums: 5, poles: 3, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
+  PIA: { officialRank: 7, code: "PIA", fullName: "Oscar Piastri", team: "McLaren", number: 81, points: 144, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 1, bestFinish: 2 },
+  HAD: { officialRank: 8, code: "HAD", fullName: "Isack Hadjar", team: "Red Bull Racing", number: 6, points: 105, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 2, bestFinish: 3 },
+  LAW: { officialRank: 9, code: "LAW", fullName: "Liam Lawson", team: "Racing Bulls", number: 30, points: 77, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 13, dnfs: 1, bestFinish: 5 },
+  GAS: { officialRank: 10, code: "GAS", fullName: "Pierre Gasly", team: "Alpine", number: 10, points: 42, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, top10: 10, dnfs: 2, bestFinish: 6 },
+  LIN: { officialRank: 11, code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 38, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 11, dnfs: 0, bestFinish: 6 },
+  COL: { officialRank: 12, code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 27, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 3, bestFinish: 6 },
+  BEA: { officialRank: 13, code: "BEA", fullName: "Oliver Bearman", team: "Haas", number: 87, points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 5, bestFinish: 5 },
+  HUL: { officialRank: 14, code: "HUL", fullName: "Nico Hülkenberg", team: "Audi Revolut", number: 27, points: 13, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 8 },
+  BOR: { officialRank: 15, code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi Revolut", number: 5, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 8 },
+  OCO: { officialRank: 16, code: "OCO", fullName: "Esteban Ocon", team: "Haas", number: 31, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 8 },
+  ALO: { officialRank: 17, code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 6, bestFinish: 8 },
+  SAI: { officialRank: 18, code: "SAI", fullName: "Carlos Sainz", team: "Williams", number: 55, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 9 },
+  ALB: { officialRank: 19, code: "ALB", fullName: "Alexander Albon", team: "Williams", number: 23, points: 5, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 7, bestFinish: 8 },
+  STR: { officialRank: 20, code: "STR", fullName: "Lance Stroll", team: "Aston Martin", number: 18, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 12, bestFinish: 12 },
+  BOT: { officialRank: 21, code: "BOT", fullName: "Valtteri Bottas", team: "Cadillac", number: 77, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 9, bestFinish: 13 },
+  PER: { officialRank: 22, code: "PER", fullName: "Sergio Perez", team: "Cadillac", number: 11, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 5, bestFinish: 14 },
+};
+
+// Verified official 2026 FIA Formula 1 World Constructors' Championship standings after the United States GP
+// Accounts for mid-season driver substitutions (Lawson 14 pts at Red Bull in R12-R14; Tsunoda 1 pt at Racing Bulls)
+const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<
+  string,
+  {
+    officialRank: number;
+    points: number;
+    wins: number;
+    podiums: number;
+    poles: number;
+    fastestLaps: number;
+    dnfs: number;
+  }
+> = {
+  Mercedes: { officialRank: 1, points: 607, wins: 12, podiums: 23, poles: 12, fastestLaps: 9, dnfs: 4 },
+  Ferrari: { officialRank: 2, points: 474, wins: 2, podiums: 12, poles: 0, fastestLaps: 5, dnfs: 4 },
+  "Red Bull": { officialRank: 3, points: 355, wins: 2, podiums: 12, poles: 2, fastestLaps: 2, dnfs: 6 },
+  McLaren: { officialRank: 4, points: 355, wins: 2, podiums: 7, poles: 3, fastestLaps: 2, dnfs: 4 },
+  "Racing Bulls": { officialRank: 5, points: 102, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 1 },
+  Alpine: { officialRank: 6, points: 69, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, dnfs: 5 },
+  Haas: { officialRank: 7, points: 30, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 6 },
+  Audi: { officialRank: 8, points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 4 },
+  Williams: { officialRank: 9, points: 12, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 10 },
+  "Aston Martin": { officialRank: 10, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 18 },
+  Cadillac: { officialRank: 11, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 14 },
+};
+
+const TOTAL_2026_F1_ROUNDS = 23;
+const SNAPSHOT_COMPLETED_ROUNDS = 18;
+
+async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 3500): Promise<T | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildBaselineF1Standings(): F1StandingsPayload {
+  const drivers: DriverStandingItem[] = Object.entries(OFFICIAL_2026_DRIVERS_SNAPSHOT)
+    .map(([codeKey, snap]) => ({
+      driverId: codeKey.toLowerCase(),
+      code: snap.code,
+      number: snap.number,
+      fullName: snap.fullName,
+      team: teamLabel(snap.team),
+      points: snap.points,
+      wins: snap.wins,
+      podiums: snap.podiums,
+      poles: snap.poles,
+      fastestLaps: snap.fastestLaps,
+      top10: snap.top10,
+      dnfs: snap.dnfs,
+      racesEntered: SNAPSHOT_COMPLETED_ROUNDS,
+      bestFinish: snap.bestFinish,
+      officialRank: snap.officialRank,
+    }))
+    .sort((a, b) => a.officialRank - b.officialRank);
+
+  const byTeam = new Map<string, ConstructorStandingItem>();
+  for (const [teamKey, cSnap] of Object.entries(OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT)) {
+    byTeam.set(teamKey, {
+      team: teamKey,
+      points: cSnap.points,
+      wins: cSnap.wins,
+      podiums: cSnap.podiums,
+      poles: cSnap.poles,
+      fastestLaps: cSnap.fastestLaps,
+      dnfs: cSnap.dnfs,
+      officialRank: cSnap.officialRank,
+      drivers: [],
+    });
+  }
+  for (const d of drivers) {
+    const t = byTeam.get(d.team);
+    if (t) {
+      t.drivers.push({
+        driverId: d.driverId,
+        code: d.code,
+        number: d.number,
+        points: d.points,
+      });
+    }
+  }
+  const constructors = [...byTeam.values()].sort((a, b) => a.officialRank - b.officialRank);
+
+  return {
+    roundsCompleted: SNAPSHOT_COMPLETED_ROUNDS,
+    drivers,
+    constructors,
+  };
+}
+
+const INITIAL_F1_STANDINGS_PAYLOAD = buildBaselineF1Standings();
+
+type JolpicaStandingsResponse = {
+  MRData?: {
+    StandingsTable?: {
+      StandingsLists?: Array<{
+        round?: string;
+        DriverStandings?: Array<{
+          points?: string;
+          wins?: string;
+          Driver?: {
+            driverId?: string;
+            code?: string;
+            familyName?: string;
+          };
+          Constructors?: Array<{ name?: string }>;
+        }>;
+        ConstructorStandings?: Array<{
+          points?: string;
+          wins?: string;
+          Constructor?: { name?: string };
+        }>;
+      }>;
+    };
+  };
 };
 
 const f1StandingsQuery = queryOptions({
   queryKey: ["f1-championship-standings", SEASON],
   staleTime: 5 * 60_000,
   gcTime: 30 * 60_000,
+  initialData: INITIAL_F1_STANDINGS_PAYLOAD,
   queryFn: async (): Promise<F1StandingsPayload> => {
-    const [driversRes, jolpicaDriversRes, jolpicaTeamsRes] =
-      await Promise.all([
-        supabase
-          .from("drivers")
-          .select("id, code, full_name, team, number")
-          .eq("active", true),
-        fetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json&_t=${Date.now()}`,
-          { cache: "no-store" },
-        )
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-        fetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json&_t=${Date.now()}`,
-          { cache: "no-store" },
-        )
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ]);
+    const [driversRes, jolpicaDriversRes, jolpicaTeamsRes] = await Promise.all([
+      supabase
+        .from("drivers")
+        .select("id, code, full_name, team, number")
+        .eq("active", true),
+      fetchJsonWithTimeout<JolpicaStandingsResponse>(
+        `https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json&_t=${Date.now()}`,
+        3500,
+      ),
+      fetchJsonWithTimeout<JolpicaStandingsResponse>(
+        `https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json&_t=${Date.now()}`,
+        3500,
+      ),
+    ]);
 
     const dbDrivers = (driversRes.data ?? []) as Driver[];
     const byDriver = new Map<string, DriverStandingItem>();
 
-    // 1. Initialize from verified official 2026 Round 19 baseline snapshot
+    // 1. Initialize from verified official 2026 United States GP (Round 18) snapshot
     for (const [codeKey, snap] of Object.entries(OFFICIAL_2026_DRIVERS_SNAPSHOT)) {
       byDriver.set(codeKey, {
         driverId: codeKey.toLowerCase(),
@@ -172,61 +297,65 @@ const f1StandingsQuery = queryOptions({
         fastestLaps: snap.fastestLaps,
         top10: snap.top10,
         dnfs: snap.dnfs,
-        racesEntered: 19,
+        racesEntered: SNAPSHOT_COMPLETED_ROUNDS,
         bestFinish: snap.bestFinish,
+        officialRank: snap.officialRank,
       });
     }
 
-    // 2. Synchronize database drivers for UUID and team formatting
+    // 2. Attach canonical database driverId without overwriting verified snapshot fields or injecting duplicates
     for (const d of dbDrivers) {
-      const code = (d.code ?? d.full_name.slice(0, 3)).toUpperCase();
+      const code = d.code?.trim().toUpperCase();
+      if (!code) continue;
       const existing = byDriver.get(code);
       if (existing) {
         existing.driverId = d.id;
-        if (d.number != null) existing.number = d.number;
-        if (d.full_name) existing.fullName = d.full_name;
-        if (d.team) existing.team = teamLabel(d.team);
-      } else {
-        byDriver.set(code, {
-          driverId: d.id,
-          code,
-          number: d.number,
-          fullName: d.full_name,
-          team: teamLabel(d.team),
-          points: 0,
-          wins: 0,
-          podiums: 0,
-          poles: 0,
-          fastestLaps: 0,
-          top10: 0,
-          dnfs: 0,
-          racesEntered: 19,
-          bestFinish: null,
-        });
       }
     }
 
-    // 3. Live Jolpica Ergast update: if points advanced beyond snapshot (e.g. Round 20+), smoothly adopt
-    const jolpicaDriverLists =
-      jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]
-        ?.DriverStandings ?? [];
-    for (const jd of jolpicaDriverLists) {
-      const code: string = (
-        jd?.Driver?.code ??
-        jd?.Driver?.familyName?.slice(0, 3) ??
-        ""
-      ).toUpperCase();
-      if (!code) continue;
-      const officialPts = Number(jd?.points ?? 0);
-      const officialWins = Number(jd?.wins ?? 0);
-      const constructorName = jd?.Constructors?.[0]?.name;
-      const existing = byDriver.get(code);
-      if (existing) {
-        existing.points = Math.max(existing.points, officialPts);
-        existing.wins = Math.max(existing.wins, officialWins);
-        if (constructorName && existing.team === "—") {
-          existing.team = teamLabel(constructorName);
+    // 3. Atomic 3-Condition Gate for future rounds (only applies when Round 19+ is officially published)
+    const driverStandingsList =
+      jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0];
+    const jolpicaDriverRound = Number(driverStandingsList?.round ?? 0);
+    const jolpicaDriverLists = driverStandingsList?.DriverStandings ?? [];
+    const jolpicaLeaderPts = Math.max(
+      0,
+      ...jolpicaDriverLists.map((jd) => Number(jd?.points ?? 0)),
+    );
+
+    let effectiveRounds = SNAPSHOT_COMPLETED_ROUNDS;
+
+    if (
+      jolpicaDriverRound > SNAPSHOT_COMPLETED_ROUNDS &&
+      jolpicaDriverRound <= TOTAL_2026_F1_ROUNDS &&
+      jolpicaDriverLists.length >= 20 &&
+      jolpicaLeaderPts >= 365
+    ) {
+      effectiveRounds = jolpicaDriverRound;
+      const maxPossibleGain = (jolpicaDriverRound - SNAPSHOT_COMPLETED_ROUNDS) * 34;
+
+      for (const jd of jolpicaDriverLists) {
+        const code = (jd?.Driver?.code ?? "").trim().toUpperCase();
+        if (!code) continue;
+        const existing = byDriver.get(code);
+        const snap = OFFICIAL_2026_DRIVERS_SNAPSHOT[code];
+        if (!existing || !snap) continue;
+
+        const officialPts = Number(jd?.points ?? 0);
+        const officialWins = Number(jd?.wins ?? 0);
+        const ptsDelta = officialPts - snap.points;
+        const winsDelta = officialWins - snap.wins;
+
+        if (ptsDelta >= 0 && ptsDelta <= maxPossibleGain) {
+          existing.points = officialPts;
         }
+        if (winsDelta >= 0 && winsDelta <= jolpicaDriverRound - SNAPSHOT_COMPLETED_ROUNDS) {
+          existing.wins = officialWins;
+          if (winsDelta > 0) {
+            existing.podiums = Math.max(existing.podiums, snap.podiums + winsDelta);
+          }
+        }
+        existing.racesEntered = jolpicaDriverRound;
       }
     }
 
@@ -236,34 +365,40 @@ const f1StandingsQuery = queryOptions({
         b.wins - a.wins ||
         b.podiums - a.podiums ||
         (a.bestFinish ?? 99) - (b.bestFinish ?? 99) ||
+        a.officialRank - b.officialRank ||
         teamRank(a.team) - teamRank(b.team) ||
         (a.number ?? 999) - (b.number ?? 999),
     );
 
-    // 4. Group drivers into official Constructors
+    // 4. Build official Constructors from snapshot + attach current roster drivers
     const byTeam = new Map<string, ConstructorStandingItem>();
+    for (const [teamKey, cSnap] of Object.entries(OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT)) {
+      byTeam.set(teamKey, {
+        team: teamKey,
+        points: cSnap.points,
+        wins: cSnap.wins,
+        podiums: cSnap.podiums,
+        poles: cSnap.poles,
+        fastestLaps: cSnap.fastestLaps,
+        dnfs: cSnap.dnfs,
+        officialRank: cSnap.officialRank,
+        drivers: [],
+      });
+    }
+
     for (const d of sortedDrivers) {
       if (!d.team || d.team === "—") continue;
-      let t = byTeam.get(d.team);
-      if (!t) {
-        t = {
-          team: d.team,
-          points: 0,
-          wins: 0,
-          podiums: 0,
-          poles: 0,
-          fastestLaps: 0,
-          dnfs: 0,
-          drivers: [],
-        };
-        byTeam.set(d.team, t);
+      const t = byTeam.get(d.team);
+      if (!t) continue;
+
+      const snapDriverPts = OFFICIAL_2026_DRIVERS_SNAPSHOT[d.code]?.points ?? 0;
+      const snapDriverWins = OFFICIAL_2026_DRIVERS_SNAPSHOT[d.code]?.wins ?? 0;
+      if (d.points > snapDriverPts) {
+        t.points += d.points - snapDriverPts;
       }
-      t.points += d.points;
-      t.wins += d.wins;
-      t.podiums += d.podiums;
-      t.poles += d.poles;
-      t.fastestLaps += d.fastestLaps;
-      t.dnfs += d.dnfs;
+      if (d.wins > snapDriverWins) {
+        t.wins += d.wins - snapDriverWins;
+      }
       t.drivers.push({
         driverId: d.driverId,
         code: d.code,
@@ -272,19 +407,38 @@ const f1StandingsQuery = queryOptions({
       });
     }
 
-    // Live Jolpica constructor standings
-    const jolpicaTeamLists =
-      jolpicaTeamsRes?.MRData?.StandingsTable?.StandingsLists?.[0]
-        ?.ConstructorStandings ?? [];
-    for (const jt of jolpicaTeamLists) {
-      const cName = teamLabel(jt?.Constructor?.name);
-      if (!cName || cName === "—") continue;
-      const officialPts = Number(jt?.points ?? 0);
-      const officialWins = Number(jt?.wins ?? 0);
-      const existing = byTeam.get(cName);
-      if (existing) {
-        existing.points = Math.max(existing.points, officialPts);
-        existing.wins = Math.max(existing.wins, officialWins);
+    // 5. Atomic 3-Condition Gate for future constructor rounds (Round 19+)
+    const teamStandingsList =
+      jolpicaTeamsRes?.MRData?.StandingsTable?.StandingsLists?.[0];
+    const jolpicaTeamRound = Number(teamStandingsList?.round ?? 0);
+    const jolpicaTeamLists = teamStandingsList?.ConstructorStandings ?? [];
+    const jolpicaTopTeamPts = Math.max(
+      0,
+      ...jolpicaTeamLists.map((jt) => Number(jt?.points ?? 0)),
+    );
+
+    if (
+      jolpicaTeamRound > SNAPSHOT_COMPLETED_ROUNDS &&
+      jolpicaTeamRound <= TOTAL_2026_F1_ROUNDS &&
+      jolpicaTeamLists.length >= 10 &&
+      jolpicaTopTeamPts >= 607
+    ) {
+      const maxTeamGain = (jolpicaTeamRound - SNAPSHOT_COMPLETED_ROUNDS) * 60;
+      for (const jt of jolpicaTeamLists) {
+        const cName = teamLabel(jt?.Constructor?.name);
+        if (!cName || cName === "—") continue;
+        const existing = byTeam.get(cName);
+        const snap = OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT[cName];
+        if (!existing || !snap) continue;
+
+        const officialPts = Number(jt?.points ?? 0);
+        const officialWins = Number(jt?.wins ?? 0);
+        if (officialPts >= snap.points && officialPts - snap.points <= maxTeamGain) {
+          existing.points = Math.max(existing.points, officialPts);
+        }
+        if (officialWins >= snap.wins) {
+          existing.wins = Math.max(existing.wins, officialWins);
+        }
       }
     }
 
@@ -293,11 +447,12 @@ const f1StandingsQuery = queryOptions({
         b.points - a.points ||
         b.wins - a.wins ||
         b.podiums - a.podiums ||
+        a.officialRank - b.officialRank ||
         teamRank(a.team) - teamRank(b.team),
     );
 
     return {
-      roundsCompleted: 19,
+      roundsCompleted: effectiveRounds,
       drivers: sortedDrivers,
       constructors: sortedConstructors,
     };
@@ -391,7 +546,14 @@ function Leaderboard() {
     if (syncing) return;
     setSyncing(true);
     try {
-      await syncF1Data({ data: { force: true } });
+      try {
+        await syncF1Data({ data: { force: true } });
+      } catch (innerErr) {
+        const msg = innerErr instanceof Error ? innerErr.message : "";
+        if (!msg.toLowerCase().includes("wait a few seconds")) {
+          throw innerErr;
+        }
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["races"] }),
         queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
@@ -452,7 +614,7 @@ function Leaderboard() {
           <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {activeTab === "league"
               ? `${scored} league race${scored === 1 ? "" : "s"} scored`
-              : "Round 19 of 24 · 5 races remaining"}
+              : `${f1Data?.roundsCompleted ?? 18} races completed · ${Math.max(0, TOTAL_2026_F1_ROUNDS - (f1Data?.roundsCompleted ?? 18))} races remaining`}
           </p>
         </div>
         {user && (
