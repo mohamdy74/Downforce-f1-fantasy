@@ -78,6 +78,31 @@ export const racesQuery = queryOptions({
   },
 });
 
+const AUSTIN_2026_DRIVERS_FALLBACK: Driver[] = [
+  { id: "antonelli", code: "ANT", full_name: "Andrea Kimi Antonelli", team: "Mercedes", number: 12 },
+  { id: "russell", code: "RUS", full_name: "George Russell", team: "Mercedes", number: 63 },
+  { id: "hamilton", code: "HAM", full_name: "Lewis Hamilton", team: "Ferrari", number: 44 },
+  { id: "verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull Racing", number: 3 },
+  { id: "leclerc", code: "LEC", full_name: "Charles Leclerc", team: "Ferrari", number: 16 },
+  { id: "norris", code: "NOR", full_name: "Lando Norris", team: "McLaren", number: 1 },
+  { id: "piastri", code: "PIA", full_name: "Oscar Piastri", team: "McLaren", number: 81 },
+  { id: "sainz", code: "SAI", full_name: "Carlos Sainz", team: "Williams", number: 55 },
+  { id: "alonso", code: "ALO", full_name: "Fernando Alonso", team: "Aston Martin", number: 14 },
+  { id: "gasly", code: "GAS", full_name: "Pierre Gasly", team: "Alpine", number: 10 },
+  { id: "albon", code: "ALB", full_name: "Alexander Albon", team: "Williams", number: 23 },
+  { id: "ocon", code: "OCO", full_name: "Esteban Ocon", team: "Haas", number: 31 },
+  { id: "stroll", code: "STR", full_name: "Lance Stroll", team: "Aston Martin", number: 18 },
+  { id: "lawson", code: "LAW", full_name: "Liam Lawson", team: "Racing Bulls", number: 30 },
+  { id: "hulkenberg", code: "HUL", full_name: "Nico Hulkenberg", team: "Audi Revolut", number: 27 },
+  { id: "colapinto", code: "COL", full_name: "Franco Colapinto", team: "Alpine", number: 43 },
+  { id: "lindblad", code: "LIN", full_name: "Arvid Lindblad", team: "Racing Bulls", number: 41 },
+  { id: "bortoleto", code: "BOR", full_name: "Gabriel Bortoleto", team: "Audi Revolut", number: 5 },
+  { id: "bottas", code: "BOT", full_name: "Valtteri Bottas", team: "Cadillac", number: 77 },
+  { id: "perez", code: "PER", full_name: "Sergio Perez", team: "Cadillac", number: 11 },
+  { id: "hadjar", code: "HAD", full_name: "Isack Hadjar", team: "Red Bull Racing", number: 6 },
+  { id: "bearman", code: "BEA", full_name: "Oliver Bearman", team: "Haas", number: 87 },
+];
+
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
   staleTime: 0,
@@ -89,7 +114,7 @@ export const driversQuery = queryOptions({
       .eq("active", true)
       .order("full_name");
     if (error) throw error;
-    return data as Driver[];
+    return data.length > 0 ? (data as Driver[]) : AUSTIN_2026_DRIVERS_FALLBACK;
   },
 });
 

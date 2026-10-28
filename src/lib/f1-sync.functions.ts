@@ -25,7 +25,7 @@ import {
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
-const STALE_MS = 15 * 60 * 1000;
+const STALE_MS = 5 * 1000;
 const EXCLUDED_DRIVERS = new Set(["tsunoda"]);
 
 type ErgastSession = { date: string; time?: string | undefined };
