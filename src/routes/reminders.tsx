@@ -11,28 +11,12 @@ export const Route = createFileRoute("/reminders")({
     meta: [{ title: "Reminders — DOWNFORCE" }, { name: "description", content: "Who hasn't submitted picks and reminders for the next race." }],
   }),
   loader: async () => {
+    // Server-only warm-up (cron sweep + season sync) lives in a .server.ts
+    // module because it needs the server-only request API, which route files
+    // (their component ships to the browser) may not import.
     if (typeof process === "undefined") return;
-    const { cronRequestAuthorized, readServerEnv } = await import("@/lib/env");
-    if (!readServerEnv("SUPABASE_SERVICE_ROLE_KEY")) return;
-    // Only authenticated cron machines (x-cron-secret header) may trigger the
-    // server-side reminder sweep + season sync. Real browsers skip this and run
-    // BackgroundSync client-side instead; while CRON_SECRET is unset the warm-up
-    // stays open exactly as before. TanStack Start exposes the current
-    // request through getRequestHeader() (route loaders do not receive the
-    // request object directly in this version).
-    let headerSecret: string | null = null;
-    try {
-      const { getRequestHeader } = await import("@tanstack/react-start/server");
-      headerSecret = getRequestHeader("x-cron-secret") ?? null;
-    } catch {
-      headerSecret = null;
-    }
-    if (!cronRequestAuthorized(headerSecret)) return;
-    const { checkAndSendRaceReminders } = await import("@/lib/push.functions");
-    await checkAndSendRaceReminders({ data: {} }).catch(() => null);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { runSeasonSync } = await import("@/lib/f1-sync.functions");
-    void runSeasonSync(supabaseAdmin, { force: false }).catch(() => null);
+    const { runRemindersWarmUp } = await import("@/lib/cron-warmup.server");
+    await runRemindersWarmUp().catch(() => null);
   },
   component: Reminders,
 });
