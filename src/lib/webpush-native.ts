@@ -168,7 +168,7 @@ async function encryptWebPushAes128Gcm(
 export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
-): Promise<{ ok: boolean; status: number }> {
+): Promise<{ ok: boolean; status: number; error?: string }> {
   // SECURITY: Load keys ONLY from environment variables - NO fallbacks
   const pub = (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || (process.env["VAPID_PUBLIC_KEY"] as string | undefined);
   const priv = process.env["VAPID_PRIVATE_KEY"] as string | undefined;
@@ -176,7 +176,11 @@ export async function sendNativeWebPush(
   // SECURITY: Fail fast with clear error if keys are not configured
   if (!pub || !priv) {
     console.error("[WebPush] VAPID keys not configured. Set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY environment variables.");
-    return { ok: false, status: 0 };
+    return {
+      ok: false,
+      status: 0,
+      error: "Server VAPID keys are not configured — set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY in Lovable Secrets",
+    };
   }
 
   const payloadStr = JSON.stringify(payloadObj);
@@ -204,7 +208,11 @@ export async function sendNativeWebPush(
     return { ok: res.ok || res.status === 201, status: res.status };
   } catch (error) {
     console.error("[WebPush] Send failed:", error);
-    return { ok: false, status: 0 };
+    return {
+      ok: false,
+      status: 0,
+      error: error instanceof Error ? `Push service unreachable: ${error.message}` : "Push service unreachable",
+    };
   } finally {
     clearTimeout(timer);
   }
