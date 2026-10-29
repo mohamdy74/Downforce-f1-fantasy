@@ -575,7 +575,7 @@ function Predict() {
         </div>
       )}
 
-      <div className={viewOnly ? "mt-4" : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3"}>
+      <div className={viewOnly ? "mt-4" : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/95 p-2 md:bg-background/80 md:backdrop-blur-md md:bottom-3"}>
         {raceLocked ? (
           <Button size="lg" className="h-12 w-full text-base" disabled>
             Picks locked — race started

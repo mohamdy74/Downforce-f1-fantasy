@@ -344,7 +344,7 @@ function Sprint() {
         <p className="mt-3 text-sm text-destructive">A driver is selected more than once.</p>
       )}
 
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/80 p-2 backdrop-blur-md md:bottom-3">
+      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/95 p-2 md:bg-background/80 md:backdrop-blur-md md:bottom-3">
         {sprintLocked ? (
           <Button size="lg" className="h-12 w-full text-base" disabled>
             Sprint picks locked — sprint started

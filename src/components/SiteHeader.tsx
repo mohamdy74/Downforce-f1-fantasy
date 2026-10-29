@@ -140,7 +140,7 @@ export function SiteHeader() {
       : null;
 
   return (
-    <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+    <header className="sticky top-0 z-40 w-full overflow-x-clip border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] md:bg-background/90 md:backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4">
         <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DOWNFORCE home">
           <LogoHorizontal className="h-7 w-auto max-w-[140px] sm:h-10 sm:max-w-none" />
@@ -235,7 +235,7 @@ export function BottomNav() {
     <>
       <div className="h-[calc(4rem+env(safe-area-inset-bottom))] md:hidden" />
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 grid border-t border-border bg-background/95 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 grid border-t border-border bg-background/95 md:hidden"
         style={{
           paddingBottom: "env(safe-area-inset-bottom)",
           gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
