@@ -11,12 +11,12 @@ export const Route = createFileRoute("/reminders")({
     meta: [{ title: "Reminders — DOWNFORCE" }, { name: "description", content: "Who hasn't submitted picks and reminders for the next race." }],
   }),
   loader: async () => {
-    // Server-only warm-up (cron sweep + season sync) lives in a .server.ts
-    // module because it needs the server-only request API, which route files
-    // (their component ships to the browser) may not import.
+    // Cron warm-up (sweep + season sync) runs inside a server function, whose
+    // handler compiles server-only — that is the only place the server-only
+    // request API may be imported from (route files ship to the browser).
     if (typeof process === "undefined") return;
-    const { runRemindersWarmUp } = await import("@/lib/cron-warmup.server");
-    await runRemindersWarmUp().catch(() => null);
+    const { runRemindersCronWarmUp } = await import("@/lib/push.functions");
+    await runRemindersCronWarmUp({ data: {} }).catch(() => null);
   },
   component: Reminders,
 });

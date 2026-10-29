@@ -1,9 +1,7 @@
-// Server-only /reminders warm-up: the cron sweep + season sync.
-// Lives in a .server.ts module because it imports the server-only
-// @tanstack/react-start/server request API, which client-graph files (route
-// files ship their component to the browser) may not import directly.
-import { getRequestHeader } from "@tanstack/react-start/server";
-
+// Server-only /reminders warm-up: the cron sweep + season sync. Only ever
+// imported from server-function handler code (push.functions.ts) — route files
+// must not import it, because their component ships to the browser and the
+// request API below is server-only.
 import { cronRequestAuthorized, readServerEnv } from "./env";
 
 export async function runRemindersWarmUp(): Promise<void> {
@@ -15,6 +13,7 @@ export async function runRemindersWarmUp(): Promise<void> {
   // stays open exactly as before.
   let headerSecret: string | null = null;
   try {
+    const { getRequestHeader } = await import("@tanstack/react-start/server");
     headerSecret = getRequestHeader("x-cron-secret") ?? null;
   } catch {
     headerSecret = null;
