@@ -26,8 +26,8 @@ git --version
 
 ```bash
 cd ~
-git clone https://github.com/mohamdy74/fidelity-image-viewer.git
-cd fidelity-image-viewer
+git clone https://github.com/mohamdy74/downforce-f1-fantasy.git
+cd downforce-f1-fantasy
 ```
 
 > **تنبيه مهم حاليًا:** ملفات Migration الجديدة موجودة في نسخة العمل الحالية، لكن محاولة رفعها إلى GitHub توقفت لأن جلسة GitHub في Terminal لم تكن مسجّلة الدخول. إذا لم تجد الملفين داخل مجلد `drizzle/migrations` بعد `clone`، نزّلهما من روابط الملفات الموجودة في نهاية هذا الدليل أو انسخ محتواهما إلى نفس المسار قبل تنفيذ خطوات Supabase.
@@ -35,11 +35,11 @@ cd fidelity-image-viewer
 ### إذا كان موجودًا بالفعل
 
 ```bash
-cd ~/fidelity-image-viewer
+cd ~/downforce-f1-fantasy
 git pull origin main
 ```
 
-إذا ظهر خطأ أن المسار غير موجود، استخدم المسار الذي حفظت فيه المشروع بدل `~/fidelity-image-viewer`.
+إذا ظهر خطأ أن المسار غير موجود، استخدم المسار الذي حفظت فيه المشروع بدل `~/downforce-f1-fantasy`.
 
 ## 3. تثبيت الحزم
 
@@ -193,7 +193,7 @@ Ctrl + C
 بعد التأكد من أن الموقع يعمل:
 
 ```bash
-cd ~/fidelity-image-viewer
+cd ~/downforce-f1-fantasy
 git status
 git add drizzle/migrations/0008_sprint_predictions_and_locks.sql
 git add drizzle/migrations/0009_f1_fantasy_schema_alignment.sql
@@ -245,7 +245,7 @@ git push origin main
 ## 11. أوامر الفحص النهائية
 
 ```bash
-cd ~/fidelity-image-viewer
+cd ~/downforce-f1-fantasy
 npm install
 npm run build
 git status
