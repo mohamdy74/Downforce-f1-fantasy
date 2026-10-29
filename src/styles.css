@@ -23,21 +23,21 @@
   font-family: "Barlow";
   font-style: normal;
   font-weight: 400;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-400.woff2") format("woff2");
 }
 @font-face {
   font-family: "Barlow";
   font-style: normal;
   font-weight: 600;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-600.woff2") format("woff2");
 }
 @font-face {
   font-family: "Barlow";
   font-style: normal;
   font-weight: 700;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-700.woff2") format("woff2");
 }
 @font-face {
@@ -51,28 +51,28 @@
   font-family: "Barlow Semi Condensed";
   font-style: normal;
   font-weight: 500;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-semicondensed-600.woff2") format("woff2");
 }
 @font-face {
   font-family: "Barlow Semi Condensed";
   font-style: normal;
   font-weight: 600;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-semicondensed-600.woff2") format("woff2");
 }
 @font-face {
   font-family: "Barlow Semi Condensed";
   font-style: normal;
   font-weight: 700;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/barlow-semicondensed-700.woff2") format("woff2");
 }
 @font-face {
   font-family: "Cairo";
   font-style: normal;
   font-weight: 200 1000;
-  font-display: block;
+  font-display: swap;
   src: url("./assets/fonts/cairo-badge-var.woff2") format("woff2");
 }
 @font-face {
@@ -940,4 +940,10 @@ a[href*="lovable.dev"] {
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* Perf: skip painting offscreen below-the-fold sections during fast scrolls */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
 }
