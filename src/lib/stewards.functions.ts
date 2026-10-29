@@ -19,14 +19,6 @@ async function requireSteward(context: { userId: string; claims?: Record<string,
   return supabaseAdmin;
 }
 
-export const getServerVapidPublicKey = createServerFn({ method: "POST" })
-  .inputValidator((input: Record<string, unknown> | undefined) => input ?? {})
-  .handler(async () => {
-    const { resolveServerVapidKeys } = await import("./webpush-native");
-    const { publicKey } = await resolveServerVapidKeys();
-    return { publicKey };
-  });
-
 export const savePushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)
