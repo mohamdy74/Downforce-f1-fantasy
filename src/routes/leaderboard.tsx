@@ -17,6 +17,7 @@ import {
   SEASON,
   type Driver,
 } from "@/lib/queries";
+import { writeQueryCache } from "@/lib/queryPersist";
 import { teamColor, teamLabel, teamRank } from "@/lib/teams";
 import { cn } from "@/lib/utils";
 
@@ -160,6 +161,17 @@ const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<string, Omit<ConstructorStandi
 
 
 
+// Bounded Jolpica fetch: on timeout or network error we fall back to the verified
+// snapshot + DB merge below, so a slow upstream never blocks the tab.
+function jolpicaFetch(url: string, timeoutMs = 4_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { cache: "no-store", signal: controller.signal })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .finally(() => clearTimeout(timer));
+}
+
 const f1StandingsQuery = queryOptions({
   queryKey: ["f1-championship-standings", SEASON],
   staleTime: 5 * 60_000,
@@ -171,18 +183,12 @@ const f1StandingsQuery = queryOptions({
           .from("drivers")
           .select("id, code, full_name, team, number")
           .eq("active", true),
-        fetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json&_t=${Date.now()}`,
-          { cache: "no-store" },
-        )
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-        fetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json&_t=${Date.now()}`,
-          { cache: "no-store" },
-        )
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
+        jolpicaFetch(
+          `https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json`,
+        ),
+        jolpicaFetch(
+          `https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json`,
+        ),
       ]);
 
     const dbDrivers = (driversRes.data ?? []) as Driver[];
@@ -327,11 +333,11 @@ const f1StandingsQuery = queryOptions({
         teamRank(a.team) - teamRank(b.team),
     );
 
-    return {
+    return writeQueryCache(`f1-standings:${SEASON}`, {
       roundsCompleted: 18,
       drivers: sortedDrivers,
       constructors: sortedConstructors,
-    };
+    });
   },
 });
 

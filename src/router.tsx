@@ -37,6 +37,12 @@ export const getRouter = () => {
         updatedAt: cachedBoard.updatedAt,
       });
     }
+    const cachedStandings = readQueryCache(`f1-standings:${SEASON}`);
+    if (cachedStandings) {
+      queryClient.setQueryData(["f1-championship-standings", SEASON], cachedStandings.data, {
+        updatedAt: cachedStandings.updatedAt,
+      });
+    }
   }
 
   const router = createRouter({

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
+import { writeQueryCache } from "@/lib/queryPersist";
 
 export const SEASON = 2026;
 /** Official league start: Round 14 (Spanish Grand Prix) */
@@ -70,11 +71,14 @@ export const racesQuery = queryOptions({
       .eq("season", SEASON)
       .order("round");
     if (error) throw error;
-    return ((data ?? []) as Race[]).map((r) => ({
-      ...r,
-      // Only treat rounds from R14 (Spanish GP) onwards as scored league rounds
-      has_results: r.round >= LEAGUE_START_ROUND ? r.has_results : false,
-    }));
+    return writeQueryCache(
+      `races:${SEASON}`,
+      ((data ?? []) as Race[]).map((r) => ({
+        ...r,
+        // Only treat rounds from R14 (Spanish GP) onwards as scored league rounds
+        has_results: r.round >= LEAGUE_START_ROUND ? r.has_results : false,
+      })),
+    );
   },
 });
 
@@ -115,7 +119,10 @@ export const driversQuery = queryOptions({
       .eq("active", true)
       .order("full_name");
     if (error) throw error;
-    return data.length > 0 ? (data as Driver[]) : AUSTIN_2026_DRIVERS_FALLBACK;
+    return writeQueryCache(
+      "drivers",
+      data.length > 0 ? (data as Driver[]) : AUSTIN_2026_DRIVERS_FALLBACK,
+    );
   },
 });
 
@@ -224,7 +231,10 @@ export const leaderboardQuery = queryOptions({
     if (pErr) throw pErr;
     if (rErr) throw rErr;
 
-    return computeLeaderboardEntries(profiles ?? [], scores ?? [], raceRows ?? []);
+    return writeQueryCache(
+      `leaderboard:${SEASON}`,
+      computeLeaderboardEntries(profiles ?? [], scores ?? [], raceRows ?? []),
+    );
   },
 });
 
