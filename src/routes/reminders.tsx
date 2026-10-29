@@ -10,15 +10,23 @@ export const Route = createFileRoute("/reminders")({
   head: () => ({
     meta: [{ title: "Reminders — DOWNFORCE" }, { name: "description", content: "Who hasn't submitted picks and reminders for the next race." }],
   }),
-  loader: async ({ request }) => {
+  loader: async () => {
     if (typeof process === "undefined") return;
     const { cronRequestAuthorized, readServerEnv } = await import("@/lib/env");
     if (!readServerEnv("SUPABASE_SERVICE_ROLE_KEY")) return;
     // Only authenticated cron machines (x-cron-secret header) may trigger the
     // server-side reminder sweep + season sync. Real browsers skip this and run
     // BackgroundSync client-side instead; while CRON_SECRET is unset the warm-up
-    // stays open exactly as before.
-    if (!cronRequestAuthorized(request.headers.get("x-cron-secret"))) return;
+    // stays open exactly as before. TanStack Start exposes the request through
+    // getWebRequest() (route loaders do not receive it directly).
+    let headerSecret: string | null = null;
+    try {
+      const { getWebRequest } = await import("@tanstack/react-start/server");
+      headerSecret = getWebRequest()?.headers.get("x-cron-secret") ?? null;
+    } catch {
+      headerSecret = null;
+    }
+    if (!cronRequestAuthorized(headerSecret)) return;
     const { checkAndSendRaceReminders } = await import("@/lib/push.functions");
     await checkAndSendRaceReminders({ data: {} }).catch(() => null);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
