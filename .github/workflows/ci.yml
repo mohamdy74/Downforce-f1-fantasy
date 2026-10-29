@@ -47,8 +47,8 @@ jobs:
           bun run build > build.log 2>&1
           status=$?
           if [ $status -ne 0 ]; then
-            grep -m 6 -iE "error|cannot|failed|✗" build.log | cut -c1-220 | while IFS= read -r line; do
-              echo "::error::BUILD: $line"
+            tail -n 18 build.log | cut -c1-220 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::BUILD: ${line//%/%25}"
             done
             exit $status
           fi
