@@ -6,6 +6,12 @@ import { syncF1Data } from "@/lib/f1-sync.functions";
 import { checkAndSendRaceReminders } from "@/lib/push.functions";
 
 const MIN_GAP_MS = 30 * 1000;
+/**
+ * Defer the first background sync so it never competes with hydration,
+ * first paint, and the user's first scroll right after opening the site.
+ * Switching back to the tab/app still triggers an immediate sync.
+ */
+const FIRST_SYNC_DELAY_MS = 30 * 1000;
 
 export function BackgroundSync() {
   const queryClient = useQueryClient();
@@ -38,19 +44,16 @@ export function BackgroundSync() {
       }
     };
 
-    const idle = (
-      window as Window & {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      }
-    ).requestIdleCallback;
-    if (idle) idle(run, { timeout: 100 });
-    else run();
+    const firstRunTimer = setTimeout(run, FIRST_SYNC_DELAY_MS);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") run();
     };
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(firstRunTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [queryClient]);
 
   return null;

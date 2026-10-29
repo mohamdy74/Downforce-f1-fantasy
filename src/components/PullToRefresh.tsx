@@ -16,6 +16,7 @@ export function PullToRefresh() {
   const pullRef = useRef(0);
   const refreshingRef = useRef(false);
   const lastRefreshTime = useRef(0);
+  const rafRef = useRef(0);
 
   const MIN_REFRESH_INTERVAL = 5000;
 
@@ -54,7 +55,14 @@ export function PullToRefresh() {
 
       const dampened = Math.min((distance - 12) * 0.5, MAX_PULL);
       pullRef.current = dampened;
-      setPullDistance(dampened);
+      // Coalesce to at most one state update per animation frame so a fast
+      // fling at the top of the page doesn't re-render on every touchmove.
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = 0;
+          setPullDistance(pullRef.current);
+        });
+      }
 
       if (distance > 20 && e.cancelable) {
         e.preventDefault();
@@ -100,6 +108,8 @@ export function PullToRefresh() {
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
       document.removeEventListener("touchstart", handleTouchStart, { capture: false });
       document.removeEventListener("touchmove", handleTouchMove, { capture: false });
       document.removeEventListener("touchend", handleTouchEnd, { capture: false });
