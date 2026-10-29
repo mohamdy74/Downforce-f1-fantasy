@@ -2,9 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { ReminderList } from "@/components/ReminderList";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { isCompleteTop10 } from "@/lib/push-keys";
+import { getReminderStats } from "@/lib/reminder.functions";
 import { racesQuery, nextRace } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -19,39 +17,26 @@ function Reminders() {
   const { user } = useAuth();
   const { data: races } = useQuery(racesQuery);
 
-  // Server-style query: only counts + names, NO prediction contents exposed
+  const race = races ? nextRace(races) : null;
+
+  // Server-style query: only counts + names, NO prediction contents exposed.
+  // RLS hides other players' predictions until their race starts, so the old
+  // client-side count always returned 0/1 — use the authenticated server
+  // function for true league-wide stats.
   const { data, isLoading } = useQuery({
-    queryKey: ["submission-status", races?.[0]?.id],
-    enabled: !!races && races.length > 0 && !!user,
+    queryKey: ["submission-status", race?.id],
+    enabled: !!race && !!user,
     queryFn: async () => {
-      const race = nextRace(races!);
-      if (!race) return null;
-
-      // Get all predictions for this race (only user_ids + top10 length — not full picks)
-      const { data: preds } = await supabase
-        .from("predictions")
-        .select("user_id, top10")
-        .eq("race_id", race.id);
-
-      const submittedIds = (preds ?? [])
-        .filter((p) => isCompleteTop10(p.top10))
-        .map((p) => p.user_id);
-      const submittedSet = new Set(submittedIds);
-
-      // Get names for non-submitted users
-      const missingIds = submittedIds.length > 0
-        ? [] // We'd need to query profiles excluding submitted — simplified for this endpoint
-        : [];
-
-      // For this endpoint, return aggregate stats only (no individual predictions shown)
+      const stats = await getReminderStats({ data: { raceId: race!.id } });
       return {
-        raceId: race.id,
-        raceName: race.name,
-        round: race.round,
-        raceAt: race.race_at,
-        submittedCount: submittedIds.length,
-        totalCount: (preds ?? []).length,
-        hasSubmitted: user ? submittedSet.has(user.id) : false,
+        raceId: race!.id,
+        raceName: race!.name,
+        round: race!.round,
+        raceAt: race!.race_at,
+        submittedCount: stats.submitted,
+        totalCount: stats.total,
+        missingCount: stats.missing.length,
+        hasSubmitted: !stats.missing.some((m) => m.id === user?.id),
       };
     },
   });
