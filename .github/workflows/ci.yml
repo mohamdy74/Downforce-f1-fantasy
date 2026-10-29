@@ -58,6 +58,7 @@ jobs:
           VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
-      - name: Lint (advisory until the baseline is clean)
+      # The auto-format bot keeps the baseline prettier-clean, so lint is
+      # now a hard gate: any new error fails the build.
+      - name: Lint
         run: bun run lint
-        continue-on-error: true

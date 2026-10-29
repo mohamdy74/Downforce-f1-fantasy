@@ -28,6 +28,7 @@ import {
   type OpenF1PositionEntry,
   type OpenF1RaceControlMessage,
 } from "./liveStandings";
+import { buildReminderPayload, computeActiveReminders } from "./reminder-windows";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -356,110 +357,83 @@ export async function checkAndSendPushReminders(
   if (!subRows?.length) return 0;
 
   let totalSent = 0;
-  const WINDOWS = [
-    { label: "2h", minMs: 45 * 60_000, maxMs: 135 * 60_000, text: "in ~2 hours" },
-    { label: "30m", minMs: 5 * 60_000, maxMs: 44 * 60_000, text: "in less than 30 minutes" },
-  ] as const;
 
-  for (const race of upcomingRaces) {
-    const targets: Array<{ type: "pole" | "race"; iso: string | null }> = [
-      { type: "pole", iso: race.qualifying_at },
-      { type: "race", iso: race.race_at },
-    ];
+  // The pure reminder-windows module owns the bands and payload copy, so this
+  // sweep only handles dedup, batching and dead-subscription cleanup.
+  for (const entry of computeActiveReminders(upcomingRaces, now)) {
+    const { race, type: t, window: w } = entry;
 
-    for (const t of targets) {
-      if (!t.iso) continue;
-      const diff = new Date(t.iso).getTime() - now;
-      for (const w of WINDOWS) {
-        if (diff < w.minMs || diff > w.maxMs) continue;
+    // Per-user dedup (replaces the old per-race global window key) so players
+    // who enable push mid-window still get their reminder and a partially
+    // failed sweep retries on the next pass.
+    const keyPrefix = `reminded:${race.id}:${t}:${w.label}:`;
+    const { data: sLogs } = await supabaseAdmin
+      .from("sync_state")
+      .select("key")
+      .like("key", keyPrefix + "%");
+    const sentSet = new Set((sLogs ?? []).map((r) => r.key.slice(keyPrefix.length)));
 
-        // Per-user dedup (replaces the old per-race global window key) so
-        // players who enable push mid-window still get their reminder and a
-        // partially failed sweep retries on the next pass.
-        const keyPrefix = `reminded:${race.id}:${t.type}:${w.label}:`;
-        const { data: sLogs } = await supabaseAdmin
-          .from("sync_state")
-          .select("key")
-          .like("key", keyPrefix + "%");
-        const sentSet = new Set((sLogs ?? []).map((r) => r.key.slice(keyPrefix.length)));
+    const { data: preds } = await supabaseAdmin
+      .from("predictions")
+      .select("user_id, top10, pole_driver_id")
+      .eq("race_id", race.id);
 
-        const { data: preds } = await supabaseAdmin
-          .from("predictions")
-          .select("user_id, top10, pole_driver_id")
-          .eq("race_id", race.id);
+    const doneUsers = new Set(
+      (preds ?? [])
+        .filter((p) => (t === "pole" ? !!p.pole_driver_id : isCompleteTop10(p.top10)))
+        .map((p) => p.user_id),
+    );
 
-        const doneUsers = new Set(
-          (preds ?? [])
-            .filter((p) => (t.type === "pole" ? !!p.pole_driver_id : isCompleteTop10(p.top10)))
-            .map((p) => p.user_id),
-        );
+    const payloadObj = buildReminderPayload(entry);
 
-        const payloadObj = {
-          title:
-            t.type === "race" && w.label === "30m"
-              ? `\u{1F6A8} ${race.name} \u2014 Final Call!`
-              : `\u23F0 ${race.name} \u2014 Lock Alert!`,
-          body:
-            t.type === "pole"
-              ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
-              : w.label === "30m"
-                ? `Final call! Race locks ${w.text} \u2014 lock in your Top 10 now before the \u221225 penalty!`
-                : `Race locks ${w.text}! You haven't submitted your picks \u2014 lock in your Top 10 now to avoid the \u221225 penalty.`,
-          tag: `downforce-${race.id}-${t.type}-${w.label}`,
-          url: "/predict",
-        };
-
-        const { sendNativeWebPush } = await import("./webpush-native");
-        const deadKeys: string[] = [];
-        const pendingSubs = subRows.flatMap((r) => {
-          const parsed = parsePushSubscriptionKey(r.key);
-          return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId)
-            ? [parsed]
-            : [];
-        });
-        const BATCH_SIZE = 25;
-        const newlyNotified = new Set<string>();
-        for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
-          const batch = pendingSubs.slice(i, i + BATCH_SIZE);
-          await Promise.allSettled(
-            batch.map(async (sub) => {
-              try {
-                const res = await sendNativeWebPush(sub, payloadObj);
-                if (res.ok) {
-                  totalSent++;
-                  newlyNotified.add(sub.userId);
-                } else if (
-                  res.status === 401 ||
-                  res.status === 403 ||
-                  res.status === 404 ||
-                  res.status === 410
-                ) {
-                  deadKeys.push(sub.rawKey);
-                }
-              } catch (error) {
-                console.error("[f1-sync.functions] Push notification failed:", error);
-              }
-            }),
-          );
-        }
-        if (deadKeys.length > 0) {
-          await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
-        }
-        if (newlyNotified.size > 0) {
-          await supabaseAdmin.from("sync_state").upsert(
-            Array.from(newlyNotified).map((uid) => ({
-              key: keyPrefix + uid,
-              synced_at: new Date().toISOString(),
-            })),
-            { onConflict: "key" },
-          );
-        }
-      }
+    const { sendNativeWebPush } = await import("./webpush-native");
+    const deadKeys: string[] = [];
+    const pendingSubs = subRows.flatMap((r) => {
+      const parsed = parsePushSubscriptionKey(r.key);
+      return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId)
+        ? [parsed]
+        : [];
+    });
+    const BATCH_SIZE = 25;
+    const newlyNotified = new Set<string>();
+    for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
+      const batch = pendingSubs.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(
+        batch.map(async (sub) => {
+          try {
+            const res = await sendNativeWebPush(sub, payloadObj);
+            if (res.ok) {
+              totalSent++;
+              newlyNotified.add(sub.userId);
+            } else if (
+              res.status === 401 ||
+              res.status === 403 ||
+              res.status === 404 ||
+              res.status === 410
+            ) {
+              deadKeys.push(sub.rawKey);
+            }
+          } catch (error) {
+            console.error("[f1-sync.functions] Push notification failed:", error);
+          }
+        }),
+      );
+    }
+    if (deadKeys.length > 0) {
+      await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
+    }
+    if (newlyNotified.size > 0) {
+      await supabaseAdmin.from("sync_state").upsert(
+        Array.from(newlyNotified).map((uid) => ({
+          key: keyPrefix + uid,
+          synced_at: new Date().toISOString(),
+        })),
+        { onConflict: "key" },
+      );
     }
   }
   return totalSent;
 }
-
 async function scoreAllRaces(targetRaceIds?: Set<string>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 

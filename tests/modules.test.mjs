@@ -12,6 +12,11 @@ import {
   scorePrediction,
 } from "../src/lib/scoring.ts";
 import { cleanVapidKey, isCompleteTop10, parsePushSubscriptionKey } from "../src/lib/push-keys.ts";
+import {
+  buildReminderPayload,
+  computeActiveReminders,
+  REMINDER_WINDOWS,
+} from "../src/lib/reminder-windows.ts";
 
 function rows() {
   const results = [];
@@ -149,4 +154,82 @@ test("push-keys.ts: parsePushSubscriptionKey round-trip and rejects malformed", 
     parsePushSubscriptionKey('push_sub:u2:{"endpoint":"https://e.example"}'), // missing keys
     null,
   );
+});
+
+// ---- reminder-windows.ts: the pure reminder scheduling core ----
+
+test("reminder-windows.ts: window bands are the consolidated 2h (45-135m) and 30m (5-44m)", () => {
+  assert.equal(REMINDER_WINDOWS.length, 2);
+  assert.deepEqual(
+    REMINDER_WINDOWS.map((w) => [w.label, w.minMs, w.maxMs, w.text]),
+    [
+      ["2h", 45 * 60_000, 135 * 60_000, "in ~2 hours"],
+      ["30m", 5 * 60_000, 44 * 60_000, "in less than 30 minutes"],
+    ],
+  );
+});
+
+test("reminder-windows.ts: computeActiveReminders picks exactly the open band", () => {
+  const now = 1_700_000_000_000; // fixed clock
+  const MIN = 60_000;
+  const iso = (ms) => new Date(now + ms).toISOString();
+  const race = {
+    id: "r19",
+    name: "Mexico City Grand Prix",
+    qualifying_at: iso(90 * MIN), // pole in 90m -> 2h band only
+    race_at: iso(25 * MIN), // race in 25m -> 30m band only
+  };
+
+  const plan = computeActiveReminders([race], now);
+  assert.equal(plan.length, 2);
+  assert.deepEqual(
+    plan.map((e) => [e.type, e.window.label]),
+    [
+      ["pole", "2h"],
+      ["race", "30m"],
+    ],
+  );
+
+  // 180 minutes out: no band is open
+  const none = computeActiveReminders(
+    [{ ...race, qualifying_at: null, race_at: iso(180 * MIN) }],
+    now,
+  );
+  assert.equal(none.length, 0);
+
+  // exactly 2h before the race: the single race-2h entry
+  const two = computeActiveReminders(
+    [{ ...race, qualifying_at: null, race_at: iso(120 * MIN) }],
+    now,
+  );
+  assert.equal(two.length, 1);
+  assert.deepEqual([two[0].type, two[0].window.label], ["race", "2h"]);
+});
+
+test("reminder-windows.ts: buildReminderPayload keeps the exact tone, tags and url", () => {
+  const now = 1_700_000_000_000;
+  const iso = (ms) => new Date(now + ms).toISOString();
+  const race = {
+    id: "r19",
+    name: "Mexico City Grand Prix",
+    qualifying_at: null,
+    race_at: iso(25 * 60_000),
+  };
+
+  const finalCall = buildReminderPayload(computeActiveReminders([race], now)[0]);
+  assert.equal(finalCall.title, "\u{1F6A8} Mexico City Grand Prix \u2014 Final Call!");
+  assert.ok(finalCall.body.includes("\u221225 penalty"));
+  assert.equal(finalCall.tag, "downforce-r19-race-30m");
+  assert.equal(finalCall.url, "/predict");
+
+  const qRace = {
+    id: "r19",
+    name: "Mexico City Grand Prix",
+    qualifying_at: iso(90 * 60_000),
+    race_at: null,
+  };
+  const pole = buildReminderPayload(computeActiveReminders([qRace], now)[0]);
+  assert.equal(pole.title, "\u23F0 Mexico City Grand Prix \u2014 Lock Alert!");
+  assert.equal(pole.body, "Qualifying starts in ~2 hours! Lock in your Pole Position pick now.");
+  assert.equal(pole.tag, "downforce-r19-pole-2h");
 });
