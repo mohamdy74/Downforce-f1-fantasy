@@ -61,11 +61,12 @@ const GROUPS: Record<Exclude<Tab, "schedule">, SessionType[]> = {
 };
 
 type QualiSegment = "q1" | "q2" | "q3";
-const QUALI_SEGMENTS: { id: QualiSegment; label: string; limit: number; cutoff: number | null }[] = [
-  { id: "q1", label: "Q1", limit: 22, cutoff: 16 },
-  { id: "q2", label: "Q2", limit: 16, cutoff: 10 },
-  { id: "q3", label: "Q3", limit: 10, cutoff: null },
-];
+const QUALI_SEGMENTS: { id: QualiSegment; label: string; limit: number; cutoff: number | null }[] =
+  [
+    { id: "q1", label: "Q1", limit: 22, cutoff: 16 },
+    { id: "q2", label: "Q2", limit: 16, cutoff: 10 },
+    { id: "q3", label: "Q3", limit: 10, cutoff: null },
+  ];
 
 type Status = "upcoming" | "live" | "completed";
 const MIN = 60_000;
@@ -157,7 +158,7 @@ function buildQualifyingSegmentRows(
   const hasAnySplits = rows.some((r) => Boolean(r.q1 || r.q2 || r.q3));
 
   // Ensure Q1 has up to 22 drivers even if an upstream feed omitted DNS drivers
-  let pool: ClassRow[] = [...rows];
+  const pool: ClassRow[] = [...rows];
   if (segment === "q1" && pool.length < 22 && gridDrivers?.length) {
     for (const d of gridDrivers) {
       if (pool.length >= 22) break;
@@ -292,9 +293,7 @@ function hasCompleteTiming(rows: ClassRow[] | null | undefined, type: SessionTyp
     return withTime >= 5;
   }
   if (type === "qualifying" || type === "sprint_qualifying") {
-    const withSplits = rows.filter(
-      (r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3)),
-    ).length;
+    const withSplits = rows.filter((r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3))).length;
     return withTime >= 5 && withSplits >= 5;
   }
   if (type === "sprint") {
@@ -455,7 +454,9 @@ function Schedule({ sessions, now }: { sessions: ScheduleItem[]; now: number }) 
             style={{ borderLeftColor: st.color }}
           >
             <div className="min-w-0">
-              <p className="font-display text-base font-extrabold italic uppercase">{SESSION_LABEL[s.type]}</p>
+              <p className="font-display text-base font-extrabold italic uppercase">
+                {SESSION_LABEL[s.type]}
+              </p>
               <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                 {localTime(s.startsAt)}
               </p>
@@ -509,7 +510,8 @@ function SessionPane({
 
   // Default to the most recent session that has already started.
   const started = available.filter((s) => new Date(s.startsAt).getTime() <= now);
-  const selected = available.find((s) => s.type === picked) ?? started[started.length - 1] ?? available[0]!;
+  const selected =
+    available.find((s) => s.type === picked) ?? started[started.length - 1] ?? available[0]!;
 
   return (
     <div className="space-y-3">
@@ -535,7 +537,13 @@ function SessionPane({
       {selected.type === "race" ? (
         <RaceResults race={race} now={now} />
       ) : (
-        <SessionResults key={selected.type} raceId={race.id} type={selected.type} startsAt={selected.startsAt} now={now} />
+        <SessionResults
+          key={selected.type}
+          raceId={race.id}
+          type={selected.type}
+          startsAt={selected.startsAt}
+          now={now}
+        />
       )}
     </div>
   );
@@ -588,7 +596,8 @@ function SessionResults({
   const data = q.data;
   const state = data?.state ?? statusLikeState(startsAt, type, now);
 
-  if (state === "upcoming") return <Empty text={`${SESSION_LABEL[type]} starts ${localTime(startsAt)}.`} />;
+  if (state === "upcoming")
+    return <Empty text={`${SESSION_LABEL[type]} starts ${localTime(startsAt)}.`} />;
   if (state === "live" && (!data || !data.rows.length))
     return (
       <Empty
@@ -635,7 +644,11 @@ function SessionResults({
   );
 }
 
-function statusLikeState(startsAt: string, type: SessionType, now: number): SessionPayload["state"] {
+function statusLikeState(
+  startsAt: string,
+  type: SessionType,
+  now: number,
+): SessionPayload["state"] {
   const s = statusOf(startsAt, type, now);
   return s === "upcoming" ? "upcoming" : s === "live" ? "live" : "pending";
 }
@@ -739,7 +752,9 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
   return (
     <div className="space-y-1">
       {rows.map((r, i) => {
-        const sub = [r.gap, r.laps != null ? `${r.laps} laps` : null].filter(Boolean).join(" \u00B7 ");
+        const sub = [r.gap, r.laps != null ? `${r.laps} laps` : null]
+          .filter(Boolean)
+          .join(" \u00B7 ");
         return (
           <div
             key={`${r.driverId ?? r.number ?? i}`}
@@ -761,7 +776,11 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
               <span className="block truncate text-[11px] text-muted-foreground">
                 {[r.name, r.team].filter(Boolean).join(" \u00B7 ")}
               </span>
-              {sub && <span className="block truncate font-mono text-[10px] text-muted-foreground">{sub}</span>}
+              {sub && (
+                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                  {sub}
+                </span>
+              )}
             </span>
             <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums">
               {r.status ? <span className="text-primary">{r.status}</span> : (r.time ?? "\u2014")}
@@ -829,7 +848,8 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
   const rows: ResultRow[] = hasOfficial ? dbRows : liveRows;
 
   if (isLoading) return <div className="h-40 animate-pulse rounded-lg bg-muted/60" />;
-  if (isError && !rows.length) return <Empty text="Couldn't load results right now. Try again in a moment." />;
+  if (isError && !rows.length)
+    return <Empty text="Couldn't load results right now. Try again in a moment." />;
 
   if (!hasOfficial && !isShowingLive) {
     const st = statusOf(race.race_at, "race", now);
@@ -861,11 +881,16 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
         </div>
       )}
       <div className="carbon-panel grid grid-cols-2 gap-3 rounded-lg p-4 sm:grid-cols-4">
-        <Fact label={isShowingLive ? "Leader" : "Winner"} d={winner && byId.get(winner.driver_id)} />
+        <Fact
+          label={isShowingLive ? "Leader" : "Winner"}
+          d={winner && byId.get(winner.driver_id)}
+        />
         <Fact label="Pole" d={pole && byId.get(pole.driver_id)} />
         <Fact label="Fastest lap" d={fl && byId.get(fl.driver_id)} purple />
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">DNFs</p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            DNFs
+          </p>
           <p className="font-display text-lg font-extrabold italic">{dnfs.length}</p>
         </div>
       </div>
@@ -879,11 +904,17 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
               className="tower-row flex items-center gap-3 rounded-md px-3 py-2"
               style={{ borderLeftColor: teamColor(d?.team ?? null) }}
             >
-              <span className="w-8 shrink-0 text-center font-mono text-sm font-bold tabular-nums">{r.position}</span>
+              <span className="w-8 shrink-0 text-center font-mono text-sm font-bold tabular-nums">
+                {r.position}
+              </span>
               <DriverName d={d} fallback={r.driver_id} />
               <span className="ml-auto flex shrink-0 gap-1 font-mono text-[10px] font-bold uppercase">
-                {r.pole && <span className="rounded bg-gold px-1.5 py-0.5 text-gold-foreground">Pole</span>}
-                {r.fastest_lap && <span className="rounded bg-secondary px-1.5 py-0.5 text-purple">FL</span>}
+                {r.pole && (
+                  <span className="rounded bg-gold px-1.5 py-0.5 text-gold-foreground">Pole</span>
+                )}
+                {r.fastest_lap && (
+                  <span className="rounded bg-secondary px-1.5 py-0.5 text-purple">FL</span>
+                )}
               </span>
             </div>
           );
@@ -896,7 +927,9 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
               className="tower-row flex items-center gap-3 rounded-md px-3 py-2 opacity-70"
               style={{ borderLeftColor: teamColor(d?.team ?? null) }}
             >
-              <span className="w-8 shrink-0 text-center font-mono text-sm font-bold text-primary">DNF</span>
+              <span className="w-8 shrink-0 text-center font-mono text-sm font-bold text-primary">
+                DNF
+              </span>
               <DriverName d={d} fallback={r.driver_id} />
             </div>
           );
@@ -922,13 +955,28 @@ function DriverName({ d, fallback }: { d?: Driver | undefined; fallback: string 
   );
 }
 
-function Fact({ label, d, purple }: { label: string; d?: Driver | undefined; purple?: boolean | undefined }) {
+function Fact({
+  label,
+  d,
+  purple,
+}: {
+  label: string;
+  d?: Driver | undefined;
+  purple?: boolean | undefined;
+}) {
   return (
     <div>
-      <p className={cn("font-mono text-[10px] uppercase tracking-widest", purple ? "text-purple" : "text-muted-foreground")}>
+      <p
+        className={cn(
+          "font-mono text-[10px] uppercase tracking-widest",
+          purple ? "text-purple" : "text-muted-foreground",
+        )}
+      >
         {label}
       </p>
-      <p className="font-display text-lg font-extrabold italic uppercase">{d ? (d.code ?? d.full_name) : "\u2014"}</p>
+      <p className="font-display text-lg font-extrabold italic uppercase">
+        {d ? (d.code ?? d.full_name) : "\u2014"}
+      </p>
     </div>
   );
 }

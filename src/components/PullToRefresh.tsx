@@ -26,7 +26,7 @@ export function PullToRefresh() {
     const handleTouchStart = (e: TouchEvent) => {
       if (window.scrollY > 0 || refreshingRef.current) return;
       const target = e.target as HTMLElement | null;
-      if (target?.closest("[role=\"dialog\"], [data-slot], .overflow-y-auto")) return;
+      if (target?.closest('[role="dialog"], [data-slot], .overflow-y-auto')) return;
       startY.current = e.touches[0]!.clientY;
       isPulling.current = true;
     };

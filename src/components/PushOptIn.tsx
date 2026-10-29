@@ -24,7 +24,11 @@ export function getLastSyncedSub(): { endpoint: string; p256dh: string; auth: st
 }
 
 export async function syncBrowserSubscription(knownPublicKey?: string): Promise<boolean> {
-  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+  if (
+    typeof window === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window)
+  ) {
     lastSyncedWarning = "Push notifications are not supported by this browser.";
     return false;
   }
@@ -40,7 +44,8 @@ export async function syncBrowserSubscription(knownPublicKey?: string): Promise<
   }
   if (!publicKey) {
     if (!lastSyncedWarning) {
-      lastSyncedWarning = "Server returned empty VAPID key (make sure VAPID_PRIVATE_KEY is saved in Lovable Secrets & click Publish -> Update).";
+      lastSyncedWarning =
+        "Server returned empty VAPID key (make sure VAPID_PRIVATE_KEY is saved in Lovable Secrets & click Publish -> Update).";
     }
     return false;
   }
@@ -104,7 +109,11 @@ export function PushOptIn() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      !("serviceWorker" in navigator)
+    ) {
       setPerm("unsupported");
       return;
     }
@@ -129,12 +138,14 @@ export function PushOptIn() {
       if (ok) {
         toast.success("Race reminders enabled on this device!");
         const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("🏎️ DOWNFORCE Alerts Active!", {
-          body: "You will get notified 2h & 30m before Qualifying and Race lock.",
-          icon: "/favicon.png",
-          badge: "/favicon.png",
-          tag: "downforce-welcome",
-        }).catch(() => {});
+        reg
+          .showNotification("🏎️ DOWNFORCE Alerts Active!", {
+            body: "You will get notified 2h & 30m before Qualifying and Race lock.",
+            icon: "/favicon.png",
+            badge: "/favicon.png",
+            tag: "downforce-welcome",
+          })
+          .catch(() => {});
       } else {
         toast.error(getLastPushSyncError() || "Could not activate push alerts on this browser.");
       }
@@ -157,14 +168,24 @@ export function PushOptIn() {
   }
 
   return (
-    <div className="carbon-panel mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border-l-4 px-4 py-3" style={{ borderLeftColor: "var(--gold)" }}>
+    <div
+      className="carbon-panel mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border-l-4 px-4 py-3"
+      style={{ borderLeftColor: "var(--gold)" }}
+    >
       <div className="flex items-center gap-2.5">
         <Bell className="h-4 w-4 shrink-0 text-gold" />
         <span className="text-xs font-medium">
-          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a −25 penalty
+          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a −25
+          penalty
         </span>
       </div>
-      <Button size="sm" variant="secondary" disabled={busy} onClick={enableAlerts} className="h-8 text-xs font-bold">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={enableAlerts}
+        className="h-8 text-xs font-bold"
+      >
         {busy ? "Enabling..." : "Enable Alerts 🔔"}
       </Button>
     </div>

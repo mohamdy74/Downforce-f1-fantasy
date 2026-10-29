@@ -20,7 +20,10 @@ export const Route = createFileRoute("/auth")({
         content: "Sign in with Google to join the DOWNFORCE prediction league.",
       },
       { name: "twitter:title", content: "Join the league — DOWNFORCE" },
-      { name: "twitter:description", content: "Sign in with Google to join the DOWNFORCE prediction league." },
+      {
+        name: "twitter:description",
+        content: "Sign in with Google to join the DOWNFORCE prediction league.",
+      },
     ],
   }),
   component: AuthPage,

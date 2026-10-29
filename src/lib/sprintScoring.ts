@@ -37,8 +37,7 @@ export function scoreSprint(
     if (finishPosition.get(driverId) === index + 1) top8 += 1;
   });
 
-  const pole =
-    !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver ? 1 : 0;
+  const pole = !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver ? 1 : 0;
 
   return { top8, pole, total: top8 + pole };
 }

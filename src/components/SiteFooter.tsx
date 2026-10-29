@@ -75,7 +75,9 @@ export function SiteFooter() {
         {/* Distinctive styled copyright & timing credit bar */}
         <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border/60 bg-secondary/30 px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-wider">
           <span className="font-bold text-foreground">
-            © {new Date().getFullYear()} <strong className="font-black text-primary">DOWNFORCE</strong> · <span className="font-black text-gold">Fantasy Racing League</span>
+            © {new Date().getFullYear()}{" "}
+            <strong className="font-black text-primary">DOWNFORCE</strong> ·{" "}
+            <span className="font-black text-gold">Fantasy Racing League</span>
           </span>
           <span className="text-muted-foreground">
             Official Timing Data: <strong className="text-foreground">Jolpica &amp; OpenF1</strong>
@@ -103,8 +105,8 @@ export function SiteFooter() {
                 <h2 className="text-2xl text-foreground">Privacy Policy</h2>
                 <p>
                   <strong>1. Data We Collect:</strong> When you sign in with Google OAuth, we store
-                  only your account identifier, email address (for authentication), display name, and
-                  profile avatar to display your position on the league leaderboard.
+                  only your account identifier, email address (for authentication), display name,
+                  and profile avatar to display your position on the league leaderboard.
                 </p>
                 <p>
                   <strong>2. Push Notifications:</strong> If you opt in to race lock alerts, your
@@ -129,15 +131,15 @@ export function SiteFooter() {
                 </p>
                 <h2 className="text-2xl text-foreground">Terms of Use</h2>
                 <p>
-                  <strong>1. Non-Profit Fan Game:</strong> DOWNFORCE is a free-to-play, non-commercial
-                  fantasy prediction league created for entertainment among friends. No real money,
-                  gambling, or wagering is involved.
+                  <strong>1. Non-Profit Fan Game:</strong> DOWNFORCE is a free-to-play,
+                  non-commercial fantasy prediction league created for entertainment among friends.
+                  No real money, gambling, or wagering is involved.
                 </p>
                 <p>
-                  <strong>2. Deadlines &amp; Fair Play:</strong> Pole position picks lock automatically
-                  at the start of Qualifying, and Race Top 10 / Fastest Lap / DNF picks lock at the
-                  official Race start time. Registered players who fail to submit a complete Top 10
-                  receive a −25 point penalty for that round.
+                  <strong>2. Deadlines &amp; Fair Play:</strong> Pole position picks lock
+                  automatically at the start of Qualifying, and Race Top 10 / Fastest Lap / DNF
+                  picks lock at the official Race start time. Registered players who fail to submit
+                  a complete Top 10 receive a −25 point penalty for that round.
                 </p>
                 <p>
                   <strong>3. FIA Stewards Decisions:</strong> League Stewards may adjust lock times

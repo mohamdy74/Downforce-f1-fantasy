@@ -35,7 +35,13 @@ function Mark({ t, a, b }: { t: string; a: string; b: string }) {
 export function LogoMark({ className = "h-8 w-auto", variant = "auto", style }: Props) {
   const { t, a, b } = PALETTE[variant];
   return (
-    <svg viewBox="-1.5 -1.5 102.0 91.0" className={className} style={style} role="img" aria-label="DOWNFORCE">
+    <svg
+      viewBox="-1.5 -1.5 102.0 91.0"
+      className={className}
+      style={style}
+      role="img"
+      aria-label="DOWNFORCE"
+    >
       <Mark t={t} a={a} b={b} />
     </svg>
   );

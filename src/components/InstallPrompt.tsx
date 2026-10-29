@@ -73,7 +73,12 @@ export function InstallPrompt() {
         >
           Install
         </Button>
-        <button type="button" aria-label="Dismiss" onClick={dismiss} className="shrink-0 p-1 text-muted-foreground">
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={dismiss}
+          className="shrink-0 p-1 text-muted-foreground"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>

@@ -26,14 +26,26 @@ export type DriverRef = {
  * resolves cleanly even if car numbers differ (#1 vs #3) or an FP1 rookie is on track.
  */
 const FALLBACK_2026_GRID: DriverRef[] = [
-  { id: "verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull Racing", number: 1 },
+  {
+    id: "verstappen",
+    code: "VER",
+    full_name: "Max Verstappen",
+    team: "Red Bull Racing",
+    number: 1,
+  },
   { id: "hadjar", code: "HAD", full_name: "Isack Hadjar", team: "Red Bull Racing", number: 6 },
   { id: "leclerc", code: "LEC", full_name: "Charles Leclerc", team: "Ferrari", number: 16 },
   { id: "hamilton", code: "HAM", full_name: "Lewis Hamilton", team: "Ferrari", number: 44 },
   { id: "norris", code: "NOR", full_name: "Lando Norris", team: "McLaren", number: 4 },
   { id: "piastri", code: "PIA", full_name: "Oscar Piastri", team: "McLaren", number: 81 },
   { id: "russell", code: "RUS", full_name: "George Russell", team: "Mercedes", number: 63 },
-  { id: "antonelli", code: "ANT", full_name: "Andrea Kimi Antonelli", team: "Mercedes", number: 12 },
+  {
+    id: "antonelli",
+    code: "ANT",
+    full_name: "Andrea Kimi Antonelli",
+    team: "Mercedes",
+    number: 12,
+  },
   { id: "alonso", code: "ALO", full_name: "Fernando Alonso", team: "Aston Martin", number: 14 },
   { id: "stroll", code: "STR", full_name: "Lance Stroll", team: "Aston Martin", number: 18 },
   { id: "gasly", code: "GAS", full_name: "Pierre Gasly", team: "Alpine", number: 10 },
@@ -130,18 +142,12 @@ export function resolveDriver(
   }
   const fallbackCode =
     hint.code?.trim().toUpperCase() ||
-    (hint.name
-      ? hint.name
-          .trim()
-          .split(/\s+/)
-          .pop()
-          ?.slice(0, 3)
-          .toUpperCase() ?? null
-      : null);
+    (hint.name ? (hint.name.trim().split(/\s+/).pop()?.slice(0, 3).toUpperCase() ?? null) : null);
   return {
     id: hint.driverId ?? (fallbackCode ? fallbackCode.toLowerCase() : `car_${hint.number ?? 0}`),
     code: fallbackCode,
-    full_name: hint.name?.trim() || (hint.number != null ? `Car #${hint.number}` : "Unknown Driver"),
+    full_name:
+      hint.name?.trim() || (hint.number != null ? `Car #${hint.number}` : "Unknown Driver"),
     team: hint.team?.trim() || null,
     number: hint.number ?? null,
   };
@@ -298,7 +304,8 @@ async function fetchSignalRState(): Promise<{
   const now = Date.now();
   if (f1SignalRCache && now - f1SignalRCache.ts < 18_000) {
     return {
-      sessionInfo: (f1SignalRCache.snapshot["SessionInfo"] as F1StaticSessionInfo | undefined) ?? null,
+      sessionInfo:
+        (f1SignalRCache.snapshot["SessionInfo"] as F1StaticSessionInfo | undefined) ?? null,
       state: f1SignalRCache.snapshot,
     };
   }
@@ -438,12 +445,14 @@ export function parseF1SignalRSnapshot(
   lookup: DriverLookup,
 ): F1LiveTimingSnapshot {
   const timingData = state["TimingData"] as
-    | { Lines?: Record<string, F1SignalRTimingLine> | undefined }
-    | undefined;
+    { Lines?: Record<string, F1SignalRTimingLine> | undefined } | undefined;
   const driverList = (state["DriverList"] as Record<string, F1SignalRDriver> | undefined) ?? {};
   const sessionStatus = state["SessionStatus"] as { Status?: string | undefined } | undefined;
   const rcmRaw = state["RaceControlMessages"] as
-    | { Messages?: Record<string, OpenF1RaceControlMessage> | OpenF1RaceControlMessage[] | undefined }
+    | {
+        Messages?:
+          Record<string, OpenF1RaceControlMessage> | OpenF1RaceControlMessage[] | undefined;
+      }
     | undefined;
 
   const linesObj = timingData?.Lines ?? {};
@@ -478,10 +487,7 @@ export function parseF1SignalRSnapshot(
 
     const bestVal = line.BestLapTime?.Value || null;
     const lapSec = parseLapTimeSeconds(bestVal);
-    if (
-      line.BestLapTime?.OverallFastest === true ||
-      (lapSec != null && lapSec < bestLapSec)
-    ) {
+    if (line.BestLapTime?.OverallFastest === true || (lapSec != null && lapSec < bestLapSec)) {
       if (lapSec != null) bestLapSec = lapSec;
       fastestLapDriverId = resolved.id;
     }
@@ -497,17 +503,14 @@ export function parseF1SignalRSnapshot(
     const q3 = getSeg(2);
 
     const gapRaw = isTimedSession
-      ? (typeof line.TimeDiffToFastest === "string"
-          ? line.TimeDiffToFastest
-          : line.TimeDiffToFastest?.Value ??
-            line.Stats?.[0]?.TimeDiffToFastest ??
-            null)
-      : (typeof line.GapToLeader === "string"
-          ? line.GapToLeader
-          : line.GapToLeader?.Value ?? null);
+      ? typeof line.TimeDiffToFastest === "string"
+        ? line.TimeDiffToFastest
+        : (line.TimeDiffToFastest?.Value ?? line.Stats?.[0]?.TimeDiffToFastest ?? null)
+      : typeof line.GapToLeader === "string"
+        ? line.GapToLeader
+        : (line.GapToLeader?.Value ?? null);
 
-    const cleanGap =
-      gapRaw && !/^LEADER$/i.test(gapRaw.trim()) ? gapRaw.trim() : null;
+    const cleanGap = gapRaw && !/^LEADER$/i.test(gapRaw.trim()) ? gapRaw.trim() : null;
 
     const retired = Boolean(line.Retired || line.Stopped);
 
@@ -519,7 +522,7 @@ export function parseF1SignalRSnapshot(
         name: resolved.full_name,
         team: resolved.team,
         number: resolved.number ?? (Number.isFinite(num) ? num : null),
-        time: isTimedSession ? (q3 || q2 || q1 || bestVal) : (position === 1 ? bestVal : null),
+        time: isTimedSession ? q3 || q2 || q1 || bestVal : position === 1 ? bestVal : null,
         q1,
         q2,
         q3,
@@ -569,8 +572,7 @@ export function parseF1SignalRSnapshot(
     : [];
 
   const statusStr = sessionStatus?.Status ?? "";
-  const chequeredFlag =
-    /Finished|Finalised|Ends/i.test(statusStr) || hasChequeredFlag(rcmList);
+  const chequeredFlag = /Finished|Finalised|Ends/i.test(statusStr) || hasChequeredFlag(rcmList);
 
   return { rows, chequeredFlag, fastestLapDriverId };
 }
@@ -622,45 +624,60 @@ type EspnCompetitor = {
   order?: number | undefined;
   place?: number | undefined;
   winner?: boolean | undefined;
-  athlete?: {
-    fullName?: string | undefined;
-    displayName?: string | undefined;
-    shortName?: string | undefined;
-    abbreviation?: string | undefined;
-  } | undefined;
-  vehicle?: {
-    number?: string | undefined;
-    manufacturer?: string | undefined;
-  } | undefined;
-  status?: {
-    type?: {
-      name?: string | undefined;
-      description?: string | undefined;
-      shortDetail?: string | undefined;
-      completed?: boolean | undefined;
-    } | undefined;
-  } | undefined;
+  athlete?:
+    | {
+        fullName?: string | undefined;
+        displayName?: string | undefined;
+        shortName?: string | undefined;
+        abbreviation?: string | undefined;
+      }
+    | undefined;
+  vehicle?:
+    | {
+        number?: string | undefined;
+        manufacturer?: string | undefined;
+      }
+    | undefined;
+  status?:
+    | {
+        type?:
+          | {
+              name?: string | undefined;
+              description?: string | undefined;
+              shortDetail?: string | undefined;
+              completed?: boolean | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
   statistics?: EspnStat[] | undefined;
-  linescores?: Array<{ value?: number | string | undefined; displayValue?: string | undefined }> | undefined;
+  linescores?:
+    Array<{ value?: number | string | undefined; displayValue?: string | undefined }> | undefined;
 };
 
 type EspnCompetition = {
   id?: string | undefined;
   date?: string | undefined;
-  type?: {
-    id?: string | undefined;
-    text?: string | undefined;
-    abbreviation?: string | undefined;
-    slug?: string | undefined;
-  } | undefined;
-  status?: {
-    type?: {
-      id?: string | undefined;
-      name?: string | undefined;
-      state?: string | undefined;
-      completed?: boolean | undefined;
-    } | undefined;
-  } | undefined;
+  type?:
+    | {
+        id?: string | undefined;
+        text?: string | undefined;
+        abbreviation?: string | undefined;
+        slug?: string | undefined;
+      }
+    | undefined;
+  status?:
+    | {
+        type?:
+          | {
+              id?: string | undefined;
+              name?: string | undefined;
+              state?: string | undefined;
+              completed?: boolean | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
   competitors?: EspnCompetitor[] | undefined;
 };
 
@@ -751,10 +768,7 @@ export function parseEspnCompetition(
     const lapsNum = lapsStr ? Number(lapsStr) : null;
 
     const compStatus =
-      c.status?.type?.shortDetail ??
-      c.status?.type?.description ??
-      c.status?.type?.name ??
-      "";
+      c.status?.type?.shortDetail ?? c.status?.type?.description ?? c.status?.type?.name ?? "";
     const isDnf = /ret|dnf|out|crash|accident|did not finish|dsq|dns/i.test(compStatus);
 
     const lapSec = parseLapTimeSeconds(bestLapStr);
@@ -777,7 +791,13 @@ export function parseEspnCompetition(
         q3,
         gap: position === 1 ? null : (gapStr ?? (!isTimedSession ? bestLapStr : null)),
         laps: lapsNum != null && Number.isFinite(lapsNum) ? lapsNum : null,
-        status: isDnf ? (/dsq/i.test(compStatus) ? "DSQ" : /dns/i.test(compStatus) ? "DNS" : "DNF") : null,
+        status: isDnf
+          ? /dsq/i.test(compStatus)
+            ? "DSQ"
+            : /dns/i.test(compStatus)
+              ? "DNS"
+              : "DNF"
+          : null,
       } satisfies ClassRow,
       lapSec,
     };
@@ -826,10 +846,10 @@ export async function fetchFromEspnScoreboard(
   const now = Date.now();
   let board = espnCache.get(rangeKey)?.data ?? null;
   if (!board || now - (espnCache.get(rangeKey)?.ts ?? 0) >= 20_000) {
-    board = await getJson<EspnScoreboardResponse>(
-      `${ESPN_F1_SCOREBOARD}?dates=${rangeKey}`,
-      { timeoutMs: 6_000, retries: 1 },
-    );
+    board = await getJson<EspnScoreboardResponse>(`${ESPN_F1_SCOREBOARD}?dates=${rangeKey}`, {
+      timeoutMs: 6_000,
+      retries: 1,
+    });
     if (board) espnCache.set(rangeKey, { ts: now, data: board });
   }
   if (!board?.events?.length) return null;
@@ -840,11 +860,9 @@ export async function fetchFromEspnScoreboard(
 
   for (const ev of board.events) {
     for (const comp of ev.competitions ?? []) {
-      const typeLabels = [
-        comp.type?.abbreviation,
-        comp.type?.text,
-        comp.type?.slug,
-      ].filter((x): x is string => Boolean(x));
+      const typeLabels = [comp.type?.abbreviation, comp.type?.text, comp.type?.slug].filter(
+        (x): x is string => Boolean(x),
+      );
       const labelMatch = typeLabels.some((lbl) => matcher.test(lbl.trim()));
       const compMs = comp.date ? new Date(comp.date).getTime() : NaN;
       const diff = Number.isFinite(compMs) ? Math.abs(compMs - targetMs) : Infinity;

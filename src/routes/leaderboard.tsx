@@ -10,13 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
-import {
-  driversQuery,
-  leaderboardQuery,
-  racesQuery,
-  SEASON,
-  type Driver,
-} from "@/lib/queries";
+import { driversQuery, leaderboardQuery, racesQuery, SEASON, type Driver } from "@/lib/queries";
 import { writeQueryCache } from "@/lib/queryPersist";
 import { teamColor, teamLabel, teamRank } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -33,14 +27,12 @@ export const Route = createFileRoute("/leaderboard")({
       { property: "og:title", content: "Standings — DOWNFORCE" },
       {
         property: "og:description",
-        content:
-          "See who is leading the DOWNFORCE league and the official 2026 F1 Championship.",
+        content: "See who is leading the DOWNFORCE league and the official 2026 F1 Championship.",
       },
       { name: "twitter:title", content: "Standings — DOWNFORCE" },
       {
         name: "twitter:description",
-        content:
-          "See who is leading the DOWNFORCE league and the official 2026 F1 Championship.",
+        content: "See who is leading the DOWNFORCE league and the official 2026 F1 Championship.",
       },
     ],
   }),
@@ -110,56 +102,420 @@ const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
   }
 > = {
   // TOP 3 - Championship contenders
-  ANT: { code: "ANT", fullName: "Andrea Kimi Antonelli", team: "Mercedes", number: 12, points: 365, wins: 9, podiums: 15, poles: 7, fastestLaps: 7, top10: 16, dnfs: 1, bestFinish: 1 },
-  RUS: { code: "RUS", fullName: "George Russell", team: "Mercedes", number: 63, points: 242, wins: 3, podiums: 8, poles: 5, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
-  HAM: { code: "HAM", fullName: "Lewis Hamilton", team: "Ferrari", number: 44, points: 241, wins: 1, podiums: 6, poles: 0, fastestLaps: 1, top10: 17, dnfs: 1, bestFinish: 1 },
-  
+  ANT: {
+    code: "ANT",
+    fullName: "Andrea Kimi Antonelli",
+    team: "Mercedes",
+    number: 12,
+    points: 365,
+    wins: 9,
+    podiums: 15,
+    poles: 7,
+    fastestLaps: 7,
+    top10: 16,
+    dnfs: 1,
+    bestFinish: 1,
+  },
+  RUS: {
+    code: "RUS",
+    fullName: "George Russell",
+    team: "Mercedes",
+    number: 63,
+    points: 242,
+    wins: 3,
+    podiums: 8,
+    poles: 5,
+    fastestLaps: 2,
+    top10: 14,
+    dnfs: 3,
+    bestFinish: 1,
+  },
+  HAM: {
+    code: "HAM",
+    fullName: "Lewis Hamilton",
+    team: "Ferrari",
+    number: 44,
+    points: 241,
+    wins: 1,
+    podiums: 6,
+    poles: 0,
+    fastestLaps: 1,
+    top10: 17,
+    dnfs: 1,
+    bestFinish: 1,
+  },
+
   // 4-6 - Midfield leaders
-  VER: { code: "VER", fullName: "Max Verstappen", team: "Red Bull Racing", number: 3, points: 236, wins: 2, podiums: 10, poles: 2, fastestLaps: 2, top10: 14, dnfs: 4, bestFinish: 1 },
-  LEC: { code: "LEC", fullName: "Charles Leclerc", team: "Ferrari", number: 16, points: 233, wins: 1, podiums: 6, poles: 0, fastestLaps: 4, top10: 15, dnfs: 3, bestFinish: 1 },
-  NOR: { code: "NOR", fullName: "Lando Norris", team: "McLaren", number: 1, points: 211, wins: 2, podiums: 5, poles: 3, fastestLaps: 2, top10: 14, dnfs: 3, bestFinish: 1 },
-  
+  VER: {
+    code: "VER",
+    fullName: "Max Verstappen",
+    team: "Red Bull Racing",
+    number: 3,
+    points: 236,
+    wins: 2,
+    podiums: 10,
+    poles: 2,
+    fastestLaps: 2,
+    top10: 14,
+    dnfs: 4,
+    bestFinish: 1,
+  },
+  LEC: {
+    code: "LEC",
+    fullName: "Charles Leclerc",
+    team: "Ferrari",
+    number: 16,
+    points: 233,
+    wins: 1,
+    podiums: 6,
+    poles: 0,
+    fastestLaps: 4,
+    top10: 15,
+    dnfs: 3,
+    bestFinish: 1,
+  },
+  NOR: {
+    code: "NOR",
+    fullName: "Lando Norris",
+    team: "McLaren",
+    number: 1,
+    points: 211,
+    wins: 2,
+    podiums: 5,
+    poles: 3,
+    fastestLaps: 2,
+    top10: 14,
+    dnfs: 3,
+    bestFinish: 1,
+  },
+
   // 7-10 - Rising stars
-  PIA: { code: "PIA", fullName: "Oscar Piastri", team: "McLaren", number: 81, points: 144, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 1, bestFinish: 2 },
-  HAD: { code: "HAD", fullName: "Isack Hadjar", team: "Red Bull Racing", number: 6, points: 105, wins: 0, podiums: 2, poles: 0, fastestLaps: 0, top10: 12, dnfs: 2, bestFinish: 2 },
-  LAW: { code: "LAW", fullName: "Liam Lawson", team: "Racing Bulls", number: 30, points: 77, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 13, dnfs: 1, bestFinish: 3 },
-  
+  PIA: {
+    code: "PIA",
+    fullName: "Oscar Piastri",
+    team: "McLaren",
+    number: 81,
+    points: 144,
+    wins: 0,
+    podiums: 2,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 12,
+    dnfs: 1,
+    bestFinish: 2,
+  },
+  HAD: {
+    code: "HAD",
+    fullName: "Isack Hadjar",
+    team: "Red Bull Racing",
+    number: 6,
+    points: 105,
+    wins: 0,
+    podiums: 2,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 12,
+    dnfs: 2,
+    bestFinish: 2,
+  },
+  LAW: {
+    code: "LAW",
+    fullName: "Liam Lawson",
+    team: "Racing Bulls",
+    number: 30,
+    points: 77,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 13,
+    dnfs: 1,
+    bestFinish: 3,
+  },
+
   // 11-20 - Midfield
-  GAS: { code: "GAS", fullName: "Pierre Gasly", team: "Alpine", number: 10, points: 42, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, top10: 10, dnfs: 2, bestFinish: 6 },
-  LIN: { code: "LIN", fullName: "Arvid Lindblad", team: "Racing Bulls", number: 41, points: 38, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 11, dnfs: 0, bestFinish: 4 },
-  COL: { code: "COL", fullName: "Franco Colapinto", team: "Alpine", number: 43, points: 27, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 8, dnfs: 3, bestFinish: 7 },
-  BEA: { code: "BEA", fullName: "Oliver Bearman", team: "Haas F1 Team", number: 87, points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 5, bestFinish: 7 },
-  HUL: { code: "HUL", fullName: "Nico Hülkenberg", team: "Audi", number: 27, points: 13, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 9 },
-  BOR: { code: "BOR", fullName: "Gabriel Bortoleto", team: "Audi", number: 5, points: 10, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 10 },
-  OCO: { code: "OCO", fullName: "Esteban Ocon", team: "Haas F1 Team", number: 31, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 1, bestFinish: 7 },
-  ALO: { code: "ALO", fullName: "Fernando Alonso", team: "Aston Martin", number: 14, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 3, dnfs: 6, bestFinish: 7 },
-  SAI: { code: "SAI", fullName: "Carlos Sainz", team: "Williams", number: 55, points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 4, dnfs: 3, bestFinish: 7 },
-  ALB: { code: "ALB", fullName: "Alexander Albon", team: "Williams", number: 23, points: 5, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 2, dnfs: 6, bestFinish: 9 },
-  
+  GAS: {
+    code: "GAS",
+    fullName: "Pierre Gasly",
+    team: "Alpine",
+    number: 10,
+    points: 42,
+    wins: 0,
+    podiums: 0,
+    poles: 1,
+    fastestLaps: 0,
+    top10: 10,
+    dnfs: 2,
+    bestFinish: 6,
+  },
+  LIN: {
+    code: "LIN",
+    fullName: "Arvid Lindblad",
+    team: "Racing Bulls",
+    number: 41,
+    points: 38,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 11,
+    dnfs: 0,
+    bestFinish: 4,
+  },
+  COL: {
+    code: "COL",
+    fullName: "Franco Colapinto",
+    team: "Alpine",
+    number: 43,
+    points: 27,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 8,
+    dnfs: 3,
+    bestFinish: 7,
+  },
+  BEA: {
+    code: "BEA",
+    fullName: "Oliver Bearman",
+    team: "Haas F1 Team",
+    number: 87,
+    points: 23,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 4,
+    dnfs: 5,
+    bestFinish: 7,
+  },
+  HUL: {
+    code: "HUL",
+    fullName: "Nico Hülkenberg",
+    team: "Audi",
+    number: 27,
+    points: 13,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 4,
+    dnfs: 3,
+    bestFinish: 9,
+  },
+  BOR: {
+    code: "BOR",
+    fullName: "Gabriel Bortoleto",
+    team: "Audi",
+    number: 5,
+    points: 10,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 3,
+    dnfs: 1,
+    bestFinish: 10,
+  },
+  OCO: {
+    code: "OCO",
+    fullName: "Esteban Ocon",
+    team: "Haas F1 Team",
+    number: 31,
+    points: 7,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 3,
+    dnfs: 1,
+    bestFinish: 7,
+  },
+  ALO: {
+    code: "ALO",
+    fullName: "Fernando Alonso",
+    team: "Aston Martin",
+    number: 14,
+    points: 7,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 3,
+    dnfs: 6,
+    bestFinish: 7,
+  },
+  SAI: {
+    code: "SAI",
+    fullName: "Carlos Sainz",
+    team: "Williams",
+    number: 55,
+    points: 7,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 4,
+    dnfs: 3,
+    bestFinish: 7,
+  },
+  ALB: {
+    code: "ALB",
+    fullName: "Alexander Albon",
+    team: "Williams",
+    number: 23,
+    points: 5,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 2,
+    dnfs: 6,
+    bestFinish: 9,
+  },
+
   // 21-23 - Backmarkers
-  TSU: { code: "TSU", fullName: "Yuki Tsunoda", team: "Racing Bulls", number: 22, points: 1, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 1, dnfs: 0, bestFinish: 10 },
-  STR: { code: "STR", fullName: "Lance Stroll", team: "Aston Martin", number: 18, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 11, bestFinish: 18 },
-  BOT: { code: "BOT", fullName: "Valtteri Bottas", team: "Cadillac", number: 77, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 9, bestFinish: 18 },
-  PER: { code: "PER", fullName: "Sergio Perez", team: "Cadillac", number: 11, points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, top10: 0, dnfs: 5, bestFinish: 18 },
+  TSU: {
+    code: "TSU",
+    fullName: "Yuki Tsunoda",
+    team: "Racing Bulls",
+    number: 22,
+    points: 1,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 1,
+    dnfs: 0,
+    bestFinish: 10,
+  },
+  STR: {
+    code: "STR",
+    fullName: "Lance Stroll",
+    team: "Aston Martin",
+    number: 18,
+    points: 0,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 0,
+    dnfs: 11,
+    bestFinish: 18,
+  },
+  BOT: {
+    code: "BOT",
+    fullName: "Valtteri Bottas",
+    team: "Cadillac",
+    number: 77,
+    points: 0,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 0,
+    dnfs: 9,
+    bestFinish: 18,
+  },
+  PER: {
+    code: "PER",
+    fullName: "Sergio Perez",
+    team: "Cadillac",
+    number: 11,
+    points: 0,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    top10: 0,
+    dnfs: 5,
+    bestFinish: 18,
+  },
 };
 // Official 2026 Constructor Standings snapshot after Round 18 (Austin GP)
 // SOURCE: https://www.formula1.com/en/results/2026/team
 // ATOMIC VALIDATION: Prevents stale cache from overwriting verified standings
-const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<string, Omit<ConstructorStandingItem, "drivers">> = {
-  Mercedes: { team: "Mercedes", points: 607, wins: 12, podiums: 23, poles: 12, fastestLaps: 9, dnfs: 2 },
-  Ferrari: { team: "Ferrari", points: 474, wins: 2, podiums: 12, poles: 0, fastestLaps: 5, dnfs: 4 },
-  "Red Bull Racing": { team: "Red Bull Racing", points: 355, wins: 2, podiums: 12, poles: 2, fastestLaps: 2, dnfs: 6 },
+const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<
+  string,
+  Omit<ConstructorStandingItem, "drivers">
+> = {
+  Mercedes: {
+    team: "Mercedes",
+    points: 607,
+    wins: 12,
+    podiums: 23,
+    poles: 12,
+    fastestLaps: 9,
+    dnfs: 2,
+  },
+  Ferrari: {
+    team: "Ferrari",
+    points: 474,
+    wins: 2,
+    podiums: 12,
+    poles: 0,
+    fastestLaps: 5,
+    dnfs: 4,
+  },
+  "Red Bull Racing": {
+    team: "Red Bull Racing",
+    points: 355,
+    wins: 2,
+    podiums: 12,
+    poles: 2,
+    fastestLaps: 2,
+    dnfs: 6,
+  },
   McLaren: { team: "McLaren", points: 355, wins: 2, podiums: 7, poles: 3, fastestLaps: 2, dnfs: 2 },
-  "Racing Bulls": { team: "Racing Bulls", points: 102, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 5 },
+  "Racing Bulls": {
+    team: "Racing Bulls",
+    points: 102,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    dnfs: 5,
+  },
   Alpine: { team: "Alpine", points: 69, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, dnfs: 4 },
-  "Haas F1 Team": { team: "Haas F1 Team", points: 30, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 6 },
+  "Haas F1 Team": {
+    team: "Haas F1 Team",
+    points: 30,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    dnfs: 6,
+  },
   Audi: { team: "Audi", points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 4 },
-  Williams: { team: "Williams", points: 12, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 9 },
-  "Aston Martin": { team: "Aston Martin", points: 7, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 17 },
-  Cadillac: { team: "Cadillac", points: 0, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 14 },
+  Williams: {
+    team: "Williams",
+    points: 12,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    dnfs: 9,
+  },
+  "Aston Martin": {
+    team: "Aston Martin",
+    points: 7,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    dnfs: 17,
+  },
+  Cadillac: {
+    team: "Cadillac",
+    points: 0,
+    wins: 0,
+    podiums: 0,
+    poles: 0,
+    fastestLaps: 0,
+    dnfs: 14,
+  },
 };
-
-
 
 // Bounded Jolpica fetch: on timeout or network error we fall back to the verified
 // snapshot + DB merge below, so a slow upstream never blocks the tab.
@@ -177,19 +533,11 @@ const f1StandingsQuery = queryOptions({
   staleTime: 5 * 60_000,
   gcTime: 30 * 60_000,
   queryFn: async (): Promise<F1StandingsPayload> => {
-    const [driversRes, jolpicaDriversRes, jolpicaTeamsRes] =
-      await Promise.all([
-        supabase
-          .from("drivers")
-          .select("id, code, full_name, team, number")
-          .eq("active", true),
-        jolpicaFetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json`,
-        ),
-        jolpicaFetch(
-          `https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json`,
-        ),
-      ]);
+    const [driversRes, jolpicaDriversRes, jolpicaTeamsRes] = await Promise.all([
+      supabase.from("drivers").select("id, code, full_name, team, number").eq("active", true),
+      jolpicaFetch(`https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json`),
+      jolpicaFetch(`https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json`),
+    ]);
 
     const dbDrivers = (driversRes.data ?? []) as Driver[];
     const byDriver = new Map<string, DriverStandingItem>();
@@ -245,8 +593,7 @@ const f1StandingsQuery = queryOptions({
 
     // 3. Live Jolpica Ergast update: if points advanced beyond snapshot (e.g. Round 20+), smoothly adopt
     const jolpicaDriverLists =
-      jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]
-        ?.DriverStandings ?? [];
+      jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
     for (const jd of jolpicaDriverLists) {
       const code: string = (
         jd?.Driver?.code ??
@@ -311,8 +658,7 @@ const f1StandingsQuery = queryOptions({
 
     // Live Jolpica constructor standings
     const jolpicaTeamLists =
-      jolpicaTeamsRes?.MRData?.StandingsTable?.StandingsLists?.[0]
-        ?.ConstructorStandings ?? [];
+      jolpicaTeamsRes?.MRData?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings ?? [];
     for (const jt of jolpicaTeamLists) {
       const cName = teamLabel(jt?.Constructor?.name);
       if (!cName || cName === "—") continue;
@@ -373,10 +719,7 @@ function StandingsSkeleton({
       )}
       <div className={cn("space-y-2", showPodium && "mt-8")}>
         {Array.from({ length: rows }).map((_, idx) => (
-          <div
-            key={idx}
-            className="tower-row flex items-center gap-3 rounded-md px-3 py-3"
-          >
+          <div key={idx} className="tower-row flex items-center gap-3 rounded-md px-3 py-3">
             <div className="skeleton-shimmer h-5 w-7 shrink-0 rounded" />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="skeleton-shimmer h-4 w-36 rounded" />
@@ -402,7 +745,10 @@ function Leaderboard() {
 
   function switchTab(nextTab: TabKey) {
     if (nextTab === activeTab) return;
-    const doc = typeof document !== "undefined" ? (document as Document & { startViewTransition?: (cb: () => void) => void }) : null;
+    const doc =
+      typeof document !== "undefined"
+        ? (document as Document & { startViewTransition?: (cb: () => void) => void })
+        : null;
     if (doc?.startViewTransition) {
       doc.startViewTransition(() => {
         setActiveTab(nextTab);
@@ -421,8 +767,7 @@ function Leaderboard() {
 
   useQuery(driversQuery);
 
-  const scored =
-    board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
+  const scored = board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
 
   async function handleForceSync() {
     if (syncing) return;
@@ -449,9 +794,7 @@ function Leaderboard() {
   const topDriverPoints = f1Drivers[0]?.points ?? 0;
   const topTeamPoints = f1Constructors[0]?.points ?? 0;
 
-  const mostWinsDriver = [...f1Drivers].sort(
-    (a, b) => b.wins - a.wins || b.points - a.points,
-  )[0];
+  const mostWinsDriver = [...f1Drivers].sort((a, b) => b.wins - a.wins || b.points - a.points)[0];
   const mostPolesDriver = [...f1Drivers].sort(
     (a, b) => b.poles - a.poles || b.points - a.points,
   )[0];
@@ -464,13 +807,9 @@ function Leaderboard() {
   const mostTop10Driver = [...f1Drivers].sort(
     (a, b) => b.top10 - a.top10 || b.points - a.points,
   )[0];
-  const mostDnfsDriver = [...f1Drivers].sort(
-    (a, b) => b.dnfs - a.dnfs || a.points - b.points,
-  )[0];
+  const mostDnfsDriver = [...f1Drivers].sort((a, b) => b.dnfs - a.dnfs || a.points - b.points)[0];
 
-  const bestSingleRoundEntry = [...(board ?? [])].sort(
-    (a, b) => (b.best ?? 0) - (a.best ?? 0),
-  )[0];
+  const bestSingleRoundEntry = [...(board ?? [])].sort((a, b) => (b.best ?? 0) - (a.best ?? 0))[0];
   const bestAverageEntry = [...(board ?? [])]
     .filter((e) => e.races > 0)
     .sort((a, b) => b.points / b.races - a.points / a.races)[0];
@@ -552,11 +891,7 @@ function Leaderboard() {
                 <Button asChild>
                   <Link to="/auth">Continue with Google</Link>
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => switchTab("drivers")}
-                >
+                <Button type="button" variant="secondary" onClick={() => switchTab("drivers")}>
                   View F1 Drivers
                 </Button>
               </div>
@@ -597,9 +932,7 @@ function Leaderboard() {
                   <div key={entry.userId}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setOpenUser(openUser === entry.userId ? null : entry.userId)
-                      }
+                      onClick={() => setOpenUser(openUser === entry.userId ? null : entry.userId)}
                       className={cn(
                         "tower-row flex w-full items-center gap-3 rounded-md px-3 py-3 text-left",
                         index === 0 && "border-l-gold",
@@ -651,9 +984,7 @@ function Leaderboard() {
                             Best {entry.best ?? 0} pts
                           </span>
                           {index === 0 && (
-                            <span className="rounded bg-gold/20 px-2 py-0.5 text-gold">
-                              Leader
-                            </span>
+                            <span className="rounded bg-gold/20 px-2 py-0.5 text-gold">Leader</span>
                           )}
                           {(entry.best ?? 0) >= 25 && (
                             <span className="rounded bg-primary/20 px-2 py-0.5 text-primary">
@@ -797,25 +1128,19 @@ function Leaderboard() {
                             <p className="font-mono text-[10px] uppercase text-muted-foreground">
                               Wins
                             </p>
-                            <p className="font-mono text-sm font-bold tabular-nums">
-                              {d.wins}
-                            </p>
+                            <p className="font-mono text-sm font-bold tabular-nums">{d.wins}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
                             <p className="font-mono text-[10px] uppercase text-muted-foreground">
                               Podiums
                             </p>
-                            <p className="font-mono text-sm font-bold tabular-nums">
-                              {d.podiums}
-                            </p>
+                            <p className="font-mono text-sm font-bold tabular-nums">{d.podiums}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
                             <p className="font-mono text-[10px] uppercase text-muted-foreground">
                               Poles
                             </p>
-                            <p className="font-mono text-sm font-bold tabular-nums">
-                              {d.poles}
-                            </p>
+                            <p className="font-mono text-sm font-bold tabular-nums">{d.poles}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
                             <p className="font-mono text-[10px] uppercase text-muted-foreground">
@@ -837,9 +1162,7 @@ function Leaderboard() {
                             <p className="font-mono text-[10px] uppercase text-muted-foreground">
                               DNFs
                             </p>
-                            <p className="font-mono text-sm font-bold tabular-nums">
-                              {d.dnfs}
-                            </p>
+                            <p className="font-mono text-sm font-bold tabular-nums">{d.dnfs}</p>
                           </div>
                         </div>
                       )}
@@ -973,9 +1296,7 @@ function Leaderboard() {
                       {stat.d?.team ?? ""}
                     </p>
                   </div>
-                  <span className="font-mono text-xl font-bold tabular-nums">
-                    {stat.val}
-                  </span>
+                  <span className="font-mono text-xl font-bold tabular-nums">{stat.val}</span>
                 </div>
               ))}
             </div>

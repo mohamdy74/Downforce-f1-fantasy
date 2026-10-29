@@ -17,11 +17,7 @@ export function saveBlob(blob: Blob, fileName: string): void {
   toast.success("Image saved.");
 }
 
-export async function shareImageFile(
-  blob: Blob,
-  fileName: string,
-  title: string,
-): Promise<void> {
+export async function shareImageFile(blob: Blob, fileName: string, title: string): Promise<void> {
   const file = new File([blob], fileName, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
     try {

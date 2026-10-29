@@ -15,7 +15,10 @@ export const Route = createFileRoute("/rules")({
         content: "Top 10 accuracy, bonus picks, perfect weekend and the no-submission penalty.",
       },
       { name: "twitter:title", content: "Scoring rules — DOWNFORCE" },
-      { name: "twitter:description", content: "Top 10 accuracy, bonus picks, perfect weekend and the no-submission penalty." },
+      {
+        name: "twitter:description",
+        content: "Top 10 accuracy, bonus picks, perfect weekend and the no-submission penalty.",
+      },
     ],
   }),
   component: Rules,
@@ -52,8 +55,8 @@ function Rules() {
     <main className="mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-3xl">Scoring rules</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        Each Grand Prix you predict the top 10 finishing order plus three bonus picks.
-        Points are awarded after the chequered flag.
+        Each Grand Prix you predict the top 10 finishing order plus three bonus picks. Points are
+        awarded after the chequered flag.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -73,16 +76,16 @@ function Rules() {
       <div className="carbon-panel mt-6 rounded-lg p-5">
         <h2 className="text-lg">Max points per weekend</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          30 from a perfect top 10, 3 for pole, 3 for fastest lap, 1 for a DNF and 15 for a
-          perfect weekend — 52 in total.
+          30 from a perfect top 10, 3 for pole, 3 for fastest lap, 1 for a DNF and 15 for a perfect
+          weekend — 52 in total.
         </p>
       </div>
 
       <div className="mt-10">
         <h2 className="text-2xl">Sprint weekends</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          On sprint weekends a Sprint tab appears. You predict the first 8 sprint positions
-          (a position only scores when it is exactly right) plus the sprint pole. Sprint points are
+          On sprint weekends a Sprint tab appears. You predict the first 8 sprint positions (a
+          position only scores when it is exactly right) plus the sprint pole. Sprint points are
           added to that round's total.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

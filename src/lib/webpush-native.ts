@@ -5,7 +5,10 @@ if (typeof window !== "undefined") {
 }
 
 function cleanEnvKey(val: string | undefined): string {
-  return (val ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+  return (val ?? "")
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
 }
 
 function b64urlDecode(str: string): Uint8Array {
@@ -30,9 +33,7 @@ export async function resolveServerVapidKeys(): Promise<{ publicKey: string; pri
     string | undefined
   >;
   let privateKey = cleanEnvKey(
-    env["VAPID_PRIVATE_KEY"] ||
-      env["PRIVATE_VAPID_KEY"] ||
-      env["VABID_PRIVATE_KEY"],
+    env["VAPID_PRIVATE_KEY"] || env["PRIVATE_VAPID_KEY"] || env["VABID_PRIVATE_KEY"],
   );
   let publicKey = cleanEnvKey(
     env["VAPID_PUBLIC_KEY"] ||
@@ -48,7 +49,11 @@ export async function resolveServerVapidKeys(): Promise<{ publicKey: string; pri
     for (const [k, v] of Object.entries(env)) {
       if (!v || typeof v !== "string") continue;
       const upper = k.toUpperCase();
-      if (!privateKey && (upper.includes("VAPID") || upper.includes("VABID")) && upper.includes("PRIV")) {
+      if (
+        !privateKey &&
+        (upper.includes("VAPID") || upper.includes("VABID")) &&
+        upper.includes("PRIV")
+      ) {
         privateKey = cleanEnvKey(v);
       }
       if (
@@ -128,7 +133,9 @@ async function createVapidAuthHeader(
   const origin = new URL(endpoint).origin;
   const pubBytes = b64urlDecode(vapidPublicKey);
   if (pubBytes.length !== 65 || pubBytes[0] !== 0x04) {
-    throw new Error("Invalid VAPID_PUBLIC_KEY format (must be 65-byte uncompressed P-256 public key)");
+    throw new Error(
+      "Invalid VAPID_PUBLIC_KEY format (must be 65-byte uncompressed P-256 public key)",
+    );
   }
   const x = b64urlEncode(pubBytes.slice(1, 33));
   const y = b64urlEncode(pubBytes.slice(33, 65));
@@ -185,11 +192,9 @@ async function encryptWebPushAes128Gcm(
     false,
     [],
   );
-  const asKeyPair = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveBits"],
-  );
+  const asKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
   const asPublicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", asKeyPair.publicKey));
   const sharedSecret = new Uint8Array(
     await crypto.subtle.deriveBits(
@@ -236,7 +241,8 @@ export async function sendNativeWebPush(
 ): Promise<{ ok: boolean; status: number; error?: string }> {
   const { publicKey: pub, privateKey: priv } = await resolveServerVapidKeys();
   if (!pub || !priv) {
-    const msg = "Missing VAPID_PRIVATE_KEY on server (save VAPID_PRIVATE_KEY in Lovable Secrets and click Publish -> Update)";
+    const msg =
+      "Missing VAPID_PRIVATE_KEY on server (save VAPID_PRIVATE_KEY in Lovable Secrets and click Publish -> Update)";
     console.error(`[WebPush] ${msg}`);
     return { ok: false, status: 0, error: msg };
   }

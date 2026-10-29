@@ -19,12 +19,21 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
-import { getLastPushSyncError, getLastSyncedSub, syncBrowserSubscription } from "@/components/PushOptIn";
+import {
+  getLastPushSyncError,
+  getLastSyncedSub,
+  syncBrowserSubscription,
+} from "@/components/PushOptIn";
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
-import { executeStewardAction, exportLeagueBackup, getStewardsDashboard, STEWARD_EMAIL } from "@/lib/stewards.functions";
+import {
+  executeStewardAction,
+  exportLeagueBackup,
+  getStewardsDashboard,
+  STEWARD_EMAIL,
+} from "@/lib/stewards.functions";
 import { Download } from "lucide-react";
 import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -261,7 +270,9 @@ function StewardsPage() {
               setBusy(true);
               try {
                 const backup = await exportLeagueBackup();
-                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+                const blob = new Blob([JSON.stringify(backup, null, 2)], {
+                  type: "application/json",
+                });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
@@ -318,7 +329,8 @@ function StewardsPage() {
         >
           {races.map((r) => (
             <option key={r.id} value={r.id}>
-              R{r.round} · {r.name.replace("Grand Prix", "GP")} {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
+              R{r.round} · {r.name.replace("Grand Prix", "GP")}{" "}
+              {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
             </option>
           ))}
         </select>
@@ -375,25 +387,52 @@ function StewardsPage() {
               const pts = scoreByUser.get(p.id);
               const hasPush = pushUserSet.has(p.id);
               return (
-                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm">
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm"
+                >
                   <div className="flex items-center gap-2">
-                    <span className="font-display font-bold italic uppercase">{p.display_name}</span>
+                    <span className="font-display font-bold italic uppercase">
+                      {p.display_name}
+                    </span>
                     <span
-                      title={hasPush ? "Subscribed to Web Push on phone/browser" : "Has not tapped Enable Alerts on phone yet"}
+                      title={
+                        hasPush
+                          ? "Subscribed to Web Push on phone/browser"
+                          : "Has not tapped Enable Alerts on phone yet"
+                      }
                       className={cn(
                         "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-[10px]",
                         hasPush ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
                       )}
                     >
-                      {hasPush ? <Bell className="h-2.5 w-2.5" /> : <BellOff className="h-2.5 w-2.5" />}
+                      {hasPush ? (
+                        <Bell className="h-2.5 w-2.5" />
+                      ) : (
+                        <BellOff className="h-2.5 w-2.5" />
+                      )}
                       {hasPush ? "Push ON" : "No Push"}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
-                    <span className={cn("rounded px-1.5 py-0.5", hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5",
+                        hasPole
+                          ? "bg-success/20 text-success"
+                          : "bg-destructive/20 text-destructive",
+                      )}
+                    >
                       Pole {hasPole ? "✓" : "✗"}
                     </span>
-                    <span className={cn("rounded px-1.5 py-0.5", topCount === 10 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5",
+                        topCount === 10
+                          ? "bg-success/20 text-success"
+                          : "bg-destructive/20 text-destructive",
+                      )}
+                    >
                       {topCount}/10
                     </span>
                     {pts != null && <span className="font-bold text-gold">{pts}p</span>}
@@ -459,7 +498,9 @@ function StewardsPage() {
               variant="secondary"
               className="h-10"
               disabled={busy || !scoreUser || !activeRace}
-              onClick={() => runAction({ action: "remove_penalty", raceId: activeRace!.id, userId: scoreUser })}
+              onClick={() =>
+                runAction({ action: "remove_penalty", raceId: activeRace!.id, userId: scoreUser })
+              }
             >
               Waive −25 → 0
             </Button>
@@ -493,7 +534,9 @@ function StewardsPage() {
           >
             <option value="">Select player to enter/edit picks for…</option>
             {(dash?.profiles ?? []).map((p) => (
-              <option key={p.id} value={p.id}>{p.display_name}</option>
+              <option key={p.id} value={p.id}>
+                {p.display_name}
+              </option>
             ))}
           </select>
 
@@ -501,15 +544,21 @@ function StewardsPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Pole Pick</span>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                    Pole Pick
+                  </span>
                   <DriverPicker drivers={drivers} value={pickPole} onChange={setPickPole} />
                 </div>
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Fastest Lap</span>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                    Fastest Lap
+                  </span>
                   <DriverPicker drivers={drivers} value={pickFl} onChange={setPickFl} />
                 </div>
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">DNF Pick</span>
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                    DNF Pick
+                  </span>
                   <DriverPicker
                     drivers={drivers.filter((d) => !/aston|cadillac/i.test(d.team ?? ""))}
                     value={pickDnf}
@@ -534,7 +583,9 @@ function StewardsPage() {
                 onClick={() => {
                   const valid = pickTop10.filter((x) => x !== EMPTY);
                   if (valid.length !== 10 && valid.length !== 0) {
-                    toast.error(`Picked ${valid.length}/10 drivers. Complete all 10 slots (or clear all for Pole-only save).`);
+                    toast.error(
+                      `Picked ${valid.length}/10 drivers. Complete all 10 slots (or clear all for Pole-only save).`,
+                    );
                     return;
                   }
                   runAction({
@@ -569,7 +620,9 @@ function StewardsPage() {
             Qualifying:{" "}
             <strong className="text-foreground">
               {activeRace?.qualifying_at
-                ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" })
+                ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", {
+                    timeZone: "Africa/Cairo",
+                  })
                 : "N/A"}
             </strong>{" "}
             · Race:{" "}
@@ -695,11 +748,15 @@ function StewardsPage() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Actual Pole Winner</span>
+              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                Actual Pole Winner
+              </span>
               <DriverPicker drivers={drivers} value={resPole} onChange={setResPole} />
             </div>
             <div>
-              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">Actual Fastest Lap</span>
+              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                Actual Fastest Lap
+              </span>
               <DriverPicker drivers={drivers} value={resFl} onChange={setResFl} />
             </div>
           </div>
@@ -758,7 +815,9 @@ function StewardsPage() {
             onClick={() => {
               const valid = resTop10.filter((x) => x !== EMPTY);
               if (valid.length !== 10) {
-                toast.error(`Picked ${valid.length}/10 finishing positions. Please fill P1 through P10.`);
+                toast.error(
+                  `Picked ${valid.length}/10 finishing positions. Please fill P1 through P10.`,
+                );
                 return;
               }
               runAction({
@@ -802,7 +861,9 @@ function StewardsPage() {
           >
             <option value="">Select player…</option>
             {(dash?.profiles ?? []).map((p) => (
-              <option key={p.id} value={p.id}>{p.display_name}</option>
+              <option key={p.id} value={p.id}>
+                {p.display_name}
+              </option>
             ))}
           </select>
           <input
@@ -817,7 +878,9 @@ function StewardsPage() {
               size="sm"
               className="h-10 flex-1"
               disabled={busy || !renameId || !renameVal.trim()}
-              onClick={() => runAction({ action: "rename_player", userId: renameId, name: renameVal })}
+              onClick={() =>
+                runAction({ action: "rename_player", userId: renameId, name: renameVal })
+              }
             >
               Rename
             </Button>
@@ -841,4 +904,3 @@ function StewardsPage() {
     </main>
   );
 }
-

@@ -22,12 +22,19 @@ export function BackgroundSync() {
     }
     let running = false;
 
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session) {
-          syncBrowserSubscription().catch(() => {});
-        }
-      }).catch(() => {});
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
+      supabase.auth
+        .getSession()
+        .then(({ data }) => {
+          if (data.session) {
+            syncBrowserSubscription().catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
 
     const run = async () => {
@@ -43,7 +50,11 @@ export function BackgroundSync() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) return;
-        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
           await syncBrowserSubscription().catch(() => {});
         }
         await Promise.allSettled([

@@ -28,7 +28,9 @@ export function useAuth() {
   const [loading, setLoading] = useState(!_r);
 
   useEffect(() => {
-    const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, next) => {
+    const {
+      data: { subscription: sub },
+    } = supabase.auth.onAuthStateChange((_event, next) => {
       _s = next;
       _r = true;
       setSession(next);

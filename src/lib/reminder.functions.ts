@@ -20,7 +20,9 @@ export const getReminderStats = createServerFn({ method: "POST" })
       .eq("race_id", normalizedRaceId);
 
     if (predictionsError) {
-      throw new Error(`Unable to load predictions: ${predictionsError instanceof Error ? predictionsError.message : String(predictionsError)}`);
+      throw new Error(
+        `Unable to load predictions: ${predictionsError instanceof Error ? predictionsError.message : String(predictionsError)}`,
+      );
     }
 
     const submittedIds = (preds ?? [])
@@ -32,7 +34,9 @@ export const getReminderStats = createServerFn({ method: "POST" })
       .select("id, display_name");
 
     if (profilesError) {
-      throw new Error(`Unable to load profiles: ${profilesError instanceof Error ? profilesError.message : String(profilesError)}`);
+      throw new Error(
+        `Unable to load profiles: ${profilesError instanceof Error ? profilesError.message : String(profilesError)}`,
+      );
     }
 
     const missing = (profiles ?? []).filter((profile) => !submittedIds.includes(profile.id));

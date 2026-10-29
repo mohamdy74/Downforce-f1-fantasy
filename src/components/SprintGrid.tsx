@@ -326,7 +326,9 @@ export function SprintGrid({
                         ? "2px solid oklch(1 0 0 / 0.45)"
                         : "1.5px solid oklch(1 0 0 / 0.28)",
                       color: on ? "#ffffff" : "var(--color-foreground)",
-                      textShadow: on ? `0 0 10px color-mix(in oklch, ${color} 85%, transparent)` : undefined,
+                      textShadow: on
+                        ? `0 0 10px color-mix(in oklch, ${color} 85%, transparent)`
+                        : undefined,
                       boxShadow: on
                         ? `inset 0 0 22px -6px color-mix(in oklch, ${color} 72%, transparent), 0 0 16px -3px ${color}, inset 0 1px 0 rgba(255, 255, 255, 0.34)`
                         : `inset 0 0 16px -9px color-mix(in oklch, ${color} 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.15)`,
@@ -336,9 +338,7 @@ export function SprintGrid({
                       className="h-2 w-2 shrink-0 rounded-full transition-transform duration-200"
                       style={{
                         background: color,
-                        boxShadow: on
-                          ? `0 0 10px ${color}, 0 0 4px #ffffff`
-                          : `0 0 6px ${color}`,
+                        boxShadow: on ? `0 0 10px ${color}, 0 0 4px #ffffff` : `0 0 6px ${color}`,
                         transform: on ? "scale(1.2)" : undefined,
                       }}
                     />

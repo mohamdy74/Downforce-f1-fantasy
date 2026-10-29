@@ -45,9 +45,7 @@ export type SynthesizedOpenF1Result = {
  * Detects whether the Chequered Flag or official Session End has been signaled
  * in OpenF1 `/v1/race_control` telemetry messages.
  */
-export function hasChequeredFlag(
-  messages: OpenF1RaceControlMessage[] | null | undefined,
-): boolean {
+export function hasChequeredFlag(messages: OpenF1RaceControlMessage[] | null | undefined): boolean {
   if (!Array.isArray(messages) || messages.length === 0) return false;
   for (const m of messages) {
     const flag = (m.flag ?? "").toUpperCase();
@@ -176,12 +174,14 @@ export function inferQualifyingSegmentBounds(
 export function buildTimedSessionOrderFromLaps(
   laps: OpenF1LapEntry[] | null | undefined,
   positions?: OpenF1PositionEntry[] | null | undefined,
-  options?: {
-    isQualifying?: boolean | undefined;
-    isSprintQualifying?: boolean | undefined;
-    sessionStartIso?: string | null | undefined;
-    raceControl?: OpenF1RaceControlMessage[] | null | undefined;
-  } | undefined,
+  options?:
+    | {
+        isQualifying?: boolean | undefined;
+        isSprintQualifying?: boolean | undefined;
+        sessionStartIso?: string | null | undefined;
+        raceControl?: OpenF1RaceControlMessage[] | null | undefined;
+      }
+    | undefined,
 ): SynthesizedOpenF1Result[] {
   const isQualifying = Boolean(options?.isQualifying);
   const segBounds = isQualifying

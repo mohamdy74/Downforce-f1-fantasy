@@ -137,7 +137,10 @@ function MobileDriverPicker({
             <DrawerClose asChild>
               <button
                 type="button"
-                onClick={() => { onChange(EMPTY); setOpen(false); }}
+                onClick={() => {
+                  onChange(EMPTY);
+                  setOpen(false);
+                }}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-muted-foreground active:bg-secondary/60"
               >
                 — No pick —
@@ -151,7 +154,10 @@ function MobileDriverPicker({
                   key={d.id}
                   type="button"
                   disabled={taken}
-                  onClick={() => { onChange(d.id); setOpen(false); }}
+                  onClick={() => {
+                    onChange(d.id);
+                    setOpen(false);
+                  }}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm active:bg-secondary/60",
                     taken && "opacity-35",
@@ -162,9 +168,7 @@ function MobileDriverPicker({
                     className="w-1 self-stretch rounded-full"
                     style={{ background: teamColor(d.team) }}
                   />
-                  <span
-                    className="w-7 shrink-0 font-mono text-[11px] font-bold tabular-nums text-muted-foreground"
-                  >
+                  <span className="w-7 shrink-0 font-mono text-[11px] font-bold tabular-nums text-muted-foreground">
                     {d.number ?? "–"}
                   </span>
                   <span className="min-w-0 flex-1">

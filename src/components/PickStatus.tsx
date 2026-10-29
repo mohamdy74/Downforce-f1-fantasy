@@ -29,7 +29,10 @@ function nextDeadline(race: Race): Date {
 }
 
 function gcalStamp(d: Date) {
-  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return d
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 /** Android: opens Google Calendar with the event filled in (one tap, no file to download). */
@@ -105,7 +108,10 @@ export function PickStatus({ race }: { race: Race }) {
 
   if (!user) {
     return (
-      <div className="carbon-panel mb-6 flex flex-wrap items-center gap-3 rounded-lg border-l-4 p-4" style={{ borderLeftColor: "var(--gold)" }}>
+      <div
+        className="carbon-panel mb-6 flex flex-wrap items-center gap-3 rounded-lg border-l-4 p-4"
+        style={{ borderLeftColor: "var(--gold)" }}
+      >
         <AlertTriangle className="h-5 w-5 shrink-0 text-gold" />
         <p className="min-w-0 flex-1 text-sm">
           Sign in to lock in your picks for <strong>{race.name}</strong>.
@@ -117,7 +123,8 @@ export function PickStatus({ race }: { race: Race }) {
     );
   }
 
-  if (submitted === undefined) return null; const ok = !!submitted;
+  if (submitted === undefined) return null;
+  const ok = !!submitted;
 
   return (
     <div
@@ -129,7 +136,9 @@ export function PickStatus({ race }: { race: Race }) {
       {ok ? (
         <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: "var(--track-green)" }} />
       ) : (
-        <AlertTriangle className={cn("h-5 w-5 shrink-0 text-primary", !locked && "animate-pulse")} />
+        <AlertTriangle
+          className={cn("h-5 w-5 shrink-0 text-primary", !locked && "animate-pulse")}
+        />
       )}
       <p className="min-w-0 text-sm leading-snug">
         {ok ? (
@@ -142,18 +151,20 @@ export function PickStatus({ race }: { race: Race }) {
           </>
         ) : (
           <>
-            You haven&apos;t submitted picks for <strong>{race.name}</strong> yet — missing out costs
-            you 25 points.
+            You haven&apos;t submitted picks for <strong>{race.name}</strong> yet — missing out
+            costs you 25 points.
           </>
         )}
       </p>
       <div className="col-start-2 flex flex-wrap gap-2">
         {!locked && (
-          <><Button size="sm" variant="secondary" onClick={() => remindMe(race)}>
-            <CalendarPlus className="mr-1 h-4 w-4" />
-            Remind me
-          </Button>
-          <PushOptIn /></>
+          <>
+            <Button size="sm" variant="secondary" onClick={() => remindMe(race)}>
+              <CalendarPlus className="mr-1 h-4 w-4" />
+              Remind me
+            </Button>
+            <PushOptIn />
+          </>
         )}
         <Button asChild size="sm" variant={ok ? "secondary" : "default"}>
           <Link to="/predict">{ok ? "Review" : "Predict"}</Link>

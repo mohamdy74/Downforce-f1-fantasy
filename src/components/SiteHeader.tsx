@@ -1,6 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Grid3x3, Home, LogOut, Moon, Shield, Sun, Swords, Trophy, X, Zap } from "lucide-react";
+import {
+  CalendarDays,
+  Grid3x3,
+  Home,
+  LogOut,
+  Moon,
+  Shield,
+  Sun,
+  Swords,
+  Trophy,
+  X,
+  Zap,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -91,7 +103,10 @@ export function SiteHeader() {
                     <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
                       Confirm Action
                     </p>
-                    <h2 id="exit-league-title" className="mt-0.5 text-lg font-black uppercase tracking-wide text-foreground">
+                    <h2
+                      id="exit-league-title"
+                      className="mt-0.5 text-lg font-black uppercase tracking-wide text-foreground"
+                    >
                       Exit the League?
                     </h2>
                   </div>
@@ -109,7 +124,8 @@ export function SiteHeader() {
               </div>
 
               <p className="relative mt-3.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Are you sure you want to exit the league? You&apos;ll be signed out on this device, and you can sign back in anytime with your Google account.
+                Are you sure you want to exit the league? You&apos;ll be signed out on this device,
+                and you can sign back in anytime with your Google account.
               </p>
 
               <div className="relative mt-5 grid grid-cols-2 gap-2.5">
@@ -222,7 +238,9 @@ export function SiteHeader() {
           )}
         </nav>
       </div>
-      <div className="hidden"><PushOptIn /></div>
+      <div className="hidden">
+        <PushOptIn />
+      </div>
       <div className="kerb-strip" />
     </header>
   );

@@ -24,7 +24,10 @@ export const Route = createFileRoute("/")({
         content: "Call the grid. Beat your rivals. Take the top step.",
       },
       { name: "twitter:title", content: "DOWNFORCE — Fantasy Racing League" },
-      { name: "twitter:description", content: "Call the grid. Beat your rivals. Take the top step." },
+      {
+        name: "twitter:description",
+        content: "Call the grid. Beat your rivals. Take the top step.",
+      },
     ],
   }),
   loader: async ({ context }) => {
@@ -58,8 +61,8 @@ function Home() {
             Beat your <span className="text-primary">rivals.</span>
           </h1>
           <p className="mt-4 max-w-md text-base text-muted-foreground">
-            Predict the top 10 finishing order plus pole, fastest lap and a DNF before
-            every Grand Prix. Picks lock automatically when the cars go out.
+            Predict the top 10 finishing order plus pole, fastest lap and a DNF before every Grand
+            Prix. Picks lock automatically when the cars go out.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild size="lg">
@@ -99,7 +102,13 @@ function Home() {
         </div>
         {upcoming && <PickStatus race={upcoming} />}
         {upcoming && <MissingPlayers race={upcoming} />}
-        <Link to="/paddock" className="carbon-panel mt-3 flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold"><span>🔓 Group picks reveal and race debrief</span><span className="text-primary">→</span></Link>
+        <Link
+          to="/paddock"
+          className="carbon-panel mt-3 flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold"
+        >
+          <span>🔓 Group picks reveal and race debrief</span>
+          <span className="text-primary">→</span>
+        </Link>
         {upcoming ? (
           <div className="carbon-panel rounded-lg p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -140,7 +149,11 @@ function Home() {
             icon={<Trophy className="h-4 w-4 text-gold" />}
             label="League leader"
             value={leader ? leader.name : user ? "No scores yet" : "Sign in to see"}
-            sub={leader ? `${leader.points} pts${fahl ? ` · 👑 فحل الجولة: ${fahl.name}` : ""}` : "Be the first to score"}
+            sub={
+              leader
+                ? `${leader.points} pts${fahl ? ` · 👑 فحل الجولة: ${fahl.name}` : ""}`
+                : "Be the first to score"
+            }
           />
           <InfoCard
             icon={<Flag className="h-4 w-4 text-primary" />}

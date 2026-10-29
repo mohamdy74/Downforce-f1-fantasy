@@ -41,7 +41,11 @@ export function SharePicks({
     enabled: !!user,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .maybeSingle();
       return data?.display_name ?? null;
     },
   });
@@ -82,34 +86,54 @@ export function SharePicks({
 
   // Live preview = exactly the image that gets shared.
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null); const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
-  const key = [raceName, round, shownName, top10.join(","), pole, fastestLap, dnf, drivers.length].join("|");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [cachedBlob, setCachedBlob] = useState<Blob | null>(null);
+  const key = [
+    raceName,
+    round,
+    shownName,
+    top10.join(","),
+    pole,
+    fastestLap,
+    dnf,
+    drivers.length,
+  ].join("|");
   useEffect(() => {
     if (!open) return;
     let dead = false;
     let objectUrl: string | null = null;
-    import("@/lib/shareCard").then((m) => m.renderPickCard(cardData())).then((blob) => {
-      if (!blob || dead) return;
-      objectUrl = URL.createObjectURL(blob); setCachedBlob(blob);
-      setPreview(objectUrl);
-    });
+    import("@/lib/shareCard")
+      .then((m) => m.renderPickCard(cardData()))
+      .then((blob) => {
+        if (!blob || dead) return;
+        objectUrl = URL.createObjectURL(blob);
+        setCachedBlob(blob);
+        setPreview(objectUrl);
+      });
     return () => {
       dead = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setPreview(null); setCachedBlob(null);
+      setPreview(null);
+      setCachedBlob(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
 
   async function handleDownloadImage() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
-    if (!blob) { toast.error("Couldn't create the image."); return; }
+    if (!blob) {
+      toast.error("Couldn't create the image.");
+      return;
+    }
     saveBlob(blob, fileName);
   }
 
   async function handleShareImage() {
     const blob = cachedBlob ?? (await (await import("@/lib/shareCard")).renderPickCard(cardData()));
-    if (!blob) { toast.error("Couldn't create the image."); return; }
+    if (!blob) {
+      toast.error("Couldn't create the image.");
+      return;
+    }
     await shareImageFile(blob, fileName, `DOWNFORCE \u2014 ${raceName}`);
   }
 
@@ -125,7 +149,11 @@ export function SharePicks({
         <DialogTitle className="sr-only">Share your picks</DialogTitle>
         <div className="aspect-[4/5] w-full overflow-hidden rounded-t-lg bg-muted/40">
           {preview ? (
-            <img src={preview} alt={`${shownName}'s picks for ${raceName}`} className="h-full w-full" />
+            <img
+              src={preview}
+              alt={`${shownName}'s picks for ${raceName}`}
+              className="h-full w-full"
+            />
           ) : (
             <div className="h-full w-full animate-pulse" />
           )}
@@ -141,7 +169,11 @@ export function SharePicks({
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" onClick={() => shareOrCopyText(text)} className="h-9 gap-1.5 text-xs">
+            <Button
+              variant="ghost"
+              onClick={() => shareOrCopyText(text)}
+              className="h-9 gap-1.5 text-xs"
+            >
               <Share2 className="h-3.5 w-3.5" /> Share Text
             </Button>
             <Button

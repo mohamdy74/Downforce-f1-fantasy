@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Countdown } from "@/components/Countdown";
-import { DriverPicker, EMPTY } from "@/components/DriverPicker"; import { SprintGrid } from "@/components/SprintGrid";
+import { DriverPicker, EMPTY } from "@/components/DriverPicker";
+import { SprintGrid } from "@/components/SprintGrid";
 import { LightsOut } from "@/components/LightsOut";
 import { MissingPlayers } from "@/components/MissingPlayers";
 import { assertDeadlineOpen, logPredAudit } from "@/lib/prediction.functions";
@@ -32,7 +33,10 @@ export const Route = createFileRoute("/predict")({
         content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix.",
       },
       { name: "twitter:title", content: "Make your picks — DOWNFORCE" },
-      { name: "twitter:description", content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix." },
+      {
+        name: "twitter:description",
+        content: "Predict the top 10, pole, fastest lap and a DNF for the next Grand Prix.",
+      },
     ],
   }),
   component: Predict,
@@ -191,8 +195,7 @@ function Predict() {
   const now = Date.now();
   const raceLocked = !!race && new Date(race.race_at).getTime() <= now;
   const poleLocked =
-    raceLocked ||
-    (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
+    raceLocked || (!!race?.qualifying_at && new Date(race.qualifying_at).getTime() <= now);
   const hasSaved = !!prediction && (prediction.top10?.length ?? 0) === 10;
   // Saved picks open in view mode so stray taps while scrolling can't change them.
   const viewOnly = raceLocked || (hasSaved && !editing);
@@ -200,7 +203,11 @@ function Predict() {
   if (loading) {
     return (
       <Shell>
-        <div role="status" aria-label="Loading prediction page" className="h-4 w-24 animate-pulse rounded bg-muted" />
+        <div
+          role="status"
+          aria-label="Loading prediction page"
+          className="h-4 w-24 animate-pulse rounded bg-muted"
+        />
         <div className="mt-3 h-8 w-64 animate-pulse rounded bg-muted" />
         <div className="mt-4 h-12 w-full animate-pulse rounded-md bg-muted/60" />
         <div className="mt-6 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
@@ -236,7 +243,8 @@ function Predict() {
 
   // In-page status banner when picks are not yet locked in
   const notSubmitted =
-    prediction !== undefined && !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
+    prediction !== undefined &&
+    !(!!prediction && (prediction.top10 ?? []).filter(Boolean).length === 10) &&
     (!raceLocked || (race.qualifying_at && new Date(race.qualifying_at).getTime() > Date.now()));
 
   const usedInTop10 = top10.filter((d) => d !== EMPTY);
@@ -253,7 +261,13 @@ function Predict() {
     toast.success("Loaded your picks from the last race.");
   }
 
-  async function save() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "race" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  async function save() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "race" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (duplicates) {
       toast.error("Each driver can only appear once in your top 10.");
       return;
@@ -308,7 +322,16 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Predictions locked in."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked", changes: { top10: [prediction?.top10 ?? [], top10] } } }).catch(() => null);
+    toast.success("Predictions locked in.");
+    logPredAudit({
+      data: {
+        userId: user!.id,
+        raceId: race!.id,
+        predId: prediction?.id ?? user!.id,
+        action: prediction?.id && (prediction.top10?.length ?? 0) === 10 ? "edited" : "locked",
+        changes: { top10: [prediction?.top10 ?? [], top10] },
+      },
+    }).catch(() => null);
     try {
       window.localStorage.removeItem(`dfr:draft:${user!.id}:${race!.id}`);
     } catch {
@@ -322,7 +345,13 @@ function Predict() {
   }
 
   // Pole can be saved alone (before the top 10 is ready) until qualifying starts.
-  async function savePole() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "pole" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  async function savePole() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "pole" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (pole === EMPTY) {
       toast.error("Choose a pole driver first.");
       return;
@@ -346,7 +375,16 @@ function Predict() {
       toast.error(error.message);
       return;
     }
-    toast.success("Pole pick saved."); logPredAudit({ data: { userId: user!.id, raceId: race!.id, predId: prediction?.id ?? user!.id, action: "pole", changes: { pole: [prediction?.pole_driver_id ?? null, pole] } } }).catch(() => null);
+    toast.success("Pole pick saved.");
+    logPredAudit({
+      data: {
+        userId: user!.id,
+        raceId: race!.id,
+        predId: prediction?.id ?? user!.id,
+        action: "pole",
+        changes: { pole: [prediction?.pole_driver_id ?? null, pole] },
+      },
+    }).catch(() => null);
     writePoleAt(user!.id, race!.id, pole);
     queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
   }
@@ -521,7 +559,8 @@ function Predict() {
       </section>
 
       <div id="grid-section" className="scroll-mt-16">
-        <SprintGrid size={10}
+        <SprintGrid
+          size={10}
           drivers={drivers ?? []}
           top10={top10}
           setTop10={setTop10}
@@ -577,13 +616,24 @@ function Predict() {
         </div>
       )}
 
-      <div className={viewOnly ? "mt-4" : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/95 p-2 md:bg-background/80 md:backdrop-blur-md md:bottom-3"}>
+      <div
+        className={
+          viewOnly
+            ? "mt-4"
+            : "sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-4 rounded-lg bg-background/95 p-2 md:bg-background/80 md:backdrop-blur-md md:bottom-3"
+        }
+      >
         {raceLocked ? (
           <Button size="lg" className="h-12 w-full text-base" disabled>
             Picks locked — race started
           </Button>
         ) : viewOnly ? (
-          <Button size="lg" variant="outline" className="h-12 w-full text-base" onClick={() => setEditing(true)}>
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-12 w-full text-base"
+            onClick={() => setEditing(true)}
+          >
             Edit picks
           </Button>
         ) : (

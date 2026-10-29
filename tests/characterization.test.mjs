@@ -28,13 +28,10 @@ function scorePrediction(prediction, results) {
     top10 += positionPoints(diff);
   });
 
-  const poleCorrect =
-    !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver;
+  const poleCorrect = !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver;
   const flCorrect =
-    !!prediction.fastest_lap_driver_id &&
-    prediction.fastest_lap_driver_id === fastestLapDriver;
-  const dnfCorrect =
-    !!prediction.dnf_driver_id && dnfDrivers.has(prediction.dnf_driver_id);
+    !!prediction.fastest_lap_driver_id && prediction.fastest_lap_driver_id === fastestLapDriver;
+  const dnfCorrect = !!prediction.dnf_driver_id && dnfDrivers.has(prediction.dnf_driver_id);
 
   const pole = poleCorrect ? 3 : 0;
   const fastestLap = flCorrect ? 3 : 0;
@@ -63,8 +60,7 @@ function scoreSprint(prediction, results) {
     if (finishPosition.get(driverId) === index + 1) top8 += 1;
   });
 
-  const pole =
-    !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver ? 1 : 0;
+  const pole = !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver ? 1 : 0;
 
   return { top8, pole, total: top8 + pole };
 }
@@ -106,9 +102,7 @@ function buildRaceScoreRows({
   const byUser = new Map((predictions ?? []).map((p) => [p.user_id, p]));
   const sprintByUser = new Map((sprintPredictions ?? []).map((p) => [p.user_id, p]));
   const sprintFor = (userId) =>
-    sprintResults?.length
-      ? scoreSprint(sprintByUser.get(userId) ?? null, sprintResults)
-      : null;
+    sprintResults?.length ? scoreSprint(sprintByUser.get(userId) ?? null, sprintResults) : null;
 
   const rows = [];
   for (const profile of profiles ?? []) {
@@ -151,7 +145,13 @@ function buildRaceScoreRows({
         const total = NO_SUBMISSION_PENALTY + poleHit + sprintTotal;
         const breakdownObj =
           mode === "auto_sync"
-            ? { noSubmission: true, poleOnly: true, pole: poleHit, ...(sprint ? { sprint } : {}), total }
+            ? {
+                noSubmission: true,
+                poleOnly: true,
+                pole: poleHit,
+                ...(sprint ? { sprint } : {}),
+                total,
+              }
             : { noSubmission: true, pole: poleHit, ...(sprint ? { sprint } : {}), total };
         rows.push({
           user_id: profile.id,
@@ -243,8 +243,7 @@ function computeLeaderboardEntries(profiles, scores, raceRows) {
     }
     const prev = [...list].sort(
       (a, b) =>
-        (prevPts.get(b.userId) ?? 0) - (prevPts.get(a.userId) ?? 0) ||
-        a.name.localeCompare(b.name),
+        (prevPts.get(b.userId) ?? 0) - (prevPts.get(a.userId) ?? 0) || a.name.localeCompare(b.name),
     );
     const prevRank = new Map(prev.map((e, i) => [e.userId, i]));
     list.forEach((e, i) => (e.change = (prevRank.get(e.userId) ?? i) - i));
@@ -359,7 +358,11 @@ test("Characterization 2: scoreSprint awards max 9 points and handles null safel
     pole: i === 0,
   }));
   assert.deepEqual(scoreSprint(null, results), { top8: 0, pole: 0, total: 0 });
-  assert.deepEqual(scoreSprint({ top8, pole_driver_id: "d1" }, results), { top8: 8, pole: 1, total: 9 });
+  assert.deepEqual(scoreSprint({ top8, pole_driver_id: "d1" }, results), {
+    top8: 8,
+    pole: 1,
+    total: 9,
+  });
 });
 
 test("Characterization 3: buildRaceScoreRows preserves stewardOverride lock, post-race signup exemption, and auto_sync vs manual_results contracts", () => {
@@ -377,11 +380,15 @@ test("Characterization 3: buildRaceScoreRows preserves stewardOverride lock, pos
     { id: "u_pole_only", created_at: "2026-01-01T00:00:00Z" },
   ];
   const predictions = [
-    { user_id: "u_pole_only", top10: ["__none__"], pole_driver_id: "d1", fastest_lap_driver_id: null, dnf_driver_id: null },
+    {
+      user_id: "u_pole_only",
+      top10: ["__none__"],
+      pole_driver_id: "d1",
+      fastest_lap_driver_id: null,
+      dnf_driver_id: null,
+    },
   ];
-  const existingScores = [
-    { user_id: "u_locked", breakdown: { stewardOverride: true, total: 99 } },
-  ];
+  const existingScores = [{ user_id: "u_locked", breakdown: { stewardOverride: true, total: 99 } }];
 
   const autoRows = buildRaceScoreRows({
     raceId: "r1",
@@ -396,7 +403,12 @@ test("Characterization 3: buildRaceScoreRows preserves stewardOverride lock, pos
   });
   assert.equal(autoRows.length, 2);
   assert.deepEqual(autoRows[0].breakdown, { noSubmission: true, total: -25 });
-  assert.deepEqual(autoRows[1].breakdown, { noSubmission: true, poleOnly: true, pole: 3, total: -22 });
+  assert.deepEqual(autoRows[1].breakdown, {
+    noSubmission: true,
+    poleOnly: true,
+    pole: 3,
+    total: -22,
+  });
 
   const manualRows = buildRaceScoreRows({
     raceId: "r1",
@@ -466,8 +478,14 @@ test("Characterization 5: push-keys and f1-parsers preserve exact string and reg
 });
 
 test("Characterization 6: isCompleteTop10, DNF constructor filter, and Cairo timezone formatting", () => {
-  assert.equal(isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10"]), true);
-  assert.equal(isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "__none__"]), false);
+  assert.equal(
+    isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10"]),
+    true,
+  );
+  assert.equal(
+    isCompleteTop10(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "__none__"]),
+    false,
+  );
   assert.equal(isCompleteTop10([]), false);
   assert.equal(isCompleteTop10(null), false);
 
@@ -478,7 +496,10 @@ test("Characterization 6: isCompleteTop10, DNF constructor filter, and Cairo tim
     { id: "nor", team: "McLaren" },
   ];
   const eligibleDnf = sampleDrivers.filter((d) => !/aston|cadillac/i.test(d.team ?? ""));
-  assert.deepEqual(eligibleDnf.map((d) => d.id), ["ver", "nor"]);
+  assert.deepEqual(
+    eligibleDnf.map((d) => d.id),
+    ["ver", "nor"],
+  );
 
   const cairoLabel = formatCairoDate("2026-10-24T20:45:00.000Z", false);
   assert.ok(cairoLabel && cairoLabel.includes("\u00B7") && cairoLabel.includes("OCT"));
@@ -566,8 +587,28 @@ test("Characterization 7: hasChequeredFlag & computeVirtualStandings compute rea
   assert.equal(hasChequeredFlag([{ category: "SessionStatus", message: "SESSION ENDED" }]), true);
 
   const officialBoard = [
-    { userId: "u_ahmed", name: "Ahmed Hatem", avatar: null, points: 46, races: 4, best: 18, change: 0, byRound: { 14: 12, 15: 16, 16: 18 }, fahl: true },
-    { userId: "u_mohamed", name: "Mohamed Hamdy", avatar: null, points: 32, races: 4, best: 14, change: 0, byRound: { 14: 10, 15: 8, 16: 14 }, fahl: false },
+    {
+      userId: "u_ahmed",
+      name: "Ahmed Hatem",
+      avatar: null,
+      points: 46,
+      races: 4,
+      best: 18,
+      change: 0,
+      byRound: { 14: 12, 15: 16, 16: 18 },
+      fahl: true,
+    },
+    {
+      userId: "u_mohamed",
+      name: "Mohamed Hamdy",
+      avatar: null,
+      points: 32,
+      races: 4,
+      best: 14,
+      change: 0,
+      byRound: { 14: 10, 15: 8, 16: 14 },
+      fahl: false,
+    },
   ];
 
   const drivers = ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10"];
@@ -581,9 +622,21 @@ test("Characterization 7: hasChequeredFlag & computeVirtualStandings compute rea
 
   const predictions = [
     // Mohamed nails exact top 10 + Pole + FL (+30 + 3 + 3 + 10 = +46 pts!)
-    { user_id: "u_mohamed", top10: drivers, pole_driver_id: "d1", fastest_lap_driver_id: "d2", dnf_driver_id: null },
+    {
+      user_id: "u_mohamed",
+      top10: drivers,
+      pole_driver_id: "d1",
+      fastest_lap_driver_id: "d2",
+      dnf_driver_id: null,
+    },
     // Ahmed misses all top 10 (-30 pts)
-    { user_id: "u_ahmed", top10: ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10"], pole_driver_id: null, fastest_lap_driver_id: null, dnf_driver_id: null },
+    {
+      user_id: "u_ahmed",
+      top10: ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10"],
+      pole_driver_id: null,
+      fastest_lap_driver_id: null,
+      dnf_driver_id: null,
+    },
   ];
 
   const virtual = computeVirtualStandings({
@@ -613,7 +666,8 @@ function buildLiveOrderFromPositions(positions, laps, raceControl) {
   const latestPos = new Map();
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i];
-    if (typeof p.driver_number !== "number" || typeof p.position !== "number" || p.position <= 0) continue;
+    if (typeof p.driver_number !== "number" || typeof p.position !== "number" || p.position <= 0)
+      continue;
     const dateMs = p.date ? new Date(p.date).getTime() : 0;
     const prev = latestPos.get(p.driver_number);
     if (!prev || (dateMs > 0 && dateMs >= prev.dateMs) || (dateMs === 0 && i >= prev.idx)) {
@@ -626,7 +680,10 @@ function buildLiveOrderFromPositions(positions, laps, raceControl) {
   const bestLapByDriver = new Map();
   for (const l of laps ?? []) {
     if (typeof l.driver_number !== "number") continue;
-    if (typeof l.lap_number === "number" && l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)) {
+    if (
+      typeof l.lap_number === "number" &&
+      l.lap_number > (maxLapByDriver.get(l.driver_number) ?? 0)
+    ) {
       maxLapByDriver.set(l.driver_number, l.lap_number);
     }
     if (
@@ -704,9 +761,7 @@ test("Characterization 8: Race-Day End-to-End Safeguards (buildLiveOrderFromPosi
     { driver_number: 16, lap_number: 12, lap_duration: 96.9 },
     { driver_number: 31, lap_number: 3, lap_duration: 99.1 },
   ];
-  const raceControl = [
-    { category: "CarEvent", message: "CAR 31 (OCO) RETIRED IN PIT LANE" },
-  ];
+  const raceControl = [{ category: "CarEvent", message: "CAR 31 (OCO) RETIRED IN PIT LANE" }];
 
   const synth = buildLiveOrderFromPositions(positions, laps, raceControl);
   assert.equal(synth.length, 4);

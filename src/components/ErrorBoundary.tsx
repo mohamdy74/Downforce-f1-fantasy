@@ -18,7 +18,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   override componentDidCatch(error: Error) {
-    if (typeof window !== "undefined" && /No QueryClient set|dynamically imported module|Failed to fetch/i.test(error.message)) {
+    if (
+      typeof window !== "undefined" &&
+      /No QueryClient set|dynamically imported module|Failed to fetch/i.test(error.message)
+    ) {
       const key = "dfr:hmr-reload";
       const last = Number(sessionStorage.getItem(key) ?? "0");
       if (Date.now() - last > 5000) {

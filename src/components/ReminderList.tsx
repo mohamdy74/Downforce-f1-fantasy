@@ -12,7 +12,6 @@ export function ReminderList() {
   const { user } = useAuth();
 
   const race = races ? nextRace(races) : null;
-  
 
   const { data: missing } = useQuery({
     queryKey: ["missing-preds", race?.id],
@@ -23,7 +22,8 @@ export function ReminderList() {
     },
   });
 
-  if (!race || !races) return null; if (!missing || !missing.missing) {
+  if (!race || !races) return null;
+  if (!missing || !missing.missing) {
     return (
       <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">
         Couldn&apos;t load reminder list — check that predictions table is accessible.
@@ -51,16 +51,26 @@ export function ReminderList() {
 
       <div className="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
         {missing.missing.map((m) => (
-          <div key={m.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-secondary/30">
+          <div
+            key={m.id}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-secondary/30"
+          >
             <UserX className="h-3.5 w-3.5 text-destructive shrink-0" />
-            <span className="truncate font-display text-sm font-extrabold italic uppercase">{m.display_name || "Player"}</span>
+            <span className="truncate font-display text-sm font-extrabold italic uppercase">
+              {m.display_name || "Player"}
+            </span>
           </div>
         ))}
       </div>
 
       <div className="mt-3 flex gap-2">
         <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
-          <a href={waLink} target="_blank" rel="noopener noreferrer" aria-label="Open WhatsApp with reminder message (manual send)">
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open WhatsApp with reminder message (manual send)"
+          >
             <Send className="h-3.5 w-3.5" />
             WhatsApp reminder (manual)
           </a>
@@ -73,7 +83,15 @@ export function ReminderList() {
       {race.race_at && (
         <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
           <Clock className="h-3 w-3" />
-          Race closes {new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} (Cairo)
+          Race closes{" "}
+          {new Date(race.race_at).toLocaleString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Africa/Cairo",
+          })}{" "}
+          (Cairo)
         </div>
       )}
     </div>

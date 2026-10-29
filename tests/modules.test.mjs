@@ -11,11 +11,7 @@ import {
   positionPoints,
   scorePrediction,
 } from "../src/lib/scoring.ts";
-import {
-  cleanVapidKey,
-  isCompleteTop10,
-  parsePushSubscriptionKey,
-} from "../src/lib/push-keys.ts";
+import { cleanVapidKey, isCompleteTop10, parsePushSubscriptionKey } from "../src/lib/push-keys.ts";
 
 function rows() {
   const results = [];
@@ -28,8 +24,20 @@ function rows() {
       pole: i === 1,
     });
   }
-  results.push({ driver_id: "d11", position: null, finished: false, fastest_lap: false, pole: false });
-  results.push({ driver_id: "d12", position: null, finished: false, fastest_lap: false, pole: false });
+  results.push({
+    driver_id: "d11",
+    position: null,
+    finished: false,
+    fastest_lap: false,
+    pole: false,
+  });
+  results.push({
+    driver_id: "d12",
+    position: null,
+    finished: false,
+    fastest_lap: false,
+    pole: false,
+  });
   return results;
 }
 
@@ -122,7 +130,7 @@ test("push-keys.ts: isCompleteTop10 accepts exactly 10 real driver ids", () => {
 
 test("push-keys.ts: cleanVapidKey strips quotes and whitespace", () => {
   assert.equal(cleanVapidKey(undefined), "");
-  assert.equal(cleanVapidKey("  \"abc\"  "), "abc");
+  assert.equal(cleanVapidKey('  "abc"  '), "abc");
   assert.equal(cleanVapidKey("'x'"), "x");
   assert.equal(cleanVapidKey("plain"), "plain");
 });

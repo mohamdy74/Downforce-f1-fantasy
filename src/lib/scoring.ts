@@ -38,10 +38,7 @@ export type Breakdown = {
   total: number;
 };
 
-export function scorePrediction(
-  prediction: PredictionInput,
-  results: ResultRow[],
-): Breakdown {
+export function scorePrediction(prediction: PredictionInput, results: ResultRow[]): Breakdown {
   const finishPosition = new Map<string, number>();
   for (const r of results) {
     if (r.finished && r.position != null) finishPosition.set(r.driver_id, r.position);
@@ -60,13 +57,10 @@ export function scorePrediction(
     top10 += positionPoints(diff);
   });
 
-  const poleCorrect =
-    !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver;
+  const poleCorrect = !!prediction.pole_driver_id && prediction.pole_driver_id === poleDriver;
   const flCorrect =
-    !!prediction.fastest_lap_driver_id &&
-    prediction.fastest_lap_driver_id === fastestLapDriver;
-  const dnfCorrect =
-    !!prediction.dnf_driver_id && dnfDrivers.has(prediction.dnf_driver_id);
+    !!prediction.fastest_lap_driver_id && prediction.fastest_lap_driver_id === fastestLapDriver;
+  const dnfCorrect = !!prediction.dnf_driver_id && dnfDrivers.has(prediction.dnf_driver_id);
 
   const pole = poleCorrect ? 3 : 0;
   const fastestLap = flCorrect ? 3 : 0;

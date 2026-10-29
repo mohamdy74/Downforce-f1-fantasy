@@ -8,7 +8,13 @@ import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/reminders")({
   head: () => ({
-    meta: [{ title: "Reminders — DOWNFORCE" }, { name: "description", content: "Who hasn't submitted picks and reminders for the next race." }],
+    meta: [
+      { title: "Reminders — DOWNFORCE" },
+      {
+        name: "description",
+        content: "Who hasn't submitted picks and reminders for the next race.",
+      },
+    ],
   }),
   loader: async () => {
     // Cron warm-up (sweep + season sync) runs inside a server function, whose
@@ -69,22 +75,26 @@ function Reminders() {
             ))}
           </div>
         </div>
-      ) : data && (
-        <div className="mt-6 carbon-panel-strong rounded-lg p-4 grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="font-mono text-xs uppercase text-muted-foreground">Race</p>
-            <p className="font-display text-lg font-extrabold italic">{data.round}</p>
-            <p className="text-xs truncate">{data.raceName}</p>
+      ) : (
+        data && (
+          <div className="mt-6 carbon-panel-strong rounded-lg p-4 grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="font-mono text-xs uppercase text-muted-foreground">Race</p>
+              <p className="font-display text-lg font-extrabold italic">{data.round}</p>
+              <p className="text-xs truncate">{data.raceName}</p>
+            </div>
+            <div>
+              <p className="font-mono text-xs uppercase text-muted-foreground">Submitted</p>
+              <p className="font-mono text-2xl font-bold text-success">{data.submittedCount}</p>
+            </div>
+            <div>
+              <p className="font-mono text-xs uppercase text-muted-foreground">Your status</p>
+              <p className="font-mono text-2xl font-bold">
+                {data.hasSubmitted ? "✓ Done" : "✗ Missing"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-mono text-xs uppercase text-muted-foreground">Submitted</p>
-            <p className="font-mono text-2xl font-bold text-success">{data.submittedCount}</p>
-          </div>
-          <div>
-            <p className="font-mono text-xs uppercase text-muted-foreground">Your status</p>
-            <p className="font-mono text-2xl font-bold">{data.hasSubmitted ? "✓ Done" : "✗ Missing"}</p>
-          </div>
-        </div>
+        )
       )}
 
       <ReminderList />

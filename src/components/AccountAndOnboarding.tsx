@@ -268,11 +268,16 @@ export function AccountAndOnboarding() {
                   {step === 2 && (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        Enable instant phone notifications so we alert you <strong>2 hours</strong> and{" "}
-                        <strong>30 minutes</strong> before Qualifying and Race lock if you haven&apos;t submitted yet.
+                        Enable instant phone notifications so we alert you <strong>2 hours</strong>{" "}
+                        and <strong>30 minutes</strong> before Qualifying and Race lock if you
+                        haven&apos;t submitted yet.
                       </p>
                       <div className="flex gap-2 pt-2">
-                        <Button className="flex-1 gap-2" disabled={busy} onClick={handleEnableAlerts}>
+                        <Button
+                          className="flex-1 gap-2"
+                          disabled={busy}
+                          onClick={handleEnableAlerts}
+                        >
                           <Bell className="h-4 w-4 text-gold" />
                           Enable Race Alerts 🔔
                         </Button>
@@ -325,7 +330,12 @@ export function AccountAndOnboarding() {
                         onChange={(e) => setNameInput(e.target.value)}
                         className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm font-bold"
                       />
-                      <Button size="sm" className="h-10" disabled={busy} onClick={() => handleSaveName(false)}>
+                      <Button
+                        size="sm"
+                        className="h-10"
+                        disabled={busy}
+                        onClick={() => handleSaveName(false)}
+                      >
                         Save
                       </Button>
                     </div>

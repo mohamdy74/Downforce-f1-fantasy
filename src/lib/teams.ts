@@ -25,7 +25,7 @@ export function teamColor(team: string | null | undefined): string {
 
 /** Canonical short label for a constructor, e.g. "Scuderia Ferrari" -> "Ferrari". */
 export function teamLabel(team: string | null | undefined): string {
-  return match(team)?.[2] ?? (team ?? "—");
+  return match(team)?.[2] ?? team ?? "—";
 }
 
 export function teamRank(team: string | null | undefined): number {
@@ -38,9 +38,7 @@ export function sortByTeam<T extends { team: string | null; number: number | nul
   drivers: T[],
 ): T[] {
   return [...drivers].sort(
-    (a, b) =>
-      teamRank(a.team) - teamRank(b.team) ||
-      (a.number ?? 999) - (b.number ?? 999),
+    (a, b) => teamRank(a.team) - teamRank(b.team) || (a.number ?? 999) - (b.number ?? 999),
   );
 }
 

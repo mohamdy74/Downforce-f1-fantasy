@@ -83,10 +83,22 @@ export const racesQuery = queryOptions({
 });
 
 const AUSTIN_2026_DRIVERS_FALLBACK: Driver[] = [
-  { id: "antonelli", code: "ANT", full_name: "Andrea Kimi Antonelli", team: "Mercedes", number: 12 },
+  {
+    id: "antonelli",
+    code: "ANT",
+    full_name: "Andrea Kimi Antonelli",
+    team: "Mercedes",
+    number: 12,
+  },
   { id: "russell", code: "RUS", full_name: "George Russell", team: "Mercedes", number: 63 },
   { id: "hamilton", code: "HAM", full_name: "Lewis Hamilton", team: "Ferrari", number: 44 },
-  { id: "verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull Racing", number: 3 },
+  {
+    id: "verstappen",
+    code: "VER",
+    full_name: "Max Verstappen",
+    team: "Red Bull Racing",
+    number: 3,
+  },
   { id: "leclerc", code: "LEC", full_name: "Charles Leclerc", team: "Ferrari", number: 16 },
   { id: "norris", code: "NOR", full_name: "Lando Norris", team: "McLaren", number: 1 },
   { id: "piastri", code: "PIA", full_name: "Oscar Piastri", team: "McLaren", number: 81 },
@@ -202,8 +214,7 @@ export function computeLeaderboardEntries(
     }
     const prev = [...list].sort(
       (a, b) =>
-        (prevPts.get(b.userId) ?? 0) - (prevPts.get(a.userId) ?? 0) ||
-        a.name.localeCompare(b.name),
+        (prevPts.get(b.userId) ?? 0) - (prevPts.get(a.userId) ?? 0) || a.name.localeCompare(b.name),
     );
     const prevRank = new Map(prev.map((e, i) => [e.userId, i]));
     list.forEach((e, i) => (e.change = (prevRank.get(e.userId) ?? i) - i));
@@ -225,7 +236,11 @@ export const leaderboardQuery = queryOptions({
     ] = await Promise.all([
       supabase.from("scores").select("user_id, race_id, points").limit(50000),
       supabase.from("profiles").select("id, display_name, avatar_url").limit(10000),
-      supabase.from("races").select("id, round").eq("season", SEASON).gte("round", LEAGUE_START_ROUND),
+      supabase
+        .from("races")
+        .select("id, round")
+        .eq("season", SEASON)
+        .gte("round", LEAGUE_START_ROUND),
     ]);
     if (sErr) throw sErr;
     if (pErr) throw pErr;

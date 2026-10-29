@@ -106,9 +106,7 @@ export function hasCompleteTimingData(
     return withTime >= 5;
   }
   if (type === "qualifying" || type === "sprint_qualifying") {
-    const withSplits = rows.filter(
-      (r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3)),
-    ).length;
+    const withSplits = rows.filter((r) => Boolean(r.q1) && (Boolean(r.q2) || Boolean(r.q3))).length;
     return withTime >= 5 && withSplits >= 5;
   }
   if (type === "sprint") {
@@ -206,8 +204,7 @@ export function mergeClassRows(
         if (idx === 0 || r.position === 1) return { ...r, gap: null };
         if (r.gap) return r;
         const rSec = parseLapTimeSeconds(r.time);
-        const computedGap =
-          rSec != null && rSec > p1Sec ? `+${(rSec - p1Sec).toFixed(3)}` : null;
+        const computedGap = rSec != null && rSec > p1Sec ? `+${(rSec - p1Sec).toFixed(3)}` : null;
         return { ...r, gap: computedGap };
       });
     }
@@ -241,7 +238,8 @@ async function loadRows(admin: Admin, raceId: string): Promise<SessRow[]> {
 async function ensureSchedule(admin: Admin, race: DbRace): Promise<SessRow[]> {
   let rows = await loadRows(admin, race.id);
   const hasCore =
-    rows.some((r) => r.session_type === "qualifying") && rows.some((r) => r.session_type === "race");
+    rows.some((r) => r.session_type === "qualifying") &&
+    rows.some((r) => r.session_type === "race");
   const last = scheduleChecked.get(race.id) ?? 0;
   if (hasCore && Date.now() - last < 6 * 60 * MIN) return rows;
   scheduleChecked.set(race.id, Date.now());
@@ -390,7 +388,12 @@ function blank(): ClassRow {
   };
 }
 
-type JDriver = { driverId: string; code?: string | undefined; givenName: string; familyName: string };
+type JDriver = {
+  driverId: string;
+  code?: string | undefined;
+  givenName: string;
+  familyName: string;
+};
 
 async function fromJolpica(
   race: DbRace,
@@ -402,15 +405,17 @@ async function fromJolpica(
       MRData: {
         RaceTable: {
           Races: Array<{
-            QualifyingResults?: Array<{
-              number?: string | undefined;
-              position: string;
-              Driver: JDriver;
-              Constructor?: { name: string } | undefined;
-              Q1?: string | undefined;
-              Q2?: string | undefined;
-              Q3?: string | undefined;
-            }> | undefined;
+            QualifyingResults?:
+              | Array<{
+                  number?: string | undefined;
+                  position: string;
+                  Driver: JDriver;
+                  Constructor?: { name: string } | undefined;
+                  Q1?: string | undefined;
+                  Q2?: string | undefined;
+                  Q3?: string | undefined;
+                }>
+              | undefined;
           }>;
         };
       };
@@ -446,22 +451,26 @@ async function fromJolpica(
     MRData: {
       RaceTable: {
         Races: Array<{
-          SprintResults?: Array<{
-            position: string;
-            laps?: string | undefined;
-            status?: string | undefined;
-            Driver: JDriver;
-            Constructor?: { name: string } | undefined;
-            Time?: { time?: string | undefined } | undefined;
-          }> | undefined;
-          Results?: Array<{
-            position: string;
-            laps?: string | undefined;
-            status?: string | undefined;
-            Driver: JDriver;
-            Constructor?: { name: string } | undefined;
-            Time?: { time?: string | undefined } | undefined;
-          }> | undefined;
+          SprintResults?:
+            | Array<{
+                position: string;
+                laps?: string | undefined;
+                status?: string | undefined;
+                Driver: JDriver;
+                Constructor?: { name: string } | undefined;
+                Time?: { time?: string | undefined } | undefined;
+              }>
+            | undefined;
+          Results?:
+            | Array<{
+                position: string;
+                laps?: string | undefined;
+                status?: string | undefined;
+                Driver: JDriver;
+                Constructor?: { name: string } | undefined;
+                Time?: { time?: string | undefined } | undefined;
+              }>
+            | undefined;
         }>;
       };
     };
@@ -545,7 +554,8 @@ async function fromOpenF1(
 
   const hasValidDuration = (d: number | Array<number | null> | null): boolean => {
     if (typeof d === "number") return Number.isFinite(d) && d > 0;
-    if (Array.isArray(d)) return d.some((x) => typeof x === "number" && Number.isFinite(x) && x > 0);
+    if (Array.isArray(d))
+      return d.some((x) => typeof x === "number" && Number.isFinite(x) && x > 0);
     return false;
   };
 
@@ -617,7 +627,7 @@ async function fromOpenF1(
 
   if (!res.length) return [];
 
-  const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
+  const lastOf = <T>(v: T | Array<T | null> | null): T | null => {
     if (Array.isArray(v)) {
       for (let i = v.length - 1; i >= 0; i--) if (v[i] != null) return v[i] as T;
       return null;
@@ -639,7 +649,11 @@ async function fromOpenF1(
       const best = typeof lastOf(dur) === "number" ? (lastOf(dur) as number) : null;
       const gapRaw = lastOf(r.gap_to_leader);
       const gap =
-        typeof gapRaw === "number" ? (gapRaw > 0 ? `+${gapRaw.toFixed(3)}` : null) : (gapRaw ?? null);
+        typeof gapRaw === "number"
+          ? gapRaw > 0
+            ? `+${gapRaw.toFixed(3)}`
+            : null
+          : (gapRaw ?? null);
       return {
         ...blank(),
         position: r.position,
@@ -963,10 +977,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
               .select("driver_id, position, finished, fastest_lap, pole")
               .eq("race_id", race.id)
               .order("position", { ascending: true, nullsFirst: false }),
-            supabaseAdmin
-              .from("scores")
-              .select("user_id, points")
-              .eq("race_id", race.id),
+            supabaseAdmin.from("scores").select("user_id, points").eq("race_id", race.id),
           ]);
           if (dbResults?.length) {
             const classification: ClassRow[] = dbResults.map((r) => {
@@ -1045,7 +1056,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
               }
             }
 
-            const lastOf = <T,>(v: T | Array<T | null> | null): T | null => {
+            const lastOf = <T>(v: T | Array<T | null> | null): T | null => {
               if (Array.isArray(v)) {
                 for (let i = v.length - 1; i >= 0; i--) if (v[i] != null) return v[i] as T;
                 return null;
@@ -1156,8 +1167,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
         }
 
         const minutesElapsed = (Date.now() - startMs) / MIN;
-        const chequered =
-          (minutesElapsed >= 40 && externalChequered) || minutesElapsed >= 180;
+        const chequered = (minutesElapsed >= 40 && externalChequered) || minutesElapsed >= 180;
 
         const liveScores: Record<string, number> = {};
         let finalizedNow = false;
@@ -1170,10 +1180,7 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
             { data: sprintPreds },
             { data: existingScores },
           ] = await Promise.all([
-            supabaseAdmin
-              .from("profiles")
-              .select("id, created_at")
-              .lt("created_at", race.race_at),
+            supabaseAdmin.from("profiles").select("id, created_at").lt("created_at", race.race_at),
             supabaseAdmin
               .from("predictions")
               .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
@@ -1186,7 +1193,10 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
               .from("sprint_predictions")
               .select("user_id, top8, pole_driver_id")
               .eq("race_id", race.id),
-            supabaseAdmin.from("scores").select("user_id, points, breakdown").eq("race_id", race.id),
+            supabaseAdmin
+              .from("scores")
+              .select("user_id, points, breakdown")
+              .eq("race_id", race.id),
           ]);
 
           const scoreRows = buildRaceScoreRows({

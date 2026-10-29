@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, getTrustedNow, LEAGUE_START_ROUND, racesQuery, type Race } from "@/lib/queries";
+import {
+  driversQuery,
+  getTrustedNow,
+  LEAGUE_START_ROUND,
+  racesQuery,
+  type Race,
+} from "@/lib/queries";
 import { positionPoints, scorePrediction } from "@/lib/scoring";
 import { teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -19,14 +25,21 @@ export const Route = createFileRoute("/paddock")({
       { title: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
       {
         name: "description",
-        content: "See every player's picks once the grid locks, and a colour-coded debrief of where points were won and lost.",
+        content:
+          "See every player's picks once the grid locks, and a colour-coded debrief of where points were won and lost.",
       },
       { property: "og:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
-      { property: "og:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
+      {
+        property: "og:description",
+        content: "Everyone's picks revealed after lock, with a post-race points debrief.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
-      { name: "twitter:description", content: "Everyone's picks revealed after lock, with a post-race points debrief." },
+      {
+        name: "twitter:description",
+        content: "Everyone's picks revealed after lock, with a post-race points debrief.",
+      },
     ],
   }),
   component: Paddock,
@@ -49,13 +62,15 @@ function Paddock() {
   const { data: drivers } = useQuery(driversQuery);
 
   const locked = useMemo(
-    () => (races ?? []).filter((r) => r.round >= LEAGUE_START_ROUND && new Date(r.race_at).getTime() <= getTrustedNow()),
+    () =>
+      (races ?? []).filter(
+        (r) => r.round >= LEAGUE_START_ROUND && new Date(r.race_at).getTime() <= getTrustedNow(),
+      ),
     [races],
   );
   const [raceId, setRaceId] = useState<string | null>(null);
   const [padRef] = useAutoAnimate<HTMLDivElement>();
-  const race: Race | undefined =
-    locked.find((r) => r.id === raceId) ?? locked[locked.length - 1];
+  const race: Race | undefined = locked.find((r) => r.id === raceId) ?? locked[locked.length - 1];
 
   const isRaceLiveCandidate = useMemo(() => {
     if (!race || race.has_results) return false;
@@ -141,11 +156,8 @@ function Paddock() {
 
   const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
   const activeResults =
-    (data?.results?.length ?? 0) > 0
-      ? data!.results
-      : (liveTelemetryQ.data?.results ?? []);
-  const isLiveScoring =
-    !(data?.results?.length) && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
+    (data?.results?.length ?? 0) > 0 ? data!.results : (liveTelemetryQ.data?.results ?? []);
+  const isLiveScoring = !data?.results?.length && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
 
   const finish = new Map<string, number>();
   const dnfs = new Set<string>();
@@ -228,32 +240,33 @@ function Paddock() {
       )}
 
       <div ref={padRef} className="mt-6 space-y-4">
-        {sorted.length > 0 && (() => {
-          const m = (a: (string | null | undefined)[]) => {
-            const c = new Map<string, number>();
-            for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1);
-            return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
-          };
-          const c1 = m(sorted.map((p) => p.top10?.[0]));
-          const cp = m(sorted.map((p) => p.pole_driver_id));
-          const cd = m(sorted.map((p) => p.dnf_driver_id));
-          return (
-            <div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs">
-              <div>
-                <span className="block text-[10px] text-muted-foreground">CROWD P1</span>
-                <b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b>
+        {sorted.length > 0 &&
+          (() => {
+            const m = (a: (string | null | undefined)[]) => {
+              const c = new Map<string, number>();
+              for (const x of a) if (x) c.set(x, (c.get(x) ?? 0) + 1);
+              return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
+            };
+            const c1 = m(sorted.map((p) => p.top10?.[0]));
+            const cp = m(sorted.map((p) => p.pole_driver_id));
+            const cd = m(sorted.map((p) => p.dnf_driver_id));
+            return (
+              <div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs">
+                <div>
+                  <span className="block text-[10px] text-muted-foreground">CROWD P1</span>
+                  <b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-muted-foreground">CROWD POLE</span>
+                  <b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-muted-foreground">CROWD DNF</span>
+                  <b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b>
+                </div>
               </div>
-              <div>
-                <span className="block text-[10px] text-muted-foreground">CROWD POLE</span>
-                <b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b>
-              </div>
-              <div>
-                <span className="block text-[10px] text-muted-foreground">CROWD DNF</span>
-                <b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b>
-              </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
         {sorted.map((p) => {
           const pts = computedPoints.get(p.user_id);
           return (
@@ -287,7 +300,9 @@ function Paddock() {
                       )}
                       style={{ borderColor: teamColor(d?.team ?? null) }}
                     >
-                      <span className="w-6 font-mono text-[11px] text-muted-foreground">P{i + 1}</span>
+                      <span className="w-6 font-mono text-[11px] text-muted-foreground">
+                        P{i + 1}
+                      </span>
                       <span className="font-semibold">{d?.code ?? id}</span>
                       {hasResults && (
                         <span className="ml-auto font-mono text-xs">
@@ -299,11 +314,29 @@ function Paddock() {
                 })}
               </ol>
               <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs">
-                <BonusChip label="Pole" code={byId.get(p.pole_driver_id ?? "")?.code} hit={hasResults ? p.pole_driver_id === poleId : null} pts={3} />
-                <BonusChip label="FL" code={byId.get(p.fastest_lap_driver_id ?? "")?.code} hit={hasResults ? p.fastest_lap_driver_id === flId : null} pts={3} />
-                <BonusChip label="DNF" code={byId.get(p.dnf_driver_id ?? "")?.code} hit={hasResults ? !!p.dnf_driver_id && dnfs.has(p.dnf_driver_id) : null} pts={1} />
+                <BonusChip
+                  label="Pole"
+                  code={byId.get(p.pole_driver_id ?? "")?.code}
+                  hit={hasResults ? p.pole_driver_id === poleId : null}
+                  pts={3}
+                />
+                <BonusChip
+                  label="FL"
+                  code={byId.get(p.fastest_lap_driver_id ?? "")?.code}
+                  hit={hasResults ? p.fastest_lap_driver_id === flId : null}
+                  pts={3}
+                />
+                <BonusChip
+                  label="DNF"
+                  code={byId.get(p.dnf_driver_id ?? "")?.code}
+                  hit={hasResults ? !!p.dnf_driver_id && dnfs.has(p.dnf_driver_id) : null}
+                  pts={1}
+                />
               </div>
-              <AuditTrail entries={data?.logs.get(p.user_id) ?? []} code={(id) => byId.get(id)?.code ?? id} />
+              <AuditTrail
+                entries={data?.logs.get(p.user_id) ?? []}
+                code={(id) => byId.get(id)?.code ?? id}
+              />
             </section>
           );
         })}
@@ -312,7 +345,17 @@ function Paddock() {
   );
 }
 
-function BonusChip({ label, code, hit, pts }: { label: string; code?: string | null | undefined; hit: boolean | null; pts: number }) {
+function BonusChip({
+  label,
+  code,
+  hit,
+  pts,
+}: {
+  label: string;
+  code?: string | null | undefined;
+  hit: boolean | null;
+  pts: number;
+}) {
   return (
     <div
       className={cn(
@@ -328,7 +371,11 @@ function BonusChip({ label, code, hit, pts }: { label: string; code?: string | n
   );
 }
 
-const ACTION_LABEL: Record<string, string> = { locked: "Locked picks", edited: "Edited picks", pole: "Pole pick" };
+const ACTION_LABEL: Record<string, string> = {
+  locked: "Locked picks",
+  edited: "Edited picks",
+  pole: "Pole pick",
+};
 
 function AuditTrail({
   entries,
@@ -348,12 +395,20 @@ function AuditTrail({
   const describe = (c: unknown): string => {
     const ch = (c ?? {}) as Record<string, unknown>;
     const parts: string[] = [];
-    for (const [k, label] of [["pole", "Pole"], ["fl", "FL"], ["dnf", "DNF"]] as const) {
+    for (const [k, label] of [
+      ["pole", "Pole"],
+      ["fl", "FL"],
+      ["dnf", "DNF"],
+    ] as const) {
       const v = ch[k];
-      if (Array.isArray(v)) parts.push(`${label} ${v[0] ? code(String(v[0])) : "\u2014"}\u2192${v[1] ? code(String(v[1])) : "\u2014"}`);
+      if (Array.isArray(v))
+        parts.push(
+          `${label} ${v[0] ? code(String(v[0])) : "\u2014"}\u2192${v[1] ? code(String(v[1])) : "\u2014"}`,
+        );
       else if (typeof v === "string") parts.push(`${label} ${code(v)}`);
     }
-    if (Array.isArray(ch["top10"]) && Array.isArray((ch["top10"] as unknown[])[0])) parts.push("top 10 changed");
+    if (Array.isArray(ch["top10"]) && Array.isArray((ch["top10"] as unknown[])[0]))
+      parts.push("top 10 changed");
     return parts.join(" \u00B7 ");
   };
   return (

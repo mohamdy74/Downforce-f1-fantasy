@@ -33,7 +33,8 @@ function NotFoundComponent() {
         </p>
         <h1 className="mt-1 text-3xl sm:text-4xl">Gravel Trap!</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          You went off the racing line. The corner you are looking for does not exist or has been moved.
+          You went off the racing line. The corner you are looking for does not exist or has been
+          moved.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link
@@ -100,7 +101,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "DOWNFORCE — Fantasy Racing League" },
       {
         name: "description",
-        content: "Predict the top 10, pole, fastest lap and DNF of every Grand Prix. Score points and win the league.",
+        content:
+          "Predict the top 10, pole, fastest lap and DNF of every Grand Prix. Score points and win the league.",
       },
       { property: "og:title", content: "DOWNFORCE — Fantasy Racing League" },
       {
@@ -111,7 +113,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:site_name", content: "DOWNFORCE" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "DOWNFORCE — Fantasy Racing League" },
-      { name: "twitter:description", content: "Predict the top 10, pole, fastest lap and DNF of every Grand Prix. Score points and win the league." },
+      {
+        name: "twitter:description",
+        content:
+          "Predict the top 10, pole, fastest lap and DNF of every Grand Prix. Score points and win the league.",
+      },
       { name: "theme-color", content: "#0E0E12" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
@@ -126,11 +132,41 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
-      { rel: "preload", href: "/assets/fonts/archivo-roman-var.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" },
-      { rel: "preload", href: "/assets/fonts/barlow-400.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" },
-      { rel: "preload", href: "/assets/fonts/barlow-600.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" },
-      { rel: "preload", href: "/assets/fonts/barlow-700.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" },
-      { rel: "preload", href: "/assets/fonts/cairo-badge-var.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" },
+      {
+        rel: "preload",
+        href: "/assets/fonts/archivo-roman-var.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossorigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/assets/fonts/barlow-400.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossorigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/assets/fonts/barlow-600.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossorigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/assets/fonts/barlow-700.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossorigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/assets/fonts/cairo-badge-var.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossorigin: "anonymous",
+      },
     ],
   }),
   shellComponent: RootShell,

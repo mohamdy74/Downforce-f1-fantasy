@@ -83,7 +83,14 @@ function spaced(ctx: Ctx, px: number) {
   }
 }
 
-function fit(ctx: Ctx, text: string, maxW: number, make: (size: number) => string, start: number, min = 18) {
+function fit(
+  ctx: Ctx,
+  text: string,
+  maxW: number,
+  make: (size: number) => string,
+  start: number,
+  min = 18,
+) {
   let size = start;
   ctx.font = make(size);
   while (size > min && ctx.measureText(text).width > maxW) {
@@ -146,7 +153,14 @@ function drawCarbonBg(ctx: Ctx, accentHex: string) {
   ctx.fillStyle = g1;
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-  const g2 = ctx.createRadialGradient(CARD_W * 0.15, CARD_H - 180, 10, CARD_W * 0.15, CARD_H - 180, 620);
+  const g2 = ctx.createRadialGradient(
+    CARD_W * 0.15,
+    CARD_H - 180,
+    10,
+    CARD_W * 0.15,
+    CARD_H - 180,
+    620,
+  );
   g2.addColorStop(0, "rgba(225,6,0,0.18)");
   g2.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g2;
@@ -385,12 +399,7 @@ export function drawPoleCard(ctx: Ctx, d: PoleCardData) {
   const tHex = teamHex(d.driver?.team);
 
   drawCarbonBg(ctx, C.gold);
-  drawHeader(
-    ctx,
-    d.round,
-    d.raceName,
-    d.circuit || "OFFICIAL POLE POSITION PREDICTION",
-  );
+  drawHeader(ctx, d.round, d.raceName, d.circuit || "OFFICIAL POLE POSITION PREDICTION");
 
   const py = 285;
   const ph = 875;

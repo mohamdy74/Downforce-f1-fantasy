@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
-import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint"; import { assertDeadlineOpen } from "@/lib/reminders.functions";
+import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
+import { assertDeadlineOpen } from "@/lib/reminders.functions";
 import {
   SPRINT_MAX_POINTS,
   SPRINT_SLOTS,
@@ -25,7 +26,8 @@ export const Route = createFileRoute("/sprint")({
       { title: "Sprint picks — DOWNFORCE" },
       {
         name: "description",
-        content: "Predict the sprint top 8 and the sprint pole. Up to 9 extra points on sprint weekends.",
+        content:
+          "Predict the sprint top 8 and the sprint pole. Up to 9 extra points on sprint weekends.",
       },
       { property: "og:title", content: "Sprint picks — DOWNFORCE" },
       {
@@ -177,7 +179,13 @@ function Sprint() {
     .sort((a, b) => a.position! - b.position!);
   const actualPole = (results ?? []).find((r) => r.pole)?.driver_id ?? null;
 
-  async function save() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  async function save() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (duplicates) {
       toast.error("Each driver can only appear once in your sprint top 8.");
       return;
@@ -227,7 +235,13 @@ function Sprint() {
     queryClient.invalidateQueries({ queryKey: ["sprint-prediction", race!.id, user!.id] });
   }
 
-  async function savePole() { try { await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint_pole" } }); } catch (e) { toast.error(e instanceof Error ? e.message : "Locked"); return; }
+  async function savePole() {
+    try {
+      await assertDeadlineOpen({ data: { raceId: race!.id, kind: "sprint_pole" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Locked");
+      return;
+    }
     if (pole === EMPTY) {
       toast.error("Choose a sprint pole driver first.");
       return;
@@ -267,8 +281,8 @@ function Sprint() {
       </p>
 
       <p className="mt-3 text-sm text-muted-foreground">
-        Predict the sprint top 8: +1 for every exact position, plus +1 for the sprint pole.
-        Maximum {SPRINT_MAX_POINTS} points, added to this round's total.
+        Predict the sprint top 8: +1 for every exact position, plus +1 for the sprint pole. Maximum{" "}
+        {SPRINT_MAX_POINTS} points, added to this round's total.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -410,7 +424,12 @@ function Sprint() {
                   <span className="ml-auto text-xs text-muted-foreground">
                     your pick: {codeOf(picked)}
                   </span>
-                  <span className={cn("w-8 text-right font-mono font-bold", hit ? "text-success" : "text-muted-foreground")}>
+                  <span
+                    className={cn(
+                      "w-8 text-right font-mono font-bold",
+                      hit ? "text-success" : "text-muted-foreground",
+                    )}
+                  >
                     {hit ? "+1" : "0"}
                   </span>
                 </li>
@@ -449,7 +468,10 @@ function Sprint() {
             <ul className="mt-3 divide-y divide-border">
               {group.preds.map((p) => {
                 const s = hasResults
-                  ? scoreSprint({ top8: p.top8 ?? [], pole_driver_id: p.pole_driver_id }, results ?? [])
+                  ? scoreSprint(
+                      { top8: p.top8 ?? [], pole_driver_id: p.pole_driver_id },
+                      results ?? [],
+                    )
                   : null;
                 return (
                   <li key={p.user_id} className="py-2.5 text-sm">
@@ -458,7 +480,8 @@ function Sprint() {
                       {s && <span className="font-mono font-bold">+{s.total}</span>}
                     </div>
                     <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                      Pole {codeOf(p.pole_driver_id)} · {(p.top8 ?? []).map((id) => codeOf(id)).join(" ") || "no top 8"}
+                      Pole {codeOf(p.pole_driver_id)} ·{" "}
+                      {(p.top8 ?? []).map((id) => codeOf(id)).join(" ") || "no top 8"}
                     </p>
                   </li>
                 );

@@ -7,16 +7,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-
 export const Route = createFileRoute("/h2h")({
   head: () => ({
     meta: [
       { title: "Head-to-head battles — DOWNFORCE" },
-      { name: "description", content: "Compare any two players race by race in the DOWNFORCE league." },
+      {
+        name: "description",
+        content: "Compare any two players race by race in the DOWNFORCE league.",
+      },
       { property: "og:title", content: "Head-to-head battles — DOWNFORCE" },
       { property: "og:description", content: "Who wins the rivalry? Race-by-race 1v1 comparison." },
       { name: "twitter:title", content: "Head-to-head battles — DOWNFORCE" },
-      { name: "twitter:description", content: "Who wins the rivalry? Race-by-race 1v1 comparison." },
+      {
+        name: "twitter:description",
+        content: "Who wins the rivalry? Race-by-race 1v1 comparison.",
+      },
     ],
   }),
   loader: async ({ context }) => {
@@ -112,7 +117,9 @@ function H2H() {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-3xl">Head-to-head</h1>
       {board.length < 2 ? (
-        <p className="mt-6 text-sm text-muted-foreground">Need at least two players for a battle.</p>
+        <p className="mt-6 text-sm text-muted-foreground">
+          Need at least two players for a battle.
+        </p>
       ) : (
         <>
           <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 mt-4 py-1.5 backdrop-blur-md">
@@ -161,13 +168,20 @@ function H2H() {
                   key={r.id}
                   className="tower-row grid grid-cols-[3rem_1fr_3rem] items-center rounded-md px-3 py-2.5"
                 >
-                  <span className={cn("font-mono text-lg font-bold tabular-nums", x > y && "text-gold")}>
+                  <span
+                    className={cn("font-mono text-lg font-bold tabular-nums", x > y && "text-gold")}
+                  >
                     {x}
                   </span>
                   <span className="truncate text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                     R{r.round} · {r.name.replace(" Grand Prix", " GP")}
                   </span>
-                  <span className={cn("text-right font-mono text-lg font-bold tabular-nums", y > x && "text-gold")}>
+                  <span
+                    className={cn(
+                      "text-right font-mono text-lg font-bold tabular-nums",
+                      y > x && "text-gold",
+                    )}
+                  >
                     {y}
                   </span>
                 </div>
@@ -201,7 +215,12 @@ function PlayerStatsCard({
         <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
           Wins
         </p>
-        <p className={cn("mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums", wins > oppWins && "text-gold")}>
+        <p
+          className={cn(
+            "mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums",
+            wins > oppWins && "text-gold",
+          )}
+        >
           {wins}
         </p>
       </div>
@@ -209,7 +228,12 @@ function PlayerStatsCard({
         <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
           Points
         </p>
-        <p className={cn("mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums", points > oppPoints && "text-gold")}>
+        <p
+          className={cn(
+            "mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums",
+            points > oppPoints && "text-gold",
+          )}
+        >
           {points}
         </p>
       </div>
@@ -217,7 +241,12 @@ function PlayerStatsCard({
         <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
           Best
         </p>
-        <p className={cn("mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums", best > oppBest && "text-gold")}>
+        <p
+          className={cn(
+            "mt-0.5 font-mono text-xl sm:text-2xl font-bold tabular-nums",
+            best > oppBest && "text-gold",
+          )}
+        >
           {best}
         </p>
       </div>

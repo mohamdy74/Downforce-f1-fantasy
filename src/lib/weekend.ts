@@ -1,13 +1,7 @@
 /** Shared (client + server safe) types and constants for the race-weekend screen. */
 
 export type SessionType =
-  | "fp1"
-  | "fp2"
-  | "fp3"
-  | "sprint_qualifying"
-  | "sprint"
-  | "qualifying"
-  | "race";
+  "fp1" | "fp2" | "fp3" | "sprint_qualifying" | "sprint" | "qualifying" | "race";
 
 export const SESSION_TYPES: SessionType[] = [
   "fp1",

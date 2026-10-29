@@ -4,7 +4,10 @@
  * Safe for both browser and server bundles (NEVER contains VAPID_PRIVATE_KEY).
  */
 export function cleanVapidKey(val: string | undefined): string {
-  return (val ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+  return (val ?? "")
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
 }
 
 const envObj =
@@ -13,7 +16,8 @@ const envObj =
     : ({} as Record<string, string | undefined>);
 
 const viteEnv =
-  typeof import.meta !== "undefined" && (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+  typeof import.meta !== "undefined" &&
+  (import.meta as unknown as { env?: Record<string, string | undefined> }).env
     ? (import.meta as unknown as { env: Record<string, string | undefined> }).env
     : ({} as Record<string, string | undefined>);
 
@@ -61,10 +65,7 @@ export function hasMatchingApplicationServerKey(
 
 /** A top-10 counts as "submitted" only when all 10 slots are real driver ids (excluding "__none__"). */
 export function isCompleteTop10(top10: unknown): boolean {
-  return (
-    Array.isArray(top10) &&
-    top10.filter((x) => Boolean(x && x !== "__none__")).length === 10
-  );
+  return Array.isArray(top10) && top10.filter((x) => Boolean(x && x !== "__none__")).length === 10;
 }
 
 export type PushSubscriptionRecord = {

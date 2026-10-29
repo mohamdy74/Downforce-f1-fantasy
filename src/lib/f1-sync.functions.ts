@@ -2,7 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import { type ResultRow } from "./scoring";
-import { buildRaceScoreRows, type ProfileRecord, type PredictionRecord, type SprintPredictionRecord, type ScoreRecord } from "./roundScoring";
+import {
+  buildRaceScoreRows,
+  type ProfileRecord,
+  type PredictionRecord,
+  type SprintPredictionRecord,
+  type ScoreRecord,
+} from "./roundScoring";
 import { type SprintResultRow } from "./sprintScoring";
 import { getJson, toIso, isClassifiedFinishStatus } from "./f1-parsers";
 import {
@@ -43,16 +49,22 @@ type ErgastRace = {
   Sprint?: ErgastSession | undefined;
   SprintQualifying?: ErgastSession | undefined;
   SprintShootout?: ErgastSession | undefined;
-  Results?: Array<{
-    position: string;
-    grid: string;
-    status: string;
-    Driver: { driverId: string; code?: string | undefined; givenName: string; familyName: string };
-    Constructor?: { name: string } | undefined;
-    FastestLap?: { rank?: string | undefined } | undefined;
-  }> | undefined;
+  Results?:
+    | Array<{
+        position: string;
+        grid: string;
+        status: string;
+        Driver: {
+          driverId: string;
+          code?: string | undefined;
+          givenName: string;
+          familyName: string;
+        };
+        Constructor?: { name: string } | undefined;
+        FastestLap?: { rank?: string | undefined } | undefined;
+      }>
+    | undefined;
 };
-
 
 const userSyncCalls = new Map<string, number>();
 let inFlightSyncLock = false;
@@ -98,23 +110,23 @@ export async function runSeasonSync(
   supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
   opts: { force: boolean },
 ): Promise<{ skipped: boolean; races: number; scored: number }> {
-    if (!opts.force && inFlightSyncLock) {
-      return { skipped: true, races: 0, scored: 0 };
-    }
+  if (!opts.force && inFlightSyncLock) {
+    return { skipped: true, races: 0, scored: 0 };
+  }
 
-    const { data: state } = await supabaseAdmin
-      .from("sync_state")
-      .select("synced_at")
-      .eq("key", `season-${SEASON}`)
-      .maybeSingle();
+  const { data: state } = await supabaseAdmin
+    .from("sync_state")
+    .select("synced_at")
+    .eq("key", `season-${SEASON}`)
+    .maybeSingle();
 
-    if (!opts.force && state?.synced_at) {
-      const age = Date.now() - new Date(state.synced_at).getTime();
-      if (age < STALE_MS) return { skipped: true, races: 0, scored: 0 };
-    }
+  if (!opts.force && state?.synced_at) {
+    const age = Date.now() - new Date(state.synced_at).getTime();
+    if (age < STALE_MS) return { skipped: true, races: 0, scored: 0 };
+  }
 
-    inFlightSyncLock = true;
-    try {
+  inFlightSyncLock = true;
+  try {
     // ---- Calendar + Drivers standings (independent upstream calls, fetched in parallel) ----
     const [calendar, standings] = await Promise.all([
       getJson<{
@@ -147,10 +159,7 @@ export async function runSeasonSync(
           .from("races")
           .select("id, round, race_at, qualifying_at")
           .eq("season", SEASON),
-        supabaseAdmin
-          .from("sync_state")
-          .select("key")
-          .like("key", "deadline_override:%"),
+        supabaseAdmin.from("sync_state").select("key").like("key", "deadline_override:%"),
       ]);
 
       const overriddenIds = new Set(
@@ -239,11 +248,14 @@ export async function runSeasonSync(
           Array.from({ length: Math.max(pageCount - 1, 0) }, (_, i) =>
             getJson<{
               MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
-            }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${(i + 1) * pageSize}`),
+            }>(
+              `${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${(i + 1) * pageSize}`,
+            ),
           ),
         );
         for (const race of page0.MRData.RaceTable.Races) mergeRace(race);
-        for (const page of rest) for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
+        for (const page of rest)
+          for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
       }
     } else {
       // Steady state: one small per-round request for each round that could have new data
@@ -254,7 +266,8 @@ export async function runSeasonSync(
           }>(`${API}/${SEASON}/${round}/results/?format=json&limit=${pageSize}`),
         ),
       );
-      for (const page of pages) for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
+      for (const page of pages)
+        for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
     }
 
     // Batched writes: 2 round trips instead of 2 per stored race
@@ -287,7 +300,9 @@ export async function runSeasonSync(
       roundsWithFreshResults.push(Number(race.round));
     }
     if (allResultRows.length) {
-      await supabaseAdmin.from("race_results").upsert(allResultRows, { onConflict: "race_id,driver_id" });
+      await supabaseAdmin
+        .from("race_results")
+        .upsert(allResultRows, { onConflict: "race_id,driver_id" });
     }
     if (roundsWithFreshResults.length) {
       const ids = roundsWithFreshResults
@@ -316,8 +331,10 @@ export async function runSeasonSync(
       );
 
     return { skipped: false as const, races: races.length, scored: racesWithResults.length };
-    } finally { inFlightSyncLock = false; }
+  } finally {
+    inFlightSyncLock = false;
   }
+}
 
 export async function checkAndSendPushReminders(
   supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
@@ -373,11 +390,7 @@ export async function checkAndSendPushReminders(
 
         const doneUsers = new Set(
           (preds ?? [])
-            .filter((p) =>
-              t.type === "pole"
-                ? !!p.pole_driver_id
-                : isCompleteTop10(p.top10),
-            )
+            .filter((p) => (t.type === "pole" ? !!p.pole_driver_id : isCompleteTop10(p.top10)))
             .map((p) => p.user_id),
         );
 
@@ -400,7 +413,9 @@ export async function checkAndSendPushReminders(
         const deadKeys: string[] = [];
         const pendingSubs = subRows.flatMap((r) => {
           const parsed = parsePushSubscriptionKey(r.key);
-          return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId) ? [parsed] : [];
+          return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId)
+            ? [parsed]
+            : [];
         });
         const BATCH_SIZE = 25;
         const newlyNotified = new Set<string>();
@@ -413,7 +428,12 @@ export async function checkAndSendPushReminders(
                 if (res.ok) {
                   totalSent++;
                   newlyNotified.add(sub.userId);
-                } else if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 410) {
+                } else if (
+                  res.status === 401 ||
+                  res.status === 403 ||
+                  res.status === 404 ||
+                  res.status === 410
+                ) {
                   deadKeys.push(sub.rawKey);
                 }
               } catch (error) {
@@ -548,7 +568,8 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
     if (!iso || !sessions.length) return undefined;
     const t = new Date(iso).getTime();
     return sessions.find(
-      (s) => s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 12 * 3600_000,
+      (s) =>
+        s.session_name === name && Math.abs(new Date(s.date_start).getTime() - t) < 12 * 3600_000,
     );
   };
 
@@ -651,9 +672,13 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
         fetchFromEspnScoreboard("race", race.race_at, lookup),
       ]);
       const chosen =
-        f1Snap && (f1Snap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) && f1Snap.rows.length >= 10
+        f1Snap &&
+        (f1Snap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) &&
+        f1Snap.rows.length >= 10
           ? f1Snap
-          : espnSnap && (espnSnap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) && espnSnap.rows.length >= 10
+          : espnSnap &&
+              (espnSnap.chequeredFlag || raceElapsedMs >= RACE_MAX_DONE_MS) &&
+              espnSnap.rows.length >= 10
             ? espnSnap
             : null;
       if (chosen) {
@@ -667,7 +692,9 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
               position: finished ? r.position : null,
               status: finished ? "Finished" : "Retired",
               finished,
-              fastest_lap: chosen.fastestLapDriverId ? r.driverId === chosen.fastestLapDriverId : false,
+              fastest_lap: chosen.fastestLapDriverId
+                ? r.driverId === chosen.fastestLapDriverId
+                : false,
               pole: poleDriverId ? r.driverId === poleDriverId : false,
             };
           });
@@ -675,7 +702,9 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
     }
 
     if (finalRows.length >= 10) {
-      await supabaseAdmin.from("race_results").upsert(finalRows, { onConflict: "race_id,driver_id" });
+      await supabaseAdmin
+        .from("race_results")
+        .upsert(finalRows, { onConflict: "race_id,driver_id" });
       await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
       finalized.add(race.id);
     }
@@ -685,12 +714,14 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
 
 type ErgastSprintRace = {
   round: string;
-  SprintResults?: Array<{
-    position: string;
-    grid: string;
-    status: string;
-    Driver: { driverId: string };
-  }> | undefined;
+  SprintResults?:
+    | Array<{
+        position: string;
+        grid: string;
+        status: string;
+        Driver: { driverId: string };
+      }>
+    | undefined;
 };
 
 async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRounds: number[]) {
@@ -709,7 +740,8 @@ async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRou
   for (const page of pages) {
     for (const race of page?.MRData.RaceTable.Races ?? []) {
       const existing = byRound.get(race.round);
-      if (existing) existing.SprintResults = [...(existing.SprintResults ?? []), ...(race.SprintResults ?? [])];
+      if (existing)
+        existing.SprintResults = [...(existing.SprintResults ?? []), ...(race.SprintResults ?? [])];
       else byRound.set(race.round, race);
     }
   }
