@@ -40,8 +40,18 @@ jobs:
       - name: Build (vite build)
         # Full production build so bundler-level breakage (vite/nitro/rolldown) is
         # caught in CI. Lovable deploys on push regardless of CI, so a red build
-        # here is the early warning that prod is broken.
-        run: bun run build
+        # here is the early warning that prod is broken. On failure, surface the
+        # key error lines as annotations (raw logs need auth to read).
+        run: |
+          set +e
+          bun run build > build.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            grep -m 6 -iE "error|cannot|failed|✗" build.log | cut -c1-220 | while IFS= read -r line; do
+              echo "::error::BUILD: $line"
+            done
+            exit $status
+          fi
         env:
           SUPABASE_URL: https://ci-placeholder.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-key
