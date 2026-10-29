@@ -47,7 +47,7 @@ jobs:
           bun run build > build.log 2>&1
           status=$?
           if [ $status -ne 0 ]; then
-            tail -n 18 build.log | cut -c1-220 | while IFS= read -r line; do
+            { grep -B 6 -A 14 -m 1 -iE "server-only|import-protection" build.log; echo "----- tail -----"; tail -n 12 build.log; } | grep -v "^--$" | head -n 36 | cut -c1-220 | while IFS= read -r line; do
               [ -n "$line" ] && echo "::error::BUILD: ${line//%/%25}"
             done
             exit $status
