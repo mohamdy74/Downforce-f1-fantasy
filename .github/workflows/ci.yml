@@ -8,6 +8,7 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +19,11 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: bun install
+        # bun.lock (Oct 1) and package-lock.json (Oct 14) predate recent
+        # package.json dependency changes; resolve fresh from package.json in CI.
+        run: |
+          rm -f bun.lock package-lock.json
+          bun install
 
       - name: Type-check (tsc --noEmit)
         run: bun run typecheck
