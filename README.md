@@ -3,7 +3,6 @@
 > Predict the Top 10. Beat your friends. Miss the lock and eat a −25 penalty.
 
 **Live app**: https://downforce.lovable.app
-**Android APK**: [DOWNFORCE Official Android App (2026 Season)](https://github.com/mohamdy74/downforce-f1-fantasy/releases/tag/latest)
 
 ## The game
 
