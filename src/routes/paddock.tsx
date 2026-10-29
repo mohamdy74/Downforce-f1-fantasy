@@ -211,7 +211,7 @@ function Paddock() {
                 key={r.id}
                 onClick={() => setRaceId(r.id)}
                 className={cn(
-                  "carbon-panel shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-xs font-semibold transition-all",
+                  "carbon-panel shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-xs font-semibold transition-colors",
                   r.id === race?.id
                     ? "border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(225,6,0,0.25)]"
                     : "border-border/70 text-muted-foreground hover:text-foreground",

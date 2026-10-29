@@ -82,7 +82,10 @@ function useNow(ms = 15_000) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(getTrustedNow());
-    const t = setInterval(() => setNow(getTrustedNow()), ms);
+    // Tick only while the tab is visible; the clock catches up on next focus.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") setNow(getTrustedNow());
+    }, ms);
     return () => clearInterval(t);
   }, [ms]);
   return now;

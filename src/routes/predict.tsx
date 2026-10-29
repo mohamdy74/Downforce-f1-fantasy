@@ -644,7 +644,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 function TrackStatus({ target }: { target: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") setNow(Date.now());
+    }, 30_000);
     return () => clearInterval(t);
   }, []);
   const left = new Date(target).getTime() - now;
