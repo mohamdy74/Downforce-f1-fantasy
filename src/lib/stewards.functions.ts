@@ -342,7 +342,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         if (!m) continue;
         const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
         const res = await sendNativeWebPush(sub, {
-          title: "ðŸŽï¸ Stewards Test Alert",
+          title: "🏎️ Stewards Test Alert",
           body: "Push notifications are 100% working on your device!",
           tag: "dfr-test-" + Date.now(),
           url: "/stewards",
@@ -383,7 +383,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
       const missingUsers = (profiles ?? []).filter((p) => !completedUsers.has(p.id));
       const payloadObj = {
-        title: d.title || "â° DOWNFORCE â€” Picks Reminder!",
+        title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
         body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
         tag: "dfr-stewards-" + Date.now(),
         url: "/predict",

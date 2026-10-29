@@ -129,7 +129,7 @@ export function PushOptIn() {
       if (ok) {
         toast.success("Race reminders enabled on this device!");
         const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("ðŸŽï¸ DOWNFORCE Alerts Active!", {
+        reg.showNotification("🏎️ DOWNFORCE Alerts Active!", {
           body: "You will get notified 2h & 30m before Qualifying and Race lock.",
           icon: "/favicon.png",
           badge: "/favicon.png",
@@ -161,11 +161,11 @@ export function PushOptIn() {
       <div className="flex items-center gap-2.5">
         <Bell className="h-4 w-4 shrink-0 text-gold" />
         <span className="text-xs font-medium">
-          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a âˆ’25 penalty
+          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a −25 penalty
         </span>
       </div>
       <Button size="sm" variant="secondary" disabled={busy} onClick={enableAlerts} className="h-8 text-xs font-bold">
-        {busy ? "Enabling..." : "Enable Alerts ðŸ””"}
+        {busy ? "Enabling..." : "Enable Alerts 🔔"}
       </Button>
     </div>
   );

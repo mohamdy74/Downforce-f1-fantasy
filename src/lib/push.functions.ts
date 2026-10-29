@@ -75,8 +75,8 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
     const payloadObj = {
       title:
         windowTag === "30m"
-          ? `ðŸš¨ 30 mins left â€” ${race.name}!`
-          : `â° 2 hours to ${race.name}!`,
+          ? `🚨 30 mins left — ${race.name}!`
+          : `⏰ 2 hours to ${race.name}!`,
       body:
         windowTag === "30m"
           ? "Final call! You still haven't locked in your Top 10. Tap here now before picks lock (-25 pts)!"
