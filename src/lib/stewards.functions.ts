@@ -397,7 +397,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           } else if (res.status === 404 || res.status === 410) {
             deadKeys.push(r.key);
           }
-        } catch {}
+        } catch { /* individual push failures are tolerated; dead keys cleaned below */ }
       });
 
       await Promise.allSettled(tasks);
@@ -456,7 +456,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       supabaseAdmin.from("sync_state").delete().like("key", `push_sub:${uid}:%`),
     ]);
     await supabaseAdmin.from("profiles").delete().eq("id", uid);
-    await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
+    await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => undefined);
     return { ok: true };
   });
 
