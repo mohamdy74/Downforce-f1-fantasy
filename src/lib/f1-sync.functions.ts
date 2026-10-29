@@ -119,10 +119,30 @@ export async function runSeasonSync(
 
     inFlightSyncLock = true;
     try {
-    // ---- Calendar (preserving Steward custom deadline overrides!) ----
-    const calendar = await getJson<{
-      MRData: { RaceTable: { Races: ErgastRace[] } };
-    }>(`${API}/${SEASON}/races/?format=json&limit=40`);
+    // ---- Calendar + Drivers standings (independent upstream calls, fetched in parallel) ----
+    const [calendar, standings] = await Promise.all([
+      getJson<{
+        MRData: { RaceTable: { Races: ErgastRace[] } };
+      }>(`${API}/${SEASON}/races/?format=json&limit=40`),
+      getJson<{
+        MRData: {
+          StandingsTable: {
+            StandingsLists: Array<{
+              DriverStandings: Array<{
+                Driver: {
+                  driverId: string;
+                  code?: string | undefined;
+                  permanentNumber?: string | undefined;
+                  givenName: string;
+                  familyName: string;
+                };
+                Constructors: Array<{ name: string }>;
+              }>;
+            }>;
+          };
+        };
+      }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`),
+    ]);
     const races = calendar?.MRData.RaceTable.Races ?? [];
 
     if (races.length) {
@@ -166,25 +186,6 @@ export async function runSeasonSync(
     }
 
     // ---- Drivers ----
-    const standings = await getJson<{
-      MRData: {
-        StandingsTable: {
-          StandingsLists: Array<{
-            DriverStandings: Array<{
-              Driver: {
-                driverId: string;
-                code?: string | undefined;
-                permanentNumber?: string | undefined;
-                givenName: string;
-                familyName: string;
-              };
-              Constructors: Array<{ name: string }>;
-            }>;
-          }>;
-        };
-      };
-    }>(`${API}/${SEASON}/driverstandings/?format=json&limit=60`);
-
     const entries = (
       standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
     ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
@@ -202,39 +203,82 @@ export async function runSeasonSync(
       );
     }
 
-    // ---- Results ----
-    const racesWithResults: ErgastRace[] = [];
-    const pageSize = 100;
-    let offset = 0;
-    let total = Infinity;
-    while (offset < total && offset < 2000) {
-      const page = await getJson<{
-        MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
-      }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${offset}`);
-      if (!page) break;
-      total = Number(page.MRData.total);
-      for (const race of page.MRData.RaceTable.Races) {
-        const existing = racesWithResults.find((r) => r.round === race.round);
-        if (existing) existing.Results = [...(existing.Results ?? []), ...(race.Results ?? [])];
-        else racesWithResults.push(race);
-      }
-      offset += pageSize;
-    }
-
+    // ---- Results (targeted: only fetch rounds that can have new data) ----
     const { data: dbRaces } = await supabaseAdmin
       .from("races")
-      .select("id, round")
+      .select("id, round, has_results, race_at, has_sprint")
       .eq("season", SEASON);
     const roundToId = new Map((dbRaces ?? []).map((r) => [r.round, r.id]));
+    const nowMs = Date.now();
+    const pendingRounds = (dbRaces ?? [])
+      .filter((r) => !r.has_results && new Date(r.race_at).getTime() < nowMs)
+      .map((r) => Number(r.round));
+    const completedRounds = (dbRaces ?? [])
+      .filter((r) => r.has_results)
+      .map((r) => Number(r.round));
+    const lastCompletedRound = completedRounds.length ? Math.max(...completedRounds) : 0;
+    const targetRounds = new Set<number>(pendingRounds);
+    if (lastCompletedRound > 0) targetRounds.add(lastCompletedRound);
+    const sprintTargetRounds = (dbRaces ?? [])
+      .filter((r) => r.has_sprint && targetRounds.has(Number(r.round)))
+      .map((r) => Number(r.round));
 
+    const racesWithResults: ErgastRace[] = [];
+    const pageSize = 100;
+    const mergeRace = (race: ErgastRace) => {
+      const existing = racesWithResults.find((r) => r.round === race.round);
+      if (existing) existing.Results = [...(existing.Results ?? []), ...(race.Results ?? [])];
+      else racesWithResults.push(race);
+    };
+
+    if (pendingRounds.length > 3) {
+      // First sync / big backfill: paginate the whole season, remaining pages in parallel
+      const page0 = await getJson<{
+        MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
+      }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=0`);
+      if (page0) {
+        const total = Number(page0.MRData.total);
+        const pageCount = Math.min(Math.ceil(total / pageSize), 20);
+        const rest = await Promise.all(
+          Array.from({ length: Math.max(pageCount - 1, 0) }, (_, i) =>
+            getJson<{
+              MRData: { total: string; RaceTable: { Races: ErgastRace[] } };
+            }>(`${API}/${SEASON}/results/?format=json&limit=${pageSize}&offset=${(i + 1) * pageSize}`),
+          ),
+        );
+        for (const race of page0.MRData.RaceTable.Races) mergeRace(race);
+        for (const page of rest) for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
+      }
+    } else {
+      // Steady state: one small per-round request for each round that could have new data
+      const pages = await Promise.all(
+        Array.from(targetRounds, (round) =>
+          getJson<{
+            MRData: { RaceTable: { Races: ErgastRace[] } };
+          }>(`${API}/${SEASON}/${round}/results/?format=json&limit=${pageSize}`),
+        ),
+      );
+      for (const page of pages) for (const race of page?.MRData.RaceTable.Races ?? []) mergeRace(race);
+    }
+
+    // Batched writes: 2 round trips instead of 2 per stored race
+    const allResultRows: Array<{
+      race_id: string;
+      driver_id: string;
+      position: number | null;
+      status: string;
+      finished: boolean;
+      fastest_lap: boolean;
+      pole: boolean;
+    }> = [];
+    const roundsWithFreshResults: number[] = [];
     for (const race of racesWithResults) {
       const raceId = roundToId.get(Number(race.round));
       if (!raceId || !race.Results?.length) continue;
-
-      const rows = race.Results.map((res) => {
+      for (const res of race.Results) {
         const status = res.status ?? "";
         const finished = isClassifiedFinishStatus(status, true);
-        return {
+        allResultRows.push({
           race_id: raceId,
           driver_id: res.Driver.driverId,
           position: finished ? Number(res.position) : null,
@@ -242,18 +286,31 @@ export async function runSeasonSync(
           finished,
           fastest_lap: res.FastestLap?.rank === "1",
           pole: res.grid === "1",
-        };
-      });
-
-      await supabaseAdmin
-        .from("race_results")
-        .upsert(rows, { onConflict: "race_id,driver_id" });
-      await supabaseAdmin.from("races").update({ has_results: true }).eq("id", raceId);
+        });
+      }
+      roundsWithFreshResults.push(Number(race.round));
+    }
+    if (allResultRows.length) {
+      await supabaseAdmin.from("race_results").upsert(allResultRows, { onConflict: "race_id,driver_id" });
+    }
+    if (roundsWithFreshResults.length) {
+      const ids = roundsWithFreshResults
+        .map((rd) => roundToId.get(rd))
+        .filter((x): x is string => !!x);
+      await supabaseAdmin.from("races").update({ has_results: true }).in("id", ids);
     }
 
-    await syncSprintResults(roundToId);
-    await openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round))));
-    await scoreAllRaces();
+    await syncSprintResults(roundToId, sprintTargetRounds);
+    const fallbackFinalized = await openF1Fallback(
+      new Set(racesWithResults.map((r) => Number(r.round))),
+    );
+    const scoreTargets = new Set<string>();
+    for (const round of targetRounds) {
+      const id = roundToId.get(round);
+      if (id) scoreTargets.add(id);
+    }
+    for (const id of fallbackFinalized) scoreTargets.add(id);
+    await scoreAllRaces(scoreTargets);
 
     await supabaseAdmin
       .from("sync_state")
@@ -368,7 +425,7 @@ export async function checkAndSendPushReminders(
   return totalSent;
 }
 
-async function scoreAllRaces() {
+async function scoreAllRaces(targetRaceIds?: Set<string>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: races } = await supabaseAdmin
@@ -378,7 +435,18 @@ async function scoreAllRaces() {
     .eq("has_results", true);
   if (!races?.length) return;
 
-  for (const race of races) {
+  // Score only races whose results may have changed this sync (or that were
+  // never scored). Untouched rounds keep their stored scores — which also
+  // guarantees Steward manual score overrides are never clobbered.
+  let toScore = races;
+  if (targetRaceIds) {
+    const { data: scoredRows } = await supabaseAdmin.from("scores").select("race_id");
+    const scoredIds = new Set((scoredRows ?? []).map((r) => r.race_id as string));
+    toScore = races.filter((r) => targetRaceIds.has(r.id) || !scoredIds.has(r.id));
+  }
+  if (!toScore.length) return;
+
+  for (const race of toScore) {
     const [
       { data: profiles },
       { data: results },
@@ -440,9 +508,10 @@ type OF1Result = {
   dsq?: boolean | undefined;
 };
 
-async function openF1Fallback(officialRounds: Set<number>) {
+async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
+  const finalized = new Set<string>();
 
   const { data: pending } = await supabaseAdmin
     .from("races")
@@ -452,7 +521,7 @@ async function openF1Fallback(officialRounds: Set<number>) {
     .lte("race_at", new Date(now - RACE_MIN_START_MS).toISOString())
     .gte("race_at", new Date(now - FALLBACK_WINDOW_MS).toISOString());
   const races = (pending ?? []).filter((r) => !officialRounds.has(r.round));
-  if (!races.length) return;
+  if (!races.length) return finalized;
 
   const { data: drivers } = await supabaseAdmin
     .from("drivers")
@@ -593,8 +662,10 @@ async function openF1Fallback(officialRounds: Set<number>) {
     if (finalRows.length >= 10) {
       await supabaseAdmin.from("race_results").upsert(finalRows, { onConflict: "race_id,driver_id" });
       await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
+      finalized.add(race.id);
     }
   }
+  return finalized;
 }
 
 type ErgastSprintRace = {
@@ -607,25 +678,25 @@ type ErgastSprintRace = {
   }> | undefined;
 };
 
-async function syncSprintResults(roundToId: Map<number, string>) {
+async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRounds: number[]) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const byRound = new Map<string, ErgastSprintRace>();
-  const pageSize = 100;
-  let offset = 0;
-  let total = Infinity;
-  while (offset < total && offset < 1000) {
-    const page = await getJson<{
-      MRData: { total: string; RaceTable: { Races: ErgastSprintRace[] } };
-    }>(`${API}/${SEASON}/sprint/?format=json&limit=${pageSize}&offset=${offset}`);
-    if (!page) break;
-    total = Number(page.MRData.total);
-    for (const race of page.MRData.RaceTable.Races) {
+  if (!sprintTargetRounds.length) return;
+  // Steady state: one small per-round request per sprint weekend in the target set
+  const pages = await Promise.all(
+    sprintTargetRounds.map((round) =>
+      getJson<{
+        MRData: { RaceTable: { Races: ErgastSprintRace[] } };
+      }>(`${API}/${SEASON}/${round}/sprint/?format=json&limit=100`),
+    ),
+  );
+  for (const page of pages) {
+    for (const race of page?.MRData.RaceTable.Races ?? []) {
       const existing = byRound.get(race.round);
       if (existing) existing.SprintResults = [...(existing.SprintResults ?? []), ...(race.SprintResults ?? [])];
       else byRound.set(race.round, race);
     }
-    offset += pageSize;
   }
 
   for (const race of byRound.values()) {
