@@ -84,7 +84,9 @@ export const syncF1Data = createServerFn({ method: "POST" })
       return { skipped: true as const };
     }
 
-    await checkAndSendPushReminders(supabaseAdmin).catch(() => {});
+    await checkAndSendPushReminders(supabaseAdmin).catch((error) => {
+      console.error("[f1-sync.functions] Push reminder check failed:", error);
+    });
 
     const { data: state } = await supabaseAdmin
       .from("sync_state")

@@ -12,7 +12,9 @@ async function syncBrowserSubscription(): Promise<boolean> {
     return false;
   }
   const reg = await navigator.serviceWorker.register("/sw.js");
-  await reg.update().catch(() => {});
+  await reg.update().catch((error) => {
+    console.error("[PushOptIn] Service Worker update failed:", error);
+  });
   const readyReg = await navigator.serviceWorker.ready;
 
   let sub = await readyReg.pushManager.getSubscription();
@@ -47,7 +49,9 @@ export function PushOptIn() {
     }
     setPerm(Notification.permission);
     if (user && Notification.permission === "granted") {
-      syncBrowserSubscription().catch(() => {});
+      syncBrowserSubscription().catch((error) => {
+        console.error("[PushOptIn] Subscription sync failed:", error);
+      });
     }
   }, [user?.id]);
 
@@ -71,7 +75,9 @@ export function PushOptIn() {
           icon: "/favicon.png",
           badge: "/favicon.png",
           tag: "downforce-welcome",
-        }).catch(() => {});
+        }).catch((error) => {
+          console.error("[PushOptIn] Notification display failed:", error);
+        });;
       }
     } catch {
       toast.error("Could not activate push alerts on this browser.");

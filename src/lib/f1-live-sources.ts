@@ -26,15 +26,14 @@ export type DriverRef = {
  * resolves cleanly even if car numbers differ (#1 vs #3) or an FP1 rookie is on track.
  */
 const FALLBACK_2026_GRID: DriverRef[] = [
-  { id: "max_verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull", number: 1 },
-  { id: "max_verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull", number: 3 },
-  { id: "hadjar", code: "HAD", full_name: "Isack Hadjar", team: "Red Bull", number: 6 },
+  { id: "verstappen", code: "VER", full_name: "Max Verstappen", team: "Red Bull Racing", number: 1 },
+  { id: "hadjar", code: "HAD", full_name: "Isack Hadjar", team: "Red Bull Racing", number: 6 },
   { id: "leclerc", code: "LEC", full_name: "Charles Leclerc", team: "Ferrari", number: 16 },
   { id: "hamilton", code: "HAM", full_name: "Lewis Hamilton", team: "Ferrari", number: 44 },
   { id: "norris", code: "NOR", full_name: "Lando Norris", team: "McLaren", number: 4 },
   { id: "piastri", code: "PIA", full_name: "Oscar Piastri", team: "McLaren", number: 81 },
   { id: "russell", code: "RUS", full_name: "George Russell", team: "Mercedes", number: 63 },
-  { id: "antonelli", code: "ANT", full_name: "Kimi Antonelli", team: "Mercedes", number: 12 },
+  { id: "antonelli", code: "ANT", full_name: "Andrea Kimi Antonelli", team: "Mercedes", number: 12 },
   { id: "alonso", code: "ALO", full_name: "Fernando Alonso", team: "Aston Martin", number: 14 },
   { id: "stroll", code: "STR", full_name: "Lance Stroll", team: "Aston Martin", number: 18 },
   { id: "gasly", code: "GAS", full_name: "Pierre Gasly", team: "Alpine", number: 10 },
@@ -43,14 +42,15 @@ const FALLBACK_2026_GRID: DriverRef[] = [
   { id: "albon", code: "ALB", full_name: "Alexander Albon", team: "Williams", number: 23 },
   { id: "sainz", code: "SAI", full_name: "Carlos Sainz", team: "Williams", number: 55 },
   { id: "lawson", code: "LAW", full_name: "Liam Lawson", team: "Racing Bulls", number: 30 },
-  { id: "lindblad", code: "LIN", full_name: "Arvid Lindblad", team: "Racing Bulls", number: 40 },
-  { id: "ocon", code: "OCO", full_name: "Esteban Ocon", team: "Haas", number: 31 },
-  { id: "bearman", code: "BEA", full_name: "Oliver Bearman", team: "Haas", number: 87 },
+  { id: "lindblad", code: "LIN", full_name: "Arvid Lindblad", team: "Racing Bulls", number: 41 },
+  { id: "ocon", code: "OCO", full_name: "Esteban Ocon", team: "Haas F1 Team", number: 31 },
+  { id: "bearman", code: "BEA", full_name: "Oliver Bearman", team: "Haas F1 Team", number: 87 },
   { id: "hulkenberg", code: "HUL", full_name: "Nico Hulkenberg", team: "Audi", number: 27 },
   { id: "bortoleto", code: "BOR", full_name: "Gabriel Bortoleto", team: "Audi", number: 5 },
   { id: "bottas", code: "BOT", full_name: "Valtteri Bottas", team: "Cadillac", number: 77 },
   { id: "perez", code: "PER", full_name: "Sergio Perez", team: "Cadillac", number: 11 },
   { id: "crawford", code: "CRA", full_name: "Jak Crawford", team: "Aston Martin", number: 34 },
+  { id: "tsunoda", code: "TSU", full_name: "Yuki Tsunoda", team: "Racing Bulls", number: 22 },
 ];
 
 export type DriverLookup = {

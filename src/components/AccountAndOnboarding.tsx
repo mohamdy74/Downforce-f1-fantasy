@@ -149,7 +149,9 @@ export function AccountAndOnboarding() {
             body: "You will be notified 2h & 30m before Qualifying and Race lock.",
             icon: "/favicon.png",
           })
-          .catch(() => {});
+          .catch((error) => {
+            console.error("[AccountAndOnboarding] localStorage write failed:", error);
+          });
         toast.success("Race alerts enabled!");
       }
       setStep(3);

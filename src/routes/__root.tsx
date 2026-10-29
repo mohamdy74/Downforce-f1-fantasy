@@ -157,7 +157,9 @@ function RootComponent() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.register("/sw.js").catch((error) => {
+        console.error("[__root.tsx] Service Worker registration failed:", error);
+      });
     }
   }, []);
 
