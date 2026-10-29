@@ -29,13 +29,41 @@ jobs:
           bun install || (echo '### bun install failed — retrying without the 24h supply-chain guard (CI sandbox only) ###' && rm -f bunfig.toml && bun install)
 
       - name: Type-check (tsc --noEmit)
-        run: bun run typecheck
+        # On failure, surface the TS errors as annotations (raw logs need auth).
+        run: |
+          set +e
+          bun run typecheck > typecheck.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            { grep -E "error TS" typecheck.log; echo "----- tail -----"; tail -n 16 typecheck.log; } | grep -v "^--$" | head -n 30 | cut -c1-220 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::TSC: ${line//%/%25}"
+            done
+            exit $status
+          fi
 
       - name: Contract tests (characterization)
-        run: node --test tests/characterization.test.mjs
+        run: |
+          set +e
+          node --test tests/characterization.test.mjs > char.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            { grep -E "not ok|AssertionError|failureType" -B2 -A8 char.log; echo "----- tail -----"; tail -n 14 char.log; } | grep -v "^--$" | head -n 30 | cut -c1-220 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::CHAR: ${line//%/%25}"
+            done
+            exit $status
+          fi
 
       - name: Regression tests (real src modules)
-        run: bun test tests/modules.test.mjs
+        run: |
+          set +e
+          bun test tests/modules.test.mjs > modules.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            { grep -E "not ok|\(fail\)|error:" -B2 -A8 modules.log; echo "----- tail -----"; tail -n 14 modules.log; } | grep -v "^--$" | head -n 30 | cut -c1-220 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::MODULES: ${line//%/%25}"
+            done
+            exit $status
+          fi
 
       - name: Build (vite build)
         # Full production build so bundler-level breakage (vite/nitro/rolldown) is
@@ -61,4 +89,13 @@ jobs:
       # The auto-format bot keeps the baseline prettier-clean, so lint is
       # now a hard gate: any new error fails the build.
       - name: Lint
-        run: bun run lint
+        run: |
+          set +e
+          bun run lint > lint.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            { grep -E " error " -B2 -A4 lint.log; echo "----- tail -----"; tail -n 10 lint.log; } | grep -v "^--$" | head -n 30 | cut -c1-220 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::LINT: ${line//%/%25}"
+            done
+            exit $status
+          fi
