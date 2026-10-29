@@ -198,7 +198,7 @@ function Predict() {
   if (loading) {
     return (
       <Shell>
-        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+        <div role="status" aria-label="Loading prediction page" className="h-4 w-24 animate-pulse rounded bg-muted" />
         <div className="mt-3 h-8 w-64 animate-pulse rounded bg-muted" />
         <div className="mt-4 h-12 w-full animate-pulse rounded-md bg-muted/60" />
         <div className="mt-6 h-40 w-full animate-pulse rounded-lg bg-muted/60" />

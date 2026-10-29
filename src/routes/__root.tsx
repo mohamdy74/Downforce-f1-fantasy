@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BackgroundSync } from "@/components/BackgroundSync";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader, BottomNav } from "@/components/SiteHeader";
@@ -168,6 +169,7 @@ function RootComponent() {
       <BackgroundSync />
       <InstallPrompt />
       <PullToRefresh />
+      <OfflineIndicator />
       <div className="relative z-10 flex min-h-svh flex-col">
         <SiteHeader />
         <div className="flex-1">

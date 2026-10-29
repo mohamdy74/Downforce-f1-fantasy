@@ -494,6 +494,8 @@ function Leaderboard() {
             disabled={syncing}
             onClick={handleForceSync}
             className="hit-slop shrink-0 gap-1.5"
+            aria-label={syncing ? "Syncing standings data" : "Sync latest race results"}
+            aria-busy={syncing}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
             {syncing ? "Syncing…" : "Sync results"}

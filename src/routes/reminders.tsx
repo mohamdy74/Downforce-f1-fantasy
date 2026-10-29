@@ -63,7 +63,20 @@ function Reminders() {
         Track who has submitted picks for the next race. No individual predictions shown.
       </p>
 
-      {data && (
+      {isLoading ? (
+        <div className="mt-6 space-y-2">
+          <div className="skeleton-shimmer h-8 w-full rounded-lg" />
+          <div className="grid grid-cols-3 gap-4 text-center">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="skeleton-shimmer h-4 w-16 rounded mx-auto" />
+                <div className="skeleton-shimmer h-6 w-12 rounded mx-auto" />
+                <div className="skeleton-shimmer h-3 w-20 rounded mx-auto" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : data && (
         <div className="mt-6 carbon-panel-strong rounded-lg p-4 grid grid-cols-3 gap-4 text-center">
           <div>
             <p className="font-mono text-xs uppercase text-muted-foreground">Race</p>
