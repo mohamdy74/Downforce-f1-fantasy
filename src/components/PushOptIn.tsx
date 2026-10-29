@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { VAPID_PUBLIC_KEY as PUBLIC_VAPID, urlBase64ToUint8Array } from "@/lib/push-keys";
 import { savePushSubscription } from "@/lib/stewards.functions";
 
-async function syncBrowserSubscription(): Promise<boolean> {
+export async function syncBrowserSubscription(): Promise<boolean> {
   if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
     return false;
   }
