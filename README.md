@@ -1,4 +1,4 @@
-#  DOWNFORCE â€” 2026 Formula 1 Fantasy & Prediction League
+# 🏎️ DOWNFORCE — 2026 Formula 1 Fantasy & Prediction League
 
 A real-time Formula 1 prediction league and race-weekend telemetry platform built with **TanStack Start**, **React 19**, **Tailwind CSS v4**, and **Supabase**.
 
@@ -23,17 +23,13 @@ A real-time Formula 1 prediction league and race-weekend telemetry platform buil
    npm install
    ```
 
-3. **Configure `.env` (never committed to Git)**:
-   Create a `.env` file in the project root with your Supabase credentials and VAPID keys:
+3. **Configure `.env`**:
+   The committed `.env` already holds the public, build-time values (Supabase URL + publishable key, VAPID public key). For local development, add your secrets **locally only — never commit them**:
    ```ini
-   VITE_SUPABASE_URL="https://your-project.supabase.co"
-   VITE_SUPABASE_PUBLISHABLE_KEY="your-anon-key"
-   SUPABASE_URL="https://your-project.supabase.co"
-   SUPABASE_PUBLISHABLE_KEY="your-anon-key"
-   SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-   VAPID_PRIVATE_KEY="your-vapid-private-key"
-   VAPID_PUBLIC_KEY="your-vapid-public-key"
+   SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"   # local only
+   VAPID_PRIVATE_KEY="your-vapid-private-key"          # local only
    ```
+   In production, secrets live in Lovable Secrets — never in this repository.
 
 4. **Start the development server**:
    ```powershell

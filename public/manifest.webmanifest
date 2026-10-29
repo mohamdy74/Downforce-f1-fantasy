@@ -1,7 +1,7 @@
 {
   "name": "DOWNFORCE — Fantasy Racing League",
   "short_name": "DOWNFORCE",
-  "description": "Predict the F10 picks, pole, fastest lap and DNF.",
+  "description": "Predict the Top 10 picks, pole, fastest lap and DNF.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0E0E12",
