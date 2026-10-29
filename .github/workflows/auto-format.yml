@@ -21,22 +21,48 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
+        # Same fresh-resolution strategy as ci.yml (stale lockfiles + 24h guard).
+        # On failure, surface key lines as annotations — raw logs need auth.
         run: |
-          rm -f bun.lock package-lock.json
-          bun install || (rm -f bunfig.toml && bun install)
+          dump() {
+            grep -iE "error|fail|denied|not found" -B2 -A8 "$1" | grep -v "^--$" | head -n 24 | cut -c1-200 | while IFS= read -r l; do
+              [ -n "$l" ] && echo "::error::INSTALL: ${l//%/%25}"
+            done
+            tail -n 8 "$1" | cut -c1-200 | while IFS= read -r l; do
+              [ -n "$l" ] && echo "::error::INSTALL-TAIL: ${l//%/%25}"
+            done
+          }
+          { rm -f bun.lock package-lock.json
+            bun install || (echo 'retry without the 24h supply-chain guard (CI sandbox only)' && rm -f bunfig.toml && bun install)
+          } > /tmp/install.log 2>&1 || { dump /tmp/install.log; exit 1; }
 
       - name: Apply eslint --fix (prettier formatting only)
-        run: bunx eslint . --fix
+        run: |
+          dump() {
+            grep -iE "error|fail|denied" -B1 -A6 "$1" | grep -v "^--$" | head -n 24 | cut -c1-200 | while IFS= read -r l; do
+              [ -n "$l" ] && echo "::error::ESLINT: ${l//%/%25}"
+            done
+            tail -n 10 "$1" | cut -c1-200 | while IFS= read -r l; do
+              [ -n "$l" ] && echo "::error::ESLINT-TAIL: ${l//%/%25}"
+            done
+          }
+          bunx eslint . --fix > /tmp/eslint.log 2>&1 || { dump /tmp/eslint.log; exit 1; }
 
       - name: Commit + push if anything changed
         run: |
-          git config user.name "df-style-bot"
-          git config user.email "actions@users.noreply.github.com"
-          if ! git diff --quiet; then
-            git add -A
-            git commit -m "style: apply eslint --fix (prettier formatting) [auto]"
-            git push
-            echo "Formatting committed and pushed."
-          else
-            echo "Nothing to format — baseline already clean."
-          fi
+          dump() {
+            tail -n 20 "$1" | cut -c1-200 | while IFS= read -r l; do
+              [ -n "$l" ] && echo "::error::PUSH: ${l//%/%25}"
+            done
+          }
+          { git config user.name "df-style-bot"
+            git config user.email "actions@users.noreply.github.com"
+            if ! git diff --quiet; then
+              git add -A
+              git commit -m "style: apply eslint --fix (prettier formatting) [auto]"
+              git push
+              echo "Formatting committed and pushed."
+            else
+              echo "Nothing to format — baseline already clean."
+            fi
+          } > /tmp/push.log 2>&1 || { dump /tmp/push.log; exit 1; }
