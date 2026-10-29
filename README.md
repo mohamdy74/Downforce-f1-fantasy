@@ -1,47 +1,42 @@
-# 🏎️ DOWNFORCE — Fantasy F1 Racing League
+# ðŸŽï¸ DOWNFORCE â€” 2026 Formula 1 Fantasy & Prediction League
 
-> Predict the Top 10. Beat your friends. Miss the lock and eat a −25 penalty.
+A real-time Formula 1 prediction league and race-weekend telemetry platform built with **TanStack Start**, **React 19**, **Tailwind CSS v4**, and **Supabase**.
 
-**Live app**: https://downforce.lovable.app
+## âœ¨ Key Features
 
-## The game
+- **Grand Prix & Sprint Predictions**: Drag-and-drop Top 10 race finish order, Pole Position (Q3), Fastest Lap, DNF pick, and Sprint Top 8 grid with automatic server-enforced lock deadlines.
+- **Official 2026 F1 Standings & Live Telemetry**: Instant 0ms initial snapshot backed by live Jolpica-F1 (Ergast) & OpenF1 synchronization.
+- **Head-to-Head (H2H) & Paddock Analytics**: Compare player accuracy, round-by-round breakdowns, and shareable social result cards.
+- **Native Web Push Alerts (RFC 8292 / AES-128-GCM)**: Automated 2-hour and 30-minute lock reminders with strict server-only VAPID key isolation.
+- **FIA Stewards & Race Control**: Dedicated race-director dashboard for deadline management, manual result overrides, JSON backups, and live pick radar.
 
-- 🏁 **Predictions** — lock in your Top 10, pole, fastest lap and DNF before the deadline
-- 📊 **Live scoring** — points calculated from real F1 race results, sprint weekends included
-- 🏆 **Leaderboard** — season standings and race-by-race history
-- ⏰ **Smart reminders** — Web Push alerts 2h & 30m before picks lock
-- 🛡️ **Stewards Room** — league admin tools: penalties, waivers, renames, nudges, manual results, league backup
+## ðŸš€ Running Locally (PowerShell)
 
-## Tech stack
+1. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/mohamdy74/Downforce-f1-fantasy.git
+   cd Downforce-f1-fantasy
+   ```
 
-| Layer | Tech |
-| --- | --- |
-| Framework | TanStack Start (React, SSR) |
-| Build | Vite |
-| Backend & auth | Supabase (Postgres, RLS, Edge Functions) |
-| Hosting & sync | Lovable |
-| Notifications | Web Push (VAPID, aes128gcm) |
-| Reminders cron | GitHub Actions — pings `/reminders` every 10 minutes |
+2. **Install dependencies**:
+   ```powershell
+   npm install
+   ```
 
-## Local development
+3. **Configure `.env` (never committed to Git)**:
+   Create a `.env` file in the project root with your Supabase credentials and VAPID keys:
+   ```ini
+   VITE_SUPABASE_URL="https://your-project.supabase.co"
+   VITE_SUPABASE_PUBLISHABLE_KEY="your-anon-key"
+   SUPABASE_URL="https://your-project.supabase.co"
+   SUPABASE_PUBLISHABLE_KEY="your-anon-key"
+   SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+   VAPID_PRIVATE_KEY="your-vapid-private-key"
+   VAPID_PUBLIC_KEY="your-vapid-public-key"
+   ```
 
-Requires Node.js 18+.
-
-```sh
-git clone https://github.com/mohamdy74/downforce-f1-fantasy.git
-cd downforce-f1-fantasy
-npm i
-npm run dev        # http://localhost:5173
-```
-
-`.env` holds public, build-time values (Supabase publishable keys, VAPID public key). Real secrets (`VAPID_PRIVATE_KEY`) live in Lovable Secrets and are never committed. For a full Arabic setup guide see [START_HERE_AR.md](START_HERE_AR.md).
-
-## Deployment
-
-The repo is two-way synced with Lovable:
-
-- Push to `main` → live app updates in ~2–5 minutes
-- Lovable editor changes → committed back to `main`
-- Don't force-push to `main` — it breaks the sync
-
-Built with [Lovable](https://lovable.dev). Continue development in the [Lovable editor](https://lovable.dev/projects/9c6dad2a-7be0-40da-8f8a-fa19706463ee).
+4. **Start the development server**:
+   ```powershell
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
