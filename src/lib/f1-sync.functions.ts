@@ -390,9 +390,7 @@ export async function checkAndSendPushReminders(
     const deadKeys: string[] = [];
     const pendingSubs = subRows.flatMap((r) => {
       const parsed = parsePushSubscriptionKey(r.key);
-      return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId)
-        ? [parsed]
-        : [];
+      return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId) ? [parsed] : [];
     });
     const BATCH_SIZE = 25;
     const newlyNotified = new Set<string>();
