@@ -1,18 +1,30 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { VAPID_SUBJECT, isCompleteTop10, parsePushSubscriptionKey } from "@/lib/push-keys";
+import { cleanVapidKey, isCompleteTop10, parsePushSubscriptionKey } from "@/lib/push-keys";
 
-// SECURITY: Get VAPID keys from server-only module (webpush-native.ts)
-// This ensures private key is NEVER exposed to client bundle
-import { sendNativeWebPush } from "@/lib/webpush-native";
+export const getServerVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
+  const raw =
+    process.env["VAPID_PUBLIC_KEY"] ||
+    process.env["VITE_VAPID_PUBLIC_KEY"] ||
+    process.env["PUBLIC_VAPID_KEY"] ||
+    "";
+  return {
+    publicKey: cleanVapidKey(raw),
+  };
+});
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
-  .inputValidator((input: { forceWindow?: "2h" | "30m" | null } | undefined) => ({
+  .inputValidator((input: { forceWindow?: "2h" | "30m" | null | undefined } | undefined) => ({
     forceWindow: input?.forceWindow ?? null,
   }))
-  .handler(async () => {
-    // SECURITY: VAPID keys are validated inside sendNativeWebPush
-    // If keys are missing, it will return { ok: false, status: 0 }
+  .handler(async ({ data }) => {
+    const { getServerVapidKeys, sendNativeWebPush } = await import("./webpush-native");
+    const { publicKey: pub, privateKey: priv } = getServerVapidKeys();
+    if (!pub || !priv) {
+      console.error("[WebPush] VAPID keys not configured on server.");
+      return { sent: 0, reason: "VAPID keys not configured" };
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const now = Date.now();
     const in3Hours = new Date(now + 3 * 3600_000).toISOString();
@@ -31,14 +43,12 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
 
     const minsLeft = (new Date(race.race_at).getTime() - now) / 60_000;
 
-    // Strictly enforce real countdown windows
-    let windowTag: "2h" | "30m" | null = null;
-    if (minsLeft <= 125 && minsLeft >= 95) windowTag = "2h";
-    else if (minsLeft <= 35 && minsLeft >= 10) windowTag = "30m";
-
+    let windowTag: "2h" | "30m" | null = data.forceWindow;
     if (!windowTag) {
-      return { sent: 0, minsLeft: Math.round(minsLeft), reason: "Outside 2h and 30m windows" };
+      if (minsLeft <= 125 && minsLeft >= 95) windowTag = "2h";
+      else if (minsLeft <= 35 && minsLeft >= 10) windowTag = "30m";
     }
+    if (!windowTag) return { sent: 0, minsLeft: Math.round(minsLeft), reason: "Outside 2h and 30m windows" };
 
     const { data: preds } = await supabaseAdmin
       .from("predictions")
@@ -52,29 +62,22 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
     );
 
     const [{ data: sLogs }, { data: sSubs }] = await Promise.all([
-      supabaseAdmin
-        .from("sync_state")
-        .select("key")
-        .like("key", `push_log:${race.id}:${windowTag}:%`),
+      supabaseAdmin.from("sync_state").select("key").like("key", "push_log:" + race.id + ":" + windowTag + ":%"),
       supabaseAdmin.from("sync_state").select("key").like("key", "push_sub:%"),
     ]);
-
     const sentSet = new Set((sLogs ?? []).map((r) => r.key.split(":").pop()!));
     const targetSubs = (sSubs ?? []).flatMap((r) => {
       const parsed = parsePushSubscriptionKey(r.key);
       if (!parsed || completedUsers.has(parsed.userId) || sentSet.has(parsed.userId)) return [];
       return [parsed];
     });
-
-    if (!targetSubs.length) {
-      return { sent: 0, windowTag, reason: "No pending un-notified users" };
-    }
+    if (!targetSubs.length) return { sent: 0, windowTag, reason: "No pending un-notified users" };
 
     const payloadObj = {
       title:
         windowTag === "30m"
-          ? `\u{1F6A8} 30 mins left \u2014 ${race.name}!`
-          : `\u23F0 2 hours to ${race.name}!`,
+          ? `ðŸš¨ 30 mins left â€” ${race.name}!`
+          : `â° 2 hours to ${race.name}!`,
       body:
         windowTag === "30m"
           ? "Final call! You still haven't locked in your Top 10. Tap here now before picks lock (-25 pts)!"
@@ -85,40 +88,36 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
 
     let sent = 0;
     const newlyNotified = new Set<string>();
-    const BATCH_SIZE = 25;
-    for (let i = 0; i < targetSubs.length; i += BATCH_SIZE) {
-      const batch = targetSubs.slice(i, i + BATCH_SIZE);
-      await Promise.allSettled(
-        batch.map(async (sub) => {
-          try {
-            const res = await sendNativeWebPush(
-              { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
-              payloadObj,
-            );
-            if (res.ok) {
-              sent++;
-              newlyNotified.add(sub.userId);
-            } else {
-              console.error(
-                `[Push] Failed to send to ${sub.userId}: status=${res.status}`,
-              );
-            }
-          } catch (error) {
-            console.error("[Push] Error sending notification:", error);
-          }
-        }),
+    const expiredKeys: string[] = [];
+    for (const sub of targetSubs) {
+      const res = await sendNativeWebPush(
+        {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        },
+        payloadObj,
       );
+      if (res.ok) {
+        sent++;
+        newlyNotified.add(sub.userId);
+      } else if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 410) {
+        expiredKeys.push(sub.rawKey);
+      }
+    }
+
+    if (expiredKeys.length > 0) {
+      await supabaseAdmin.from("sync_state").delete().in("key", expiredKeys);
     }
 
     if (newlyNotified.size > 0) {
       await supabaseAdmin.from("sync_state").upsert(
         Array.from(newlyNotified).map((uid) => ({
-          key: `push_log:${race.id}:${windowTag}:${uid}`,
+          key: "push_log:" + race.id + ":" + windowTag + ":" + uid,
           synced_at: new Date().toISOString(),
         })),
         { onConflict: "key" },
       );
     }
-
     return { sent, windowTag, raceName: race.name };
   });

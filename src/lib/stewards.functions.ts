@@ -22,7 +22,7 @@ async function requireSteward(context: { userId: string; claims?: Record<string,
 export const getServerVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
   const raw =
     process.env["VAPID_PUBLIC_KEY"] ||
-    process.env["VITE_VAPID_PUBLIC_KEY"] ||
+    (process.env["VAPID_PUBLIC_KEY"] || process.env["VITE_VAPID_PUBLIC_KEY"]) ||
     "";
   return {
     publicKey: raw.trim().replace(/^["']+|["']+$/g, "").trim(),

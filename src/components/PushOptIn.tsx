@@ -4,24 +4,46 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { VAPID_PUBLIC_KEY as PUBLIC_VAPID, urlBase64ToUint8Array } from "@/lib/push-keys";
+import { getServerVapidPublicKey } from "@/lib/push.functions";
+import {
+  VAPID_PUBLIC_KEY,
+  hasMatchingApplicationServerKey,
+  urlBase64ToUint8Array,
+} from "@/lib/push-keys";
 import { savePushSubscription } from "@/lib/stewards.functions";
 
 export async function syncBrowserSubscription(): Promise<boolean> {
   if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
     return false;
   }
+  let publicKey = VAPID_PUBLIC_KEY;
+  if (!publicKey) {
+    try {
+      const res = await getServerVapidPublicKey();
+      publicKey = res?.publicKey ?? "";
+    } catch {
+      publicKey = "";
+    }
+  }
+  if (!publicKey) {
+    console.warn("[WebPush] VAPID_PUBLIC_KEY is not configured on client or server.");
+    return false;
+  }
+
+  const expectedKeyBytes = urlBase64ToUint8Array(publicKey);
   const reg = await navigator.serviceWorker.register("/sw.js");
-  await reg.update().catch((error) => {
-    console.error("[PushOptIn] Service Worker update failed:", error);
-  });
+  await reg.update().catch(() => {});
   const readyReg = await navigator.serviceWorker.ready;
 
   let sub = await readyReg.pushManager.getSubscription();
+  if (sub && !hasMatchingApplicationServerKey(sub, expectedKeyBytes)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = null;
+  }
   if (!sub) {
     sub = await readyReg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID),
+      applicationServerKey: expectedKeyBytes,
     });
   }
   const json = sub.toJSON();
@@ -49,9 +71,7 @@ export function PushOptIn() {
     }
     setPerm(Notification.permission);
     if (user && Notification.permission === "granted") {
-      syncBrowserSubscription().catch((error) => {
-        console.error("[PushOptIn] Subscription sync failed:", error);
-      });
+      syncBrowserSubscription().catch(() => {});
     }
   }, [user?.id]);
 
@@ -70,14 +90,14 @@ export function PushOptIn() {
       if (ok) {
         toast.success("Race reminders enabled on this device!");
         const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("🏎️ DOWNFORCE Alerts Active!", {
+        reg.showNotification("ðŸŽï¸ DOWNFORCE Alerts Active!", {
           body: "You will get notified 2h & 30m before Qualifying and Race lock.",
           icon: "/favicon.png",
           badge: "/favicon.png",
           tag: "downforce-welcome",
-        }).catch((error) => {
-          console.error("[PushOptIn] Notification display failed:", error);
-        });;
+        }).catch(() => {});
+      } else {
+        toast.error("Could not register push key (make sure VAPID_PUBLIC_KEY is in Secrets and click Publish).");
       }
     } catch {
       toast.error("Could not activate push alerts on this browser.");
@@ -102,11 +122,11 @@ export function PushOptIn() {
       <div className="flex items-center gap-2.5">
         <Bell className="h-4 w-4 shrink-0 text-gold" />
         <span className="text-xs font-medium">
-          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a −25 penalty
+          Get notified <strong>2h &amp; 30m</strong> before picks lock so you never take a âˆ’25 penalty
         </span>
       </div>
       <Button size="sm" variant="secondary" disabled={busy} onClick={enableAlerts} className="h-8 text-xs font-bold">
-        {busy ? "Enabling..." : "Enable Alerts 🔔"}
+        {busy ? "Enabling..." : "Enable Alerts ðŸ””"}
       </Button>
     </div>
   );

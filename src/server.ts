@@ -18,27 +18,20 @@ async function getServerEntry(): Promise<ServerEntry> {
   return serverEntryPromise;
 }
 
-const SECURITY_HEADERS: Record<string, string> = {
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "SAMEORIGIN",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
-  "X-Permitted-Cross-Domain-Policies": "none",
-};
-
-function withSecurityHeaders(response: Response): Response {
-  const headers = new Headers(response.headers);
-  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
-    if (!headers.has(k)) {
-      headers.set(k, v);
+function bridgeRuntimeEnvToProcess(env: unknown) {
+  if (typeof process === "undefined" || !process?.env) return;
+  if (env && typeof env === "object") {
+    for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
+      if (typeof v === "string" && v.trim() && !process.env[k]) {
+        process.env[k] = v;
+      }
     }
   }
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  if (process.env["VAPID_PUBLIC_KEY"] && !process.env["VITE_VAPID_PUBLIC_KEY"]) {
+    process.env["VITE_VAPID_PUBLIC_KEY"] = process.env["VAPID_PUBLIC_KEY"];
+  } else if (process.env["VITE_VAPID_PUBLIC_KEY"] && !process.env["VAPID_PUBLIC_KEY"]) {
+    process.env["VAPID_PUBLIC_KEY"] = process.env["VITE_VAPID_PUBLIC_KEY"];
+  }
 }
 
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
@@ -67,19 +60,17 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    bridgeRuntimeEnvToProcess(env);
     try {
       const handler = await getServerEntry();
-      const rawResponse = await handler.fetch(request, env, ctx);
-      const normalized = await normalizeCatastrophicSsrResponse(rawResponse);
-      return withSecurityHeaders(normalized);
+      const response = await handler.fetch(request, env, ctx);
+      return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
-      return withSecurityHeaders(
-        new Response(renderErrorPage(), {
-          status: 500,
-          headers: { "content-type": "text/html; charset=utf-8" },
-        }),
-      );
+      return new Response(renderErrorPage(), {
+        status: 500,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
     }
   },
 };

@@ -1,16 +1,40 @@
 if (typeof window !== "undefined") {
-  throw new Error("Security violation: webpush-native is a Server-Only module and must never be imported in browser code.");
+  throw new Error(
+    "Security violation: webpush-native is a Server-Only module and must never be imported in browser code.",
+  );
 }
 
-// SECURITY: VAPID keys are loaded ONLY from environment variables.
-// NO hardcoded fallback keys - if keys are missing, push notifications will fail safely.
-// Set these in Lovable: More -> Settings -> Secrets
-//   VAPID_PRIVATE_KEY = your_private_key_here
-//   VITE_VAPID_PUBLIC_KEY = your_public_key_here
+function cleanEnvKey(val: string | undefined): string {
+  return (val ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+}
+
+export function getServerVapidKeys(): { publicKey: string; privateKey: string } {
+  const env = (typeof process !== "undefined" && process?.env ? process.env : {}) as Record<
+    string,
+    string | undefined
+  >;
+  const publicKey = cleanEnvKey(
+    env["VAPID_PUBLIC_KEY"] ||
+      env["VITE_VAPID_PUBLIC_KEY"] ||
+      env["PUBLIC_VAPID_KEY"],
+  );
+  const privateKey = cleanEnvKey(
+    env["VAPID_PRIVATE_KEY"] ||
+      env["PRIVATE_VAPID_KEY"],
+  );
+  if (publicKey && !env["VITE_VAPID_PUBLIC_KEY"]) {
+    env["VITE_VAPID_PUBLIC_KEY"] = publicKey;
+  }
+  if (publicKey && !env["VAPID_PUBLIC_KEY"]) {
+    env["VAPID_PUBLIC_KEY"] = publicKey;
+  }
+  return { publicKey, privateKey };
+}
 
 function b64urlDecode(str: string): Uint8Array {
-  const pad = "=".repeat((4 - (str.length % 4)) % 4);
-  const b64 = (str + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const cleaned = cleanEnvKey(str);
+  const pad = "=".repeat((4 - (cleaned.length % 4)) % 4);
+  const b64 = (cleaned + pad).replace(/-/g, "+").replace(/_/g, "/");
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -65,6 +89,9 @@ async function createVapidAuthHeader(
 ): Promise<string> {
   const origin = new URL(endpoint).origin;
   const pubBytes = b64urlDecode(vapidPublicKey);
+  if (pubBytes.length !== 65 || pubBytes[0] !== 0x04) {
+    throw new Error("Invalid VAPID_PUBLIC_KEY format (must be 65-byte uncompressed P-256 public key)");
+  }
   const x = b64urlEncode(pubBytes.slice(1, 33));
   const y = b64urlEncode(pubBytes.slice(33, 65));
   const jwk: JsonWebKey = {
@@ -72,16 +99,23 @@ async function createVapidAuthHeader(
     crv: "P-256",
     x,
     y,
-    d: vapidPrivateKey,
+    d: cleanEnvKey(vapidPrivateKey),
     ext: true,
   };
-  const ecKey = await crypto.subtle.importKey(
-    "jwk",
-    jwk,
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign"],
-  );
+  let ecKey: CryptoKey;
+  try {
+    ecKey = await crypto.subtle.importKey(
+      "jwk",
+      jwk,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+  } catch {
+    throw new Error(
+      "VAPID_PRIVATE_KEY does not match VAPID_PUBLIC_KEY! Make sure both came from the same generated keypair.",
+    );
+  }
   const enc = new TextEncoder();
   const header = b64urlEncode(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
   const payload = b64urlEncode(
@@ -101,7 +135,7 @@ async function createVapidAuthHeader(
       enc.encode(unsigned) as BufferSource,
     ),
   );
-  return `vapid t=${unsigned}.${b64urlEncode(sig)}, k=${vapidPublicKey}`;
+  return `vapid t=${unsigned}.${b64urlEncode(sig)}, k=${cleanEnvKey(vapidPublicKey)}`;
 }
 
 async function encryptWebPushAes128Gcm(
@@ -169,30 +203,28 @@ export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
 ): Promise<{ ok: boolean; status: number; error?: string }> {
-  // SECURITY: Load keys ONLY from environment variables - NO fallbacks
-  const pub = (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || (process.env["VAPID_PUBLIC_KEY"] as string | undefined);
-  const priv = process.env["VAPID_PRIVATE_KEY"] as string | undefined;
-  
-  // SECURITY: Fail fast with clear error if keys are not configured
+  const { publicKey: pub, privateKey: priv } = getServerVapidKeys();
   if (!pub || !priv) {
-    console.error("[WebPush] VAPID keys not configured. Set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY environment variables.");
-    return {
-      ok: false,
-      status: 0,
-      error: "Server VAPID keys are not configured — set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY in Lovable Secrets",
-    };
+    const missing = [
+      !pub ? "VAPID_PUBLIC_KEY" : "",
+      !priv ? "VAPID_PRIVATE_KEY" : "",
+    ]
+      .filter(Boolean)
+      .join(" & ");
+    const msg = `Missing ${missing} on server (click Publish -> Update in Lovable after adding Secrets)`;
+    console.error(`[WebPush] ${msg}`);
+    return { ok: false, status: 0, error: msg };
   }
-
   const payloadStr = JSON.stringify(payloadObj);
-
-  const [authHeader, encryptedBody] = await Promise.all([
-    createVapidAuthHeader(sub.endpoint, "mailto:admin@downforce.app", pub, priv),
-    encryptWebPushAes128Gcm(sub.p256dh, sub.auth, payloadStr),
-  ]);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
+    const [authHeader, encryptedBody] = await Promise.all([
+      createVapidAuthHeader(sub.endpoint, "mailto:admin@downforce.app", pub, priv),
+      encryptWebPushAes128Gcm(sub.p256dh, sub.auth, payloadStr),
+    ]);
+
     const res = await fetch(sub.endpoint, {
       method: "POST",
       headers: {
@@ -205,14 +237,24 @@ export async function sendNativeWebPush(
       body: encryptedBody as BodyInit,
       signal: ctrl.signal,
     });
-    return { ok: res.ok || res.status === 201, status: res.status };
-  } catch (error) {
-    console.error("[WebPush] Send failed:", error);
-    return {
-      ok: false,
-      status: 0,
-      error: error instanceof Error ? `Push service unreachable: ${error.message}` : "Push service unreachable",
-    };
+    const ok = res.ok || res.status === 201;
+    if (!ok) {
+      const errText = await res.text().catch(() => "");
+      console.error(`[WebPush] Push endpoint returned HTTP ${res.status}: ${errText}`);
+      return {
+        ok: false,
+        status: res.status,
+        error:
+          res.status === 401 || res.status === 403
+            ? `HTTP ${res.status} (Old VAPID subscription removed â€” tap Test My Phone once more to re-subscribe)`
+            : `Push service HTTP ${res.status}`,
+      };
+    }
+    return { ok: true, status: res.status };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[WebPush] Failed to send push notification:", errMsg);
+    return { ok: false, status: 0, error: errMsg };
   } finally {
     clearTimeout(timer);
   }
