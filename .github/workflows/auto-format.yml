@@ -49,9 +49,12 @@ jobs:
           bunx eslint . --fix > /tmp/eslint.log 2>&1 || { dump /tmp/eslint.log; exit 1; }
 
       - name: Commit + push if anything changed
+        # actions/checkout leaves HEAD detached, so the push must use an
+        # explicit refspec (HEAD:main). Rebase onto the latest main first so
+        # concurrent commits (e.g. from the developer) do not break the push.
         run: |
           dump() {
-            tail -n 20 "$1" | cut -c1-200 | while IFS= read -r l; do
+            tail -n 24 "$1" | cut -c1-200 | while IFS= read -r l; do
               [ -n "$l" ] && echo "::error::PUSH: ${l//%/%25}"
             done
           }
@@ -60,8 +63,15 @@ jobs:
             if ! git diff --quiet; then
               git add -A
               git commit -m "style: apply eslint --fix (prettier formatting) [auto]"
-              git push
-              echo "Formatting committed and pushed."
+              git fetch origin main
+              if git rebase origin/main; then
+                git push origin HEAD:main
+                echo "Formatting committed and pushed."
+              else
+                git rebase --abort
+                echo "::error::PUSH: rebase onto latest main conflicted — skipping this auto-format push."
+                exit 1
+              fi
             else
               echo "Nothing to format — baseline already clean."
             fi
