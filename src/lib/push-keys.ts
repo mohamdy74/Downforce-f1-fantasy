@@ -12,15 +12,6 @@ const envObj =
     ? (process.env as Record<string, string | undefined>)
     : ({} as Record<string, string | undefined>);
 
-// Mirror VAPID_PUBLIC_KEY <-> VITE_VAPID_PUBLIC_KEY on the server so both names always work
-if (typeof window === "undefined") {
-  if (envObj["VAPID_PUBLIC_KEY"] && !envObj["VITE_VAPID_PUBLIC_KEY"]) {
-    envObj["VITE_VAPID_PUBLIC_KEY"] = envObj["VAPID_PUBLIC_KEY"];
-  } else if (envObj["VITE_VAPID_PUBLIC_KEY"] && !envObj["VAPID_PUBLIC_KEY"]) {
-    envObj["VAPID_PUBLIC_KEY"] = envObj["VITE_VAPID_PUBLIC_KEY"];
-  }
-}
-
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as unknown as { env?: Record<string, string | undefined> }).env
     ? (import.meta as unknown as { env: Record<string, string | undefined> }).env
@@ -28,23 +19,10 @@ const viteEnv =
 
 export const VAPID_PUBLIC_KEY = cleanVapidKey(
   viteEnv["VITE_VAPID_PUBLIC_KEY"] ||
-    viteEnv["VAPID_PUBLIC_KEY"] ||
-    envObj["VAPID_PUBLIC_KEY"] ||
     envObj["VITE_VAPID_PUBLIC_KEY"] ||
+    envObj["VAPID_PUBLIC_KEY"] ||
     "",
 );
-
-export function getVapidPublicKey(): string {
-  if (typeof process !== "undefined" && process?.env) {
-    const serverKey = cleanVapidKey(
-      process.env["VAPID_PUBLIC_KEY"] ||
-        process.env["VITE_VAPID_PUBLIC_KEY"] ||
-        process.env["PUBLIC_VAPID_KEY"],
-    );
-    if (serverKey) return serverKey;
-  }
-  return VAPID_PUBLIC_KEY;
-}
 
 export const VAPID_SUBJECT = "mailto:admin@downforce.app";
 
@@ -52,7 +30,7 @@ export const VAPID_SUBJECT = "mailto:admin@downforce.app";
 export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const cleaned = cleanVapidKey(base64String);
   const padding = "=".repeat((4 - (cleaned.length % 4)) % 4);
-  const b64 = (cleaned + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const base64 = (cleaned + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   const buffer = new ArrayBuffer(rawData.length);
   const outputArray = new Uint8Array(buffer);

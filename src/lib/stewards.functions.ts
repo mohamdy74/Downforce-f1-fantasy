@@ -19,15 +19,13 @@ async function requireSteward(context: { userId: string; claims?: Record<string,
   return supabaseAdmin;
 }
 
-export const getServerVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
-  const raw =
-    process.env["VAPID_PUBLIC_KEY"] ||
-    (process.env["VAPID_PUBLIC_KEY"] || (process.env["VAPID_PUBLIC_KEY"] || process.env["VITE_VAPID_PUBLIC_KEY"])) ||
-    "";
-  return {
-    publicKey: raw.trim().replace(/^["']+|["']+$/g, "").trim(),
-  };
-});
+export const getServerVapidPublicKey = createServerFn({ method: "POST" })
+  .inputValidator((input: Record<string, unknown> | undefined) => input ?? {})
+  .handler(async () => {
+    const { resolveServerVapidKeys } = await import("./webpush-native");
+    const { publicKey } = await resolveServerVapidKeys();
+    return { publicKey };
+  });
 
 export const savePushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -88,12 +86,15 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
       ),
     );
 
+    const { resolveServerVapidKeys } = await import("./webpush-native");
+    const { publicKey: vapidPublicKey } = await resolveServerVapidKeys();
     return {
       profiles: profiles ?? [],
       preds: preds ?? [],
       scores: scores ?? [],
       results: results ?? [],
       pushUserIds,
+      vapidPublicKey,
     };
   });
 
@@ -125,6 +126,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     dnfs?: string[] | undefined;
     title?: string | undefined;
     body?: string | undefined;
+    clientSub?: { endpoint: string; p256dh: string; auth: string } | undefined;
   }) => d)
   .handler(async ({ data: d, context }) => {
     const sb = await requireSteward(context);
@@ -141,13 +143,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         },
         { onConflict: "user_id,race_id" },
       );
-      if (error) throw new Error(`Database error: ${error.message}`);
+      if (error) throw new Error(error.message);
       return { ok: true, msg: `Score locked to ${pts} pts (protected from auto-sync overwrite).` };
     }
 
     if (d.action === "rename_player" && d.userId && d.name) {
       const { error } = await sb.from("profiles").update({ display_name: d.name.trim() }).eq("id", d.userId);
-      if (error) throw new Error(`Database error: ${error.message}`);
+      if (error) throw new Error(error.message);
       return { ok: true, msg: "Player display name updated." };
     }
 
@@ -156,7 +158,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       await sb.from("predictions").delete().eq("user_id", d.userId);
       await sb.from("sprint_predictions").delete().eq("user_id", d.userId);
       const { error } = await sb.from("profiles").delete().eq("id", d.userId);
-      if (error) throw new Error(`Database error: ${error.message}`);
+      if (error) throw new Error(error.message);
       return { ok: true, msg: "Player and associated records removed." };
     }
 
@@ -168,7 +170,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           ? { qualifying_at: parsed.toISOString() }
           : { race_at: parsed.toISOString() };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
-      if (error) throw new Error(`Database error: ${error.message}`);
+      if (error) throw new Error(error.message);
       await sb
         .from("sync_state")
         .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
@@ -185,7 +187,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           ? { qualifying_at: nextIso }
           : { race_at: nextIso };
       const { error } = await sb.from("races").update(updateData).eq("id", d.raceId);
-      if (error) throw new Error(`Database error: ${error.message}`);
+      if (error) throw new Error(error.message);
       await sb
         .from("sync_state")
         .upsert({ key: `deadline_override:${d.raceId}`, synced_at: new Date().toISOString() }, { onConflict: "key" });
@@ -206,10 +208,10 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       let predId = existing?.id ?? d.userId;
       if (existing?.id) {
         const { error } = await sb.from("predictions").update(payload).eq("id", existing.id);
-        if (error) throw new Error(`Database error: ${error.message}`);
+        if (error) throw new Error(error.message);
       } else {
         const { data: ins, error } = await sb.from("predictions").insert(payload).select("id").single();
-        if (error) throw new Error(`Database error: ${error.message}`);
+        if (error) throw new Error(error.message);
         if (ins?.id) predId = ins.id;
       }
       await sb.from("prediction_logs").insert({
@@ -317,6 +319,12 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
     if (d.action === "test_my_push") {
       const { sendNativeWebPush } = await import("./webpush-native");
+      if (d.clientSub?.endpoint && d.clientSub?.p256dh && d.clientSub?.auth) {
+        const prefix = `push_sub:${context.userId}:`;
+        await sb.from("sync_state").delete().like("key", `${prefix}%`);
+        const newKey = `${prefix}${JSON.stringify(d.clientSub)}`;
+        await sb.from("sync_state").upsert({ key: newKey, synced_at: new Date().toISOString() }, { onConflict: "key" });
+      }
       const { data: subRows } = await sb
         .from("sync_state")
         .select("key")
@@ -324,7 +332,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       if (!subRows?.length) {
         return {
           ok: false,
-          msg: "Your device is not subscribed yet! Allow notifications on this browser and try again.",
+          msg: "Could not register browser subscription (enable notifications in Brave browser settings and tap Test My Phone again).",
         };
       }
       let sent = 0;
@@ -334,7 +342,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         if (!m) continue;
         const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
         const res = await sendNativeWebPush(sub, {
-          title: "🏎️ Stewards Test Alert",
+          title: "ðŸŽï¸ Stewards Test Alert",
           body: "Push notifications are 100% working on your device!",
           tag: "dfr-test-" + Date.now(),
           url: "/stewards",
@@ -375,7 +383,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
 
       const missingUsers = (profiles ?? []).filter((p) => !completedUsers.has(p.id));
       const payloadObj = {
-        title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
+        title: d.title || "â° DOWNFORCE â€” Picks Reminder!",
         body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
         tag: "dfr-stewards-" + Date.now(),
         url: "/predict",
@@ -397,9 +405,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
           } else if (res.status === 404 || res.status === 410) {
             deadKeys.push(r.key);
           }
-        } catch (error) {
-          console.error("[stewards.functions] Push notification failed:", error);
-        }
+        } catch {}
       });
 
       await Promise.allSettled(tasks);
@@ -458,9 +464,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       supabaseAdmin.from("sync_state").delete().like("key", `push_sub:${uid}:%`),
     ]);
     await supabaseAdmin.from("profiles").delete().eq("id", uid);
-    await supabaseAdmin.auth.admin.deleteUser(uid).catch((error) => {
-      console.error("[stewards.functions] Failed to delete user:", error);
-    });
+    await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
     return { ok: true };
   });
 

@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
-import { syncBrowserSubscription } from "@/components/PushOptIn";
+import { getLastPushSyncError, getLastSyncedSub, syncBrowserSubscription } from "@/components/PushOptIn";
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { syncF1Data } from "@/lib/f1-sync.functions";
@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/stewards")({
   head: () => ({
-    meta: [{ title: "FIA Stewards & Race Control — DOWNFORCE" }],
+    meta: [{ title: "FIA Stewards & Race Control â€” DOWNFORCE" }],
   }),
   component: StewardsPage,
 });
@@ -177,7 +177,7 @@ function StewardsPage() {
   const [renameId, setRenameId] = useState("");
   const [renameVal, setRenameVal] = useState("");
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading Stewards Room…</main>;
+  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading Stewards Roomâ€¦</main>;
   if (!user || !isSteward) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 text-center">
@@ -193,15 +193,24 @@ function StewardsPage() {
   async function runAction(payload: Parameters<typeof executeStewardAction>[0]["data"]) {
     setBusy(true);
     try {
-      if (payload.action === "test_my_push" && typeof window !== "undefined" && "Notification" in window) {
-        if (Notification.permission === "default") {
+      let finalPayload = payload;
+      if (payload.action === "test_my_push" && typeof window !== "undefined") {
+        if ("Notification" in window && Notification.permission === "default") {
           await Notification.requestPermission().catch(() => {});
         }
-        if (Notification.permission === "granted") {
-          await syncBrowserSubscription().catch(() => {});
+        const ok = await syncBrowserSubscription(dash?.vapidPublicKey);
+        const clientSub = getLastSyncedSub();
+        if (!ok || !clientSub) {
+          toast.error(
+            getLastPushSyncError() ||
+              "Browser could not subscribe to Push Alerts (check Brave Notification permissions).",
+            { duration: 8000 },
+          );
+          return;
         }
+        finalPayload = { ...payload, clientSub };
       }
-      const res = await executeStewardAction({ data: payload });
+      const res = await executeStewardAction({ data: finalPayload });
       if (res.ok === false) {
         toast.error(res.msg, { duration: 7000 });
       } else {
@@ -309,7 +318,7 @@ function StewardsPage() {
         >
           {races.map((r) => (
             <option key={r.id} value={r.id}>
-              R{r.round} · {r.name.replace("Grand Prix", "GP")} {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
+              R{r.round} Â· {r.name.replace("Grand Prix", "GP")} {r.has_results ? "(Scored âœ“)" : "(Upcoming)"}
             </option>
           ))}
         </select>
@@ -340,7 +349,7 @@ function StewardsPage() {
                 runAction({
                   action: "nudge_missing_push",
                   raceId: activeRace!.id,
-                  title: `⏰ ${activeRace!.name} Picks Reminder!`,
+                  title: `â° ${activeRace!.name} Picks Reminder!`,
                   body: "You still haven't locked in your Top 10! Tap here to submit before the -25 penalty.",
                 })
               }
@@ -354,7 +363,7 @@ function StewardsPage() {
               disabled={busy}
               onClick={() => runAction({ action: "test_my_push" })}
             >
-              Test My Phone 🔔
+              Test My Phone ðŸ””
             </Button>
           </div>
 
@@ -382,7 +391,7 @@ function StewardsPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
                     <span className={cn("rounded px-1.5 py-0.5", hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
-                      Pole {hasPole ? "✓" : "✗"}
+                      Pole {hasPole ? "âœ“" : "âœ—"}
                     </span>
                     <span className={cn("rounded px-1.5 py-0.5", topCount === 10 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
                       {topCount}/10
@@ -403,7 +412,7 @@ function StewardsPage() {
         onToggle={toggleSection}
         icon={<Trophy className="h-4 w-4 text-gold" />}
         title="Score & Penalty Override"
-        subtitle="Adjust round points or waive a −25 missed-submission penalty"
+        subtitle="Adjust round points or waive a âˆ’25 missed-submission penalty"
       >
         <div className="grid gap-2 sm:grid-cols-3">
           <select
@@ -415,7 +424,7 @@ function StewardsPage() {
             }}
             className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm"
           >
-            <option value="">Select player…</option>
+            <option value="">Select playerâ€¦</option>
             {(dash?.profiles ?? []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.display_name} ({scoreByUser.get(p.id) ?? "no score"} pts)
@@ -452,7 +461,7 @@ function StewardsPage() {
               disabled={busy || !scoreUser || !activeRace}
               onClick={() => runAction({ action: "remove_penalty", raceId: activeRace!.id, userId: scoreUser })}
             >
-              Waive −25 → 0
+              Waive âˆ’25 â†’ 0
             </Button>
           </div>
         </div>
@@ -482,7 +491,7 @@ function StewardsPage() {
             }}
             className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm font-bold"
           >
-            <option value="">Select player to enter/edit picks for…</option>
+            <option value="">Select player to enter/edit picks forâ€¦</option>
             {(dash?.profiles ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.display_name}</option>
             ))}
@@ -563,7 +572,7 @@ function StewardsPage() {
                 ? new Date(activeRace.qualifying_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" })
                 : "N/A"}
             </strong>{" "}
-            · Race:{" "}
+            Â· Race:{" "}
             <strong className="text-foreground">
               {activeRace
                 ? new Date(activeRace.race_at).toLocaleString("en-GB", { timeZone: "Africa/Cairo" })
@@ -681,7 +690,7 @@ function StewardsPage() {
         onToggle={toggleSection}
         icon={<Flag className="h-4 w-4 text-primary" />}
         title="Manual Race Results Entry"
-        subtitle="Select P1–P10 finishing order & retired DNF drivers to score immediately"
+        subtitle="Select P1â€“P10 finishing order & retired DNF drivers to score immediately"
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -791,7 +800,7 @@ function StewardsPage() {
             }}
             className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm"
           >
-            <option value="">Select player…</option>
+            <option value="">Select playerâ€¦</option>
             {(dash?.profiles ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.display_name}</option>
             ))}

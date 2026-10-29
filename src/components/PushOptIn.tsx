@@ -12,51 +12,90 @@ import {
 } from "@/lib/push-keys";
 import { savePushSubscription } from "@/lib/stewards.functions";
 
-export async function syncBrowserSubscription(): Promise<boolean> {
+let lastSyncedWarning = "";
+let lastSyncedSub: { endpoint: string; p256dh: string; auth: string } | null = null;
+
+export function getLastPushSyncError(): string {
+  return lastSyncedWarning;
+}
+
+export function getLastSyncedSub(): { endpoint: string; p256dh: string; auth: string } | null {
+  return lastSyncedSub;
+}
+
+export async function syncBrowserSubscription(knownPublicKey?: string): Promise<boolean> {
   if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    lastSyncedWarning = "Push notifications are not supported by this browser.";
     return false;
   }
-  let publicKey = VAPID_PUBLIC_KEY;
+  let publicKey = knownPublicKey || VAPID_PUBLIC_KEY;
   if (!publicKey) {
     try {
-      const res = await getServerVapidPublicKey();
+      const res = await getServerVapidPublicKey({ data: {} });
       publicKey = res?.publicKey ?? "";
-    } catch {
+    } catch (err) {
+      lastSyncedWarning = `Could not fetch VAPID public key from server: ${err instanceof Error ? err.message : String(err)}`;
       publicKey = "";
     }
   }
   if (!publicKey) {
-    console.warn("[WebPush] VAPID_PUBLIC_KEY is not configured on client or server.");
+    if (!lastSyncedWarning) {
+      lastSyncedWarning = "Server returned empty VAPID key (make sure VAPID_PRIVATE_KEY is saved in Lovable Secrets & click Publish -> Update).";
+    }
     return false;
   }
 
-  const expectedKeyBytes = urlBase64ToUint8Array(publicKey);
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  await reg.update().catch(() => {});
-  const readyReg = await navigator.serviceWorker.ready;
-
-  let sub = await readyReg.pushManager.getSubscription();
-  if (sub && !hasMatchingApplicationServerKey(sub, expectedKeyBytes)) {
-    await sub.unsubscribe().catch(() => {});
-    sub = null;
+  let expectedKeyBytes: Uint8Array<ArrayBuffer>;
+  try {
+    expectedKeyBytes = urlBase64ToUint8Array(publicKey);
+  } catch {
+    lastSyncedWarning = "VAPID public key is not valid Base64URL.";
+    return false;
   }
-  if (!sub) {
-    sub = await readyReg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: expectedKeyBytes,
-    });
-  }
-  const json = sub.toJSON();
-  if (!json.endpoint || !json.keys?.["p256dh"] || !json.keys?.["auth"]) return false;
 
-  await savePushSubscription({
-    data: {
+  try {
+    await navigator.serviceWorker.register("/sw.js");
+    const readyReg = await navigator.serviceWorker.ready;
+
+    let sub = await readyReg.pushManager.getSubscription();
+    if (sub && !hasMatchingApplicationServerKey(sub, expectedKeyBytes)) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+    if (!sub) {
+      try {
+        sub = await readyReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: expectedKeyBytes,
+        });
+      } catch {
+        const existing = await readyReg.pushManager.getSubscription().catch(() => null);
+        if (existing) await existing.unsubscribe().catch(() => {});
+        sub = await readyReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: expectedKeyBytes,
+        });
+      }
+    }
+    const json = sub.toJSON();
+    if (!json.endpoint || !json.keys?.["p256dh"] || !json.keys?.["auth"]) {
+      lastSyncedWarning = "Browser push subscription did not return encryption keys.";
+      return false;
+    }
+
+    const subPayload = {
       endpoint: json.endpoint,
       p256dh: json.keys["p256dh"],
       auth: json.keys["auth"],
-    },
-  });
-  return true;
+    };
+    lastSyncedSub = subPayload;
+    await savePushSubscription({ data: subPayload });
+    lastSyncedWarning = "";
+    return true;
+  } catch (err) {
+    lastSyncedWarning = `Browser subscribe error (in Brave, enable 'Use Google services for push messaging' in Settings -> Privacy): ${err instanceof Error ? err.message : String(err)}`;
+    return false;
+  }
 }
 
 export function PushOptIn() {
@@ -97,7 +136,7 @@ export function PushOptIn() {
           tag: "downforce-welcome",
         }).catch(() => {});
       } else {
-        toast.error("Could not register push key (make sure VAPID_PUBLIC_KEY is in Secrets and click Publish).");
+        toast.error(getLastPushSyncError() || "Could not activate push alerts on this browser.");
       }
     } catch {
       toast.error("Could not activate push alerts on this browser.");

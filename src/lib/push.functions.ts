@@ -1,25 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { cleanVapidKey, isCompleteTop10, parsePushSubscriptionKey } from "@/lib/push-keys";
+import { isCompleteTop10, parsePushSubscriptionKey } from "@/lib/push-keys";
 
-export const getServerVapidPublicKey = createServerFn({ method: "GET" }).handler(async () => {
-  const raw =
-    process.env["VAPID_PUBLIC_KEY"] ||
-    process.env["VITE_VAPID_PUBLIC_KEY"] ||
-    process.env["PUBLIC_VAPID_KEY"] ||
-    "";
-  return {
-    publicKey: cleanVapidKey(raw),
-  };
-});
+export const getServerVapidPublicKey = createServerFn({ method: "POST" })
+  .inputValidator((input: Record<string, unknown> | undefined) => input ?? {})
+  .handler(async () => {
+    const { resolveServerVapidKeys } = await import("./webpush-native");
+    const { publicKey } = await resolveServerVapidKeys();
+    return {
+      publicKey,
+    };
+  });
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
   .inputValidator((input: { forceWindow?: "2h" | "30m" | null | undefined } | undefined) => ({
     forceWindow: input?.forceWindow ?? null,
   }))
   .handler(async ({ data }) => {
-    const { getServerVapidKeys, sendNativeWebPush } = await import("./webpush-native");
-    const { publicKey: pub, privateKey: priv } = getServerVapidKeys();
+    const { resolveServerVapidKeys, sendNativeWebPush } = await import("./webpush-native");
+    const { publicKey: pub, privateKey: priv } = await resolveServerVapidKeys();
     if (!pub || !priv) {
       console.error("[WebPush] VAPID keys not configured on server.");
       return { sent: 0, reason: "VAPID keys not configured" };

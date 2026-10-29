@@ -8,29 +8,6 @@ function cleanEnvKey(val: string | undefined): string {
   return (val ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
 }
 
-export function getServerVapidKeys(): { publicKey: string; privateKey: string } {
-  const env = (typeof process !== "undefined" && process?.env ? process.env : {}) as Record<
-    string,
-    string | undefined
-  >;
-  const publicKey = cleanEnvKey(
-    env["VAPID_PUBLIC_KEY"] ||
-      env["VITE_VAPID_PUBLIC_KEY"] ||
-      env["PUBLIC_VAPID_KEY"],
-  );
-  const privateKey = cleanEnvKey(
-    env["VAPID_PRIVATE_KEY"] ||
-      env["PRIVATE_VAPID_KEY"],
-  );
-  if (publicKey && !env["VITE_VAPID_PUBLIC_KEY"]) {
-    env["VITE_VAPID_PUBLIC_KEY"] = publicKey;
-  }
-  if (publicKey && !env["VAPID_PUBLIC_KEY"]) {
-    env["VAPID_PUBLIC_KEY"] = publicKey;
-  }
-  return { publicKey, privateKey };
-}
-
 function b64urlDecode(str: string): Uint8Array {
   const cleaned = cleanEnvKey(str);
   const pad = "=".repeat((4 - (cleaned.length % 4)) % 4);
@@ -45,6 +22,67 @@ function b64urlEncode(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function resolveServerVapidKeys(): Promise<{ publicKey: string; privateKey: string }> {
+  const env = (typeof process !== "undefined" && process?.env ? process.env : {}) as Record<
+    string,
+    string | undefined
+  >;
+  let privateKey = cleanEnvKey(
+    env["VAPID_PRIVATE_KEY"] ||
+      env["PRIVATE_VAPID_KEY"] ||
+      env["VABID_PRIVATE_KEY"],
+  );
+  let publicKey = cleanEnvKey(
+    env["VAPID_PUBLIC_KEY"] ||
+      env["VITE_VAPID_PUBLIC_KEY"] ||
+      env["PUBLIC_VAPID_KEY"] ||
+      env["VAPID_PUPLIC_KEY"] ||
+      env["PUPLIC_VAPID_KEY"] ||
+      env["VABID_PUBLIC_KEY"] ||
+      env["VABID_PUPLIC_KEY"],
+  );
+
+  if (!privateKey || !publicKey) {
+    for (const [k, v] of Object.entries(env)) {
+      if (!v || typeof v !== "string") continue;
+      const upper = k.toUpperCase();
+      if (!privateKey && (upper.includes("VAPID") || upper.includes("VABID")) && upper.includes("PRIV")) {
+        privateKey = cleanEnvKey(v);
+      }
+      if (
+        !publicKey &&
+        (upper.includes("VAPID") || upper.includes("VABID")) &&
+        (upper.includes("PUB") || upper.includes("PUP"))
+      ) {
+        publicKey = cleanEnvKey(v);
+      }
+    }
+  }
+
+  // Always derive the exact matching P-256 public key from VAPID_PRIVATE_KEY when privateKey is present!
+  if (privateKey) {
+    try {
+      const { createECDH } = await import("node:crypto");
+      const ecdh = createECDH("prime256v1");
+      ecdh.setPrivateKey(b64urlDecode(privateKey));
+      const derivedPub = b64urlEncode(new Uint8Array(ecdh.getPublicKey()));
+      if (derivedPub) {
+        publicKey = derivedPub;
+      }
+    } catch {
+      // Fallback to env publicKey if node:crypto is unavailable
+    }
+  }
+
+  if (publicKey && !env["VITE_VAPID_PUBLIC_KEY"]) {
+    env["VITE_VAPID_PUBLIC_KEY"] = publicKey;
+  }
+  if (publicKey && !env["VAPID_PUBLIC_KEY"]) {
+    env["VAPID_PUBLIC_KEY"] = publicKey;
+  }
+  return { publicKey, privateKey };
 }
 
 function concatBytes(...arrays: Uint8Array[]): Uint8Array {
@@ -102,20 +140,13 @@ async function createVapidAuthHeader(
     d: cleanEnvKey(vapidPrivateKey),
     ext: true,
   };
-  let ecKey: CryptoKey;
-  try {
-    ecKey = await crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["sign"],
-    );
-  } catch {
-    throw new Error(
-      "VAPID_PRIVATE_KEY does not match VAPID_PUBLIC_KEY! Make sure both came from the same generated keypair.",
-    );
-  }
+  const ecKey = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
   const enc = new TextEncoder();
   const header = b64urlEncode(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
   const payload = b64urlEncode(
@@ -203,15 +234,9 @@ export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
 ): Promise<{ ok: boolean; status: number; error?: string }> {
-  const { publicKey: pub, privateKey: priv } = getServerVapidKeys();
+  const { publicKey: pub, privateKey: priv } = await resolveServerVapidKeys();
   if (!pub || !priv) {
-    const missing = [
-      !pub ? "VAPID_PUBLIC_KEY" : "",
-      !priv ? "VAPID_PRIVATE_KEY" : "",
-    ]
-      .filter(Boolean)
-      .join(" & ");
-    const msg = `Missing ${missing} on server (click Publish -> Update in Lovable after adding Secrets)`;
+    const msg = "Missing VAPID_PRIVATE_KEY on server (save VAPID_PRIVATE_KEY in Lovable Secrets and click Publish -> Update)";
     console.error(`[WebPush] ${msg}`);
     return { ok: false, status: 0, error: msg };
   }
@@ -244,10 +269,7 @@ export async function sendNativeWebPush(
       return {
         ok: false,
         status: res.status,
-        error:
-          res.status === 401 || res.status === 403
-            ? `HTTP ${res.status} (Old VAPID subscription removed â€” tap Test My Phone once more to re-subscribe)`
-            : `Push service HTTP ${res.status}`,
+        error: `Push service returned HTTP ${res.status}`,
       };
     }
     return { ok: true, status: res.status };
