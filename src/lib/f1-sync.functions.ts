@@ -25,7 +25,7 @@ import {
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
-const STALE_MS = 5 * 1000;
+const STALE_MS = 5 * 60 * 1000; // non-force syncs skip while season data is younger than this
 const EXCLUDED_DRIVERS = new Set();
 
 type ErgastSession = { date: string; time?: string | undefined };
@@ -88,15 +88,33 @@ export const syncF1Data = createServerFn({ method: "POST" })
       console.error("[f1-sync.functions] Push reminder check failed:", error);
     });
 
+    return runSeasonSync(supabaseAdmin, { force: data.force });
+  });
+
+/**
+ * Shared season sync used by the authenticated `syncF1Data` server function and
+ * the /reminders cron warm-up. Non-force calls respect the STALE_MS freshness
+ * window and the in-flight lock, so background and cron syncs never hammer the
+ * external F1 APIs. Returns `skipped: true` without heavy work when the season
+ * data is already fresh.
+ */
+export async function runSeasonSync(
+  supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
+  opts: { force: boolean },
+): Promise<{ skipped: boolean; races: number; scored: number }> {
+    if (!opts.force && inFlightSyncLock) {
+      return { skipped: true, races: 0, scored: 0 };
+    }
+
     const { data: state } = await supabaseAdmin
       .from("sync_state")
       .select("synced_at")
       .eq("key", `season-${SEASON}`)
       .maybeSingle();
 
-    if (!data.force && state?.synced_at) {
+    if (!opts.force && state?.synced_at) {
       const age = Date.now() - new Date(state.synced_at).getTime();
-      if (age < 5 * 1000) return { skipped: true as const };
+      if (age < STALE_MS) return { skipped: true, races: 0, scored: 0 };
     }
 
     inFlightSyncLock = true;
@@ -246,7 +264,7 @@ export const syncF1Data = createServerFn({ method: "POST" })
 
     return { skipped: false as const, races: races.length, scored: racesWithResults.length };
     } finally { inFlightSyncLock = false; }
-  });
+  }
 
 export async function checkAndSendPushReminders(
   supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],

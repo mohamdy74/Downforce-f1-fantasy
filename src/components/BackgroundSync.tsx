@@ -29,7 +29,7 @@ export function BackgroundSync() {
         if (!data.session) return;
 
         await Promise.allSettled([
-          syncF1Data({ data: { force: true } }),
+          syncF1Data({ data: { force: false } }),
           checkAndSendRaceReminders({ data: {} }),
         ]);
 
