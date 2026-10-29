@@ -84,10 +84,6 @@ export const syncF1Data = createServerFn({ method: "POST" })
       return { skipped: true as const };
     }
 
-    await checkAndSendPushReminders(supabaseAdmin).catch((error) => {
-      console.error("[f1-sync.functions] Push reminder check failed:", error);
-    });
-
     return runSeasonSync(supabaseAdmin, { force: data.force });
   });
 
@@ -359,13 +355,16 @@ export async function checkAndSendPushReminders(
       const diff = new Date(t.iso).getTime() - now;
       for (const w of WINDOWS) {
         if (diff < w.minMs || diff > w.maxMs) continue;
-        const stateKey = `reminded:${race.id}:${t.type}:${w.label}`;
-        const { data: already } = await supabaseAdmin
+
+        // Per-user dedup (replaces the old per-race global window key) so
+        // players who enable push mid-window still get their reminder and a
+        // partially failed sweep retries on the next pass.
+        const keyPrefix = `reminded:${race.id}:${t.type}:${w.label}:`;
+        const { data: sLogs } = await supabaseAdmin
           .from("sync_state")
           .select("key")
-          .eq("key", stateKey)
-          .maybeSingle();
-        if (already) continue;
+          .like("key", keyPrefix + "%");
+        const sentSet = new Set((sLogs ?? []).map((r) => r.key.slice(keyPrefix.length)));
 
         const { data: preds } = await supabaseAdmin
           .from("predictions")
@@ -383,12 +382,17 @@ export async function checkAndSendPushReminders(
         );
 
         const payloadObj = {
-          title: `\u23F0 ${race.name} \u2014 Lock Alert!`,
+          title:
+            t.type === "race" && w.label === "30m"
+              ? `\u{1F6A8} ${race.name} \u2014 Final Call!`
+              : `\u23F0 ${race.name} \u2014 Lock Alert!`,
           body:
             t.type === "pole"
               ? `Qualifying starts ${w.text}! Lock in your Pole Position pick now.`
-              : `Race locks ${w.text}! Submit your Top 10 now to avoid the \u221225 penalty.`,
-          tag: stateKey,
+              : w.label === "30m"
+                ? `Final call! Race locks ${w.text} \u2014 lock in your Top 10 now before the \u221225 penalty!`
+                : `Race locks ${w.text}! You haven't submitted your picks \u2014 lock in your Top 10 now to avoid the \u221225 penalty.`,
+          tag: `downforce-${race.id}-${t.type}-${w.label}`,
           url: "/predict",
         };
 
@@ -396,17 +400,22 @@ export async function checkAndSendPushReminders(
         const deadKeys: string[] = [];
         const pendingSubs = subRows.flatMap((r) => {
           const parsed = parsePushSubscriptionKey(r.key);
-          return parsed && !doneUsers.has(parsed.userId) ? [parsed] : [];
+          return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId) ? [parsed] : [];
         });
         const BATCH_SIZE = 25;
+        const newlyNotified = new Set<string>();
         for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
           const batch = pendingSubs.slice(i, i + BATCH_SIZE);
           await Promise.allSettled(
             batch.map(async (sub) => {
               try {
                 const res = await sendNativeWebPush(sub, payloadObj);
-                if (res.ok) totalSent++;
-                else if (res.status === 404 || res.status === 410) deadKeys.push(sub.rawKey);
+                if (res.ok) {
+                  totalSent++;
+                  newlyNotified.add(sub.userId);
+                } else if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 410) {
+                  deadKeys.push(sub.rawKey);
+                }
               } catch (error) {
                 console.error("[f1-sync.functions] Push notification failed:", error);
               }
@@ -416,9 +425,15 @@ export async function checkAndSendPushReminders(
         if (deadKeys.length > 0) {
           await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
         }
-        await supabaseAdmin
-          .from("sync_state")
-          .upsert({ key: stateKey, synced_at: new Date().toISOString() }, { onConflict: "key" });
+        if (newlyNotified.size > 0) {
+          await supabaseAdmin.from("sync_state").upsert(
+            Array.from(newlyNotified).map((uid) => ({
+              key: keyPrefix + uid,
+              synced_at: new Date().toISOString(),
+            })),
+            { onConflict: "key" },
+          );
+        }
       }
     }
   }
