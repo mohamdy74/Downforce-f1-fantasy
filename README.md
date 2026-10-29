@@ -12,7 +12,6 @@
 - 🏆 **Leaderboard** — season standings and race-by-race history
 - ⏰ **Smart reminders** — Web Push alerts 2h & 30m before picks lock
 - 🛡️ **Stewards Room** — league admin tools: penalties, waivers, renames, nudges, manual results, league backup
-- 📱 **Android app** — official APK with offline race alarms and telemetry haptics
 
 ## Tech stack
 
