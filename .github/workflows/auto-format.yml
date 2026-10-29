@@ -1,0 +1,42 @@
+name: Auto-format
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# eslint --fix applies the exact same prettier fixes the lint step enforces,
+# so after this bot runs the lint baseline is clean and CI can gate on it.
+# Formatting-only commits; a GITHUB_TOKEN push does not re-trigger workflows.
+permissions:
+  contents: write
+
+jobs:
+  eslint-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: |
+          rm -f bun.lock package-lock.json
+          bun install || (rm -f bunfig.toml && bun install)
+
+      - name: Apply eslint --fix (prettier formatting only)
+        run: bunx eslint . --fix
+
+      - name: Commit + push if anything changed
+        run: |
+          git config user.name "df-style-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "style: apply eslint --fix (prettier formatting) [auto]"
+            git push
+            echo "Formatting committed and pushed."
+          else
+            echo "Nothing to format — baseline already clean."
+          fi
