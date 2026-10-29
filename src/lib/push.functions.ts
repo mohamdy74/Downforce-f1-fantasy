@@ -1,23 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import {
-  VAPID_PRIVATE_KEY,
-  VAPID_PUBLIC_KEY,
-  isCompleteTop10,
-  parsePushSubscriptionKey,
-} from "@/lib/push-keys";
+import { VAPID_SUBJECT, isCompleteTop10, parsePushSubscriptionKey } from "@/lib/push-keys";
+
+// SECURITY: Get VAPID keys from server-only module (webpush-native.ts)
+// This ensures private key is NEVER exposed to client bundle
+import { sendNativeWebPush } from "@/lib/webpush-native";
 
 export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
   .inputValidator((input: { forceWindow?: "2h" | "30m" | null } | undefined) => ({
     forceWindow: input?.forceWindow ?? null,
   }))
   .handler(async () => {
-    const pub = VAPID_PUBLIC_KEY;
-    const priv = VAPID_PRIVATE_KEY;
-    if (!pub || !priv) return { sent: 0, reason: "VAPID keys not configured" };
-
+    // SECURITY: VAPID keys are validated inside sendNativeWebPush
+    // If keys are missing, it will return { ok: false, status: 0 }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { sendNativeWebPush } = await import("@/lib/webpush-native");
     const now = Date.now();
     const in3Hours = new Date(now + 3 * 3600_000).toISOString();
     const nowIso = new Date(now).toISOString();
@@ -102,9 +98,13 @@ export const checkAndSendRaceReminders = createServerFn({ method: "POST" })
             if (res.ok) {
               sent++;
               newlyNotified.add(sub.userId);
+            } else {
+              console.error(
+                `[Push] Failed to send to ${sub.userId}: status=${res.status}`,
+              );
             }
-          } catch {
-            // Ignore expired subscription
+          } catch (error) {
+            console.error("[Push] Error sending notification:", error);
           }
         }),
       );

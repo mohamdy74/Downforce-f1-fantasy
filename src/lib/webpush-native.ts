@@ -2,15 +2,11 @@ if (typeof window !== "undefined") {
   throw new Error("Security violation: webpush-native is a Server-Only module and must never be imported in browser code.");
 }
 
-// SECURITY: VAPID keys should be loaded from environment variables in production.
-// These defaults are for development only and MUST NOT be used in production.
-// Set VITE_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in your environment.
-// WARNING: The private key below is EXPOSED in source code - rotate it immediately if this repo is public.
-const DEFAULT_VAPID_PUBLIC =
-  (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) ||
-  "BPsK6eJs07cjbH2JnZRJvMrZ_wTN4CfxgZqdZBXY-oQStSLyrd8NPq0xYVMsUqdbywWgvj5XJQboYn-E9TxPrSk";
-const DEFAULT_VAPID_PRIVATE =
-  (process.env["VAPID_PRIVATE_KEY"] as string | undefined) || "";
+// SECURITY: VAPID keys are loaded ONLY from environment variables.
+// NO hardcoded fallback keys - if keys are missing, push notifications will fail safely.
+// Set these in Lovable: More -> Settings -> Secrets
+//   VAPID_PRIVATE_KEY = your_private_key_here
+//   VITE_VAPID_PUBLIC_KEY = your_public_key_here
 
 function b64urlDecode(str: string): Uint8Array {
   const pad = "=".repeat((4 - (str.length % 4)) % 4);
@@ -173,14 +169,16 @@ export async function sendNativeWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
   payloadObj: { title: string; body: string; tag?: string; url?: string },
 ): Promise<{ ok: boolean; status: number }> {
-  const pub = (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || (process.env["VAPID_PUBLIC_KEY"] as string | undefined) || DEFAULT_VAPID_PUBLIC;
-  const priv = (process.env["VAPID_PRIVATE_KEY"] as string | undefined) || DEFAULT_VAPID_PRIVATE;
+  // SECURITY: Load keys ONLY from environment variables - NO fallbacks
+  const pub = (process.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || (process.env["VAPID_PUBLIC_KEY"] as string | undefined);
+  const priv = process.env["VAPID_PRIVATE_KEY"] as string | undefined;
   
-  // SECURITY: Refuse to send if private key is not properly configured
-  if (!pub || !priv || priv === "") {
+  // SECURITY: Fail fast with clear error if keys are not configured
+  if (!pub || !priv) {
     console.error("[WebPush] VAPID keys not configured. Set VAPID_PRIVATE_KEY and VITE_VAPID_PUBLIC_KEY environment variables.");
     return { ok: false, status: 0 };
   }
+
   const payloadStr = JSON.stringify(payloadObj);
 
   const [authHeader, encryptedBody] = await Promise.all([
@@ -204,7 +202,8 @@ export async function sendNativeWebPush(
       signal: ctrl.signal,
     });
     return { ok: res.ok || res.status === 201, status: res.status };
-  } catch {
+  } catch (error) {
+    console.error("[WebPush] Send failed:", error);
     return { ok: false, status: 0 };
   } finally {
     clearTimeout(timer);
