@@ -10,4 +10,18 @@ jobs:
       # x-cron-secret: optional shared secret. Once CRON_SECRET is set in BOTH
       # GitHub repo secrets AND Lovable Secrets, only authenticated pings may
       # trigger the server-side reminder sweep (empty secret = open, as today).
-      - run: curl -s -L -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" https://downforce.lovable.app/reminders > /dev/null
+      # Diagnostics as annotations: raw logs need auth, and this ping is the
+      # league's only server-side reminder entry, so its health matters.
+      - name: Ping /reminders (cron warm-up)
+        run: |
+          set +e
+          out=$(curl -4 -sS -L --max-time 150 \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -o /dev/null -w "%{http_code} %{time_total}" \
+            https://downforce.lovable.app/reminders 2>/tmp/curl.err)
+          status=$?
+          echo "curl exit=${status} http+time=${out}"
+          if [ $status -ne 0 ]; then
+            echo "::error::REMINDERS-PING: curl exit ${status} — http+time ${out} — $(head -c 180 /tmp/curl.err)"
+            exit 1
+          fi
