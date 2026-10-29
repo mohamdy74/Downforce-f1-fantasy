@@ -17,12 +17,13 @@ export const Route = createFileRoute("/reminders")({
     // Only authenticated cron machines (x-cron-secret header) may trigger the
     // server-side reminder sweep + season sync. Real browsers skip this and run
     // BackgroundSync client-side instead; while CRON_SECRET is unset the warm-up
-    // stays open exactly as before. TanStack Start exposes the request through
-    // getWebRequest() (route loaders do not receive it directly).
+    // stays open exactly as before. TanStack Start exposes the current
+    // request through getRequestHeader() (route loaders do not receive the
+    // request object directly in this version).
     let headerSecret: string | null = null;
     try {
-      const { getWebRequest } = await import("@tanstack/react-start/server");
-      headerSecret = getWebRequest()?.headers.get("x-cron-secret") ?? null;
+      const { getRequestHeader } = await import("@tanstack/react-start/server");
+      headerSecret = getRequestHeader("x-cron-secret") ?? null;
     } catch {
       headerSecret = null;
     }
