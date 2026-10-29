@@ -73,6 +73,7 @@ function Predict() {
   const { data: prediction } = useQuery({
     queryKey: ["prediction", race?.id, user?.id],
     enabled: !!race && !!user,
+    staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("predictions")
@@ -88,6 +89,7 @@ function Predict() {
   const { data: lastPicks } = useQuery({
     queryKey: ["last-prediction", race?.id, user?.id],
     enabled: !!race && !!user && !!races,
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("predictions")
@@ -531,7 +533,7 @@ function Predict() {
         <p className="mt-3 text-sm text-destructive">A driver is selected more than once.</p>
       )}
 
-      <section className="carbon-panel mt-6 rounded-lg p-4 sm:p-5">
+      <section className="carbon-panel cv-auto mt-6 rounded-lg p-4 sm:p-5">
         <h2 className="text-xl">Bonus picks</h2>
         <div className="mt-4 space-y-4">
           <Field label="Fastest lap (+3)" purple>
@@ -560,7 +562,7 @@ function Predict() {
       </section>
 
       {hasSaved && viewOnly && prediction && (
-        <div className="mt-6">
+        <div className="cv-auto mt-6">
           <SharePicks
             raceName={race.name}
             round={race.round}
