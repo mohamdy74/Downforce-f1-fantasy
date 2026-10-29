@@ -7,4 +7,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -s -L https://downforce.lovable.app/reminders > /dev/null
+      # x-cron-secret: optional shared secret. Once CRON_SECRET is set in BOTH
+      # GitHub repo secrets AND Lovable Secrets, only authenticated pings may
+      # trigger the server-side reminder sweep (empty secret = open, as today).
+      - run: curl -s -L -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" https://downforce.lovable.app/reminders > /dev/null

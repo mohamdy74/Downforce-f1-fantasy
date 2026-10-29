@@ -37,6 +37,17 @@ jobs:
       - name: Regression tests (real src modules)
         run: bun test tests/modules.test.mjs
 
+      - name: Build (vite build)
+        # Full production build so bundler-level breakage (vite/nitro/rolldown) is
+        # caught in CI. Lovable deploys on push regardless of CI, so a red build
+        # here is the early warning that prod is broken.
+        run: bun run build
+        env:
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-key
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
       - name: Lint (advisory until the baseline is clean)
         run: bun run lint
         continue-on-error: true

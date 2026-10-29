@@ -1,6 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
-import { Bell, CheckCircle2, ShieldAlert, Sparkles, Trash2, Trophy, UserCog, X } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+  Trophy,
+  UserCog,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -76,7 +85,9 @@ export function AccountAndOnboarding() {
       } else {
         window.localStorage.setItem(key, "1");
       }
-    } catch (error) { console.error("[AccountAndOnboarding]", error); }
+    } catch (error) {
+      console.error("[AccountAndOnboarding]", error);
+    }
   }, [user?.id, profile]);
 
   if (!user) return null;
@@ -84,7 +95,9 @@ export function AccountAndOnboarding() {
   function markOnboarded() {
     try {
       window.localStorage.setItem(`dfr:onboarded:${user!.id}`, "1");
-    } catch (error) { console.error("[AccountAndOnboarding]", error); }
+    } catch (error) {
+      console.error("[AccountAndOnboarding]", error);
+    }
   }
 
   function closeModal() {
@@ -227,7 +240,8 @@ export function AccountAndOnboarding() {
                   {step === 1 && (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        This is the name shown on the League Standings, Head-to-Head, and Share Cards.
+                        This is the name shown on the League Standings, Head-to-Head, and Share
+                        Cards.
                       </p>
                       <input
                         type="text"
@@ -237,7 +251,11 @@ export function AccountAndOnboarding() {
                         className="h-11 w-full rounded-lg border border-input bg-background px-3 font-display text-sm font-bold uppercase"
                       />
                       <div className="flex gap-2 pt-1">
-                        <Button className="flex-1" disabled={busy} onClick={() => handleSaveName(true)}>
+                        <Button
+                          className="flex-1"
+                          disabled={busy}
+                          onClick={() => handleSaveName(true)}
+                        >
                           Save &amp; Continue →
                         </Button>
                         <Button variant="ghost" onClick={() => setStep(2)}>

@@ -22,7 +22,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS);
-    })
+    }),
   );
   self.skipWaiting();
 });
@@ -35,9 +35,9 @@ self.addEventListener("activate", (event) => {
           if (name !== CACHE_NAME) {
             return caches.delete(name);
           }
-        })
+        }),
       );
-    })
+    }),
   );
   event.waitUntil(self.clients.claim());
 });
@@ -51,7 +51,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .catch(() => caches.match(event.request))
-        .then((response) => response || caches.match("/"))
+        .then((response) => response || caches.match("/")),
     );
     return;
   }
@@ -59,7 +59,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       return cachedResponse || fetch(event.request);
-    })
+    }),
   );
 });
 
