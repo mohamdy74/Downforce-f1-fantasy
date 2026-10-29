@@ -44,7 +44,18 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  
+
+  // Navigations (HTML documents) go network-first so installed PWA users always
+  // receive the latest deploy; the precached "/" only serves as offline fallback.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => caches.match(event.request))
+        .then((response) => response || caches.match("/"))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       return cachedResponse || fetch(event.request);
