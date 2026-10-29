@@ -758,7 +758,9 @@ test("Characterization 8: Race-Day End-to-End Safeguards (buildLiveOrderFromPosi
   assert.ok(weekendFnSrc.includes("liveScores"));
 
   const leaderboardSrc = fs.readFileSync("src/routes/leaderboard.tsx", "utf8");
-  assert.ok(leaderboardSrc.includes("Test Live Mode"));
+  // "Test Live Mode" debug toggle was removed in the Oct 29 UX pass;
+  // pin the live-standings fetch helper that replaced that flow instead.
+  assert.ok(leaderboardSrc.includes("jolpicaFetch"));
 
   const weekendRouteSrc = fs.readFileSync("src/routes/weekend.tsx", "utf8");
   assert.ok(weekendRouteSrc.includes("Live Grand Prix Telemetry"));
