@@ -6,7 +6,7 @@ import { scoreSprint, type SprintResultRow } from "./sprintScoring";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
 
-async function requireSteward(context: { userId: string; claims?: Record<string, unknown> }) {
+export async function requireSteward(context: { userId: string; claims?: Record<string, unknown> }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   let email = String(context.claims?.["email"] ?? "").toLowerCase();
   if (!email) {

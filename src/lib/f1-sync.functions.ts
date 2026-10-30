@@ -29,6 +29,7 @@ import {
   type OpenF1RaceControlMessage,
 } from "./liveStandings";
 import { buildReminderPayload, computeActiveReminders } from "./reminder-windows";
+import { requireSteward } from "./stewards.functions";
 
 const API = "https://api.jolpi.ca/ergast/f1";
 const SEASON = 2026;
@@ -77,6 +78,12 @@ export const syncF1Data = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Force syncs run the full season pipeline against upstream APIs — reserve them
+    // for the steward. Regular player-triggered syncs stay on the cooldown below.
+    if (data.force) {
+      await requireSteward(context);
+    }
 
     const userId = context.userId;
     const lastCall = userSyncCalls.get(userId) ?? 0;

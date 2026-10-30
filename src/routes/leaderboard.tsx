@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 import { driversQuery, leaderboardQuery, racesQuery, SEASON, type Driver } from "@/lib/queries";
 import { writeQueryCache } from "@/lib/queryPersist";
 import { teamColor, teamLabel, teamRank } from "@/lib/teams";
@@ -844,7 +845,7 @@ function Leaderboard() {
               : `Round ${completedRounds} of ${totalRounds} · ${remainingRaces} race${remainingRaces === 1 ? "" : "s"} remaining`}
           </p>
         </div>
-        {user && (
+        {user && (user.email ?? "").toLowerCase() === STEWARD_EMAIL && (
           <Button
             type="button"
             variant="secondary"
