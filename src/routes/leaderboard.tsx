@@ -679,8 +679,13 @@ const f1StandingsQuery = queryOptions({
         teamRank(a.team) - teamRank(b.team),
     );
 
+    // Prefer the live championship round reported by Jolpica; the verified
+    // Round-18 snapshot number is only the fallback when upstream is unreachable.
+    const jolpicaRound = Number(
+      jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]?.round ?? 0,
+    );
     return writeQueryCache(`f1-standings:${SEASON}`, {
-      roundsCompleted: 18,
+      roundsCompleted: jolpicaRound || 18,
       drivers: sortedDrivers,
       constructors: sortedConstructors,
     });
@@ -769,6 +774,14 @@ function Leaderboard() {
 
   const scored = board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
 
+  // Season progress derived from the races table — the old hardcoded
+  // "Round 18 of 24 · 6 races remaining" copy went stale after every round.
+  const totalRounds = races?.length ?? 0;
+  const completedRounds = races
+    ? races.reduce((max, r) => (r.has_results ? Math.max(max, r.round) : max), 0)
+    : 0;
+  const remainingRaces = Math.max(totalRounds - completedRounds, 0);
+
   async function handleForceSync() {
     if (syncing) return;
     setSyncing(true);
@@ -828,7 +841,7 @@ function Leaderboard() {
           <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {activeTab === "league"
               ? `${scored} league race${scored === 1 ? "" : "s"} scored`
-              : "Round 18 of 24 · 6 races remaining"}
+              : `Round ${completedRounds} of ${totalRounds} · ${remainingRaces} race${remainingRaces === 1 ? "" : "s"} remaining`}
           </p>
         </div>
         {user && (
