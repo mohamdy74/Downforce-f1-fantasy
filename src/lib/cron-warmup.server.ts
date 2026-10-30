@@ -20,9 +20,11 @@ export async function runRemindersWarmUp(): Promise<void> {
   }
   if (!cronRequestAuthorized(headerSecret)) return;
 
-  const { checkAndSendRaceReminders } = await import("./push.functions");
-  await checkAndSendRaceReminders({ data: {} }).catch(() => null);
+  // Sweep directly instead of round-tripping through the public server
+  // function: the header was already validated above, and this keeps working
+  // even once checkAndSendRaceReminders starts enforcing x-cron-secret.
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { runSeasonSync } = await import("./f1-sync.functions");
+  const { checkAndSendPushReminders, runSeasonSync } = await import("./f1-sync.functions");
+  await checkAndSendPushReminders(supabaseAdmin).catch(() => null);
   void runSeasonSync(supabaseAdmin, { force: false }).catch(() => null);
 }

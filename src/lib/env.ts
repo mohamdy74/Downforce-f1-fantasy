@@ -33,3 +33,15 @@ export function cronRequestAuthorized(headerSecret: string | null): boolean {
   if (!expected) return true;
   return !!headerSecret && headerSecret === expected;
 }
+
+/**
+ * Gate for the public checkAndSendRaceReminders server function. The entry is
+ * shared by the /reminders cron warm-up and the browser BackgroundSync, so it
+ * may only be locked once the server-side cron path is fully operational
+ * (SUPABASE_SERVICE_ROLE_KEY set). Without the service role the browser path
+ * is the only reminder delivery mechanism and must stay open.
+ */
+export function raceRemindersSweepAuthorized(headerSecret: string | null): boolean {
+  if (!readServerEnv("SUPABASE_SERVICE_ROLE_KEY")) return true;
+  return cronRequestAuthorized(headerSecret);
+}
