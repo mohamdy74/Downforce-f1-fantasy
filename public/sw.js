@@ -1,4 +1,4 @@
-const CACHE_NAME = "dfr:v1";
+const CACHE_NAME = "dfr:v2";
 const PRECACHE_ASSETS = [
   "/",
   "/favicon.svg",
@@ -7,21 +7,19 @@ const PRECACHE_ASSETS = [
   "/icon-192.png",
   "/icon-512.png",
   "/manifest.webmanifest",
-  "/assets/fonts/archivo-roman-var.woff2",
-  "/assets/fonts/archivo-italic-var.woff2",
-  "/assets/fonts/barlow-400.woff2",
-  "/assets/fonts/barlow-600.woff2",
-  "/assets/fonts/barlow-700.woff2",
-  "/assets/fonts/barlow-700-italic.woff2",
-  "/assets/fonts/barlow-semicondensed-600.woff2",
-  "/assets/fonts/barlow-semicondensed-700.woff2",
-  "/assets/fonts/cairo-badge-var.woff2",
 ];
+// NOTE: fonts are intentionally NOT precached. Vite emits them content-hashed
+// under /assets/, so the v1 "/assets/fonts/<name>.woff2" paths never existed —
+// every one of them 404'd and the all-or-nothing addAll() aborted "install",
+// which silently broke SW registration, PWA install AND push subscriptions on
+// every device. Fonts still load via styles.css (font-display: swap) + HTTP cache.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
+      // Cache each URL individually: a single failed request must never abort
+      // the whole install again (see the v1 incident note above).
+      return Promise.all(PRECACHE_ASSETS.map((url) => cache.add(url).catch(() => undefined)));
     }),
   );
   self.skipWaiting();

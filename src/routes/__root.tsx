@@ -132,41 +132,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
-      {
-        rel: "preload",
-        href: "/assets/fonts/archivo-roman-var.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossorigin: "anonymous",
-      },
-      {
-        rel: "preload",
-        href: "/assets/fonts/barlow-400.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossorigin: "anonymous",
-      },
-      {
-        rel: "preload",
-        href: "/assets/fonts/barlow-600.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossorigin: "anonymous",
-      },
-      {
-        rel: "preload",
-        href: "/assets/fonts/barlow-700.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossorigin: "anonymous",
-      },
-      {
-        rel: "preload",
-        href: "/assets/fonts/cairo-badge-var.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossorigin: "anonymous",
-      },
+      // NOTE: manual font preloads removed — Vite emits fonts content-hashed,
+      // so the old /assets/fonts/* hrefs 404'd on every page load (and fed the
+      // broken paths that aborted the service-worker precache install).
+      // Fonts load through styles.css with font-display: swap.
     ],
   }),
   shellComponent: RootShell,
