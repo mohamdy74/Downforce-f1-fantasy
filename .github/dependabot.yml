@@ -1,0 +1,19 @@
+# Dependabot — weekly checks for npm deps + GitHub Actions updates.
+# Security alerts for vulnerable packages are on by default for public repos;
+# this config additionally opens automated version-update PRs.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
