@@ -57,6 +57,13 @@
       "when": 1791245928883,
       "tag": "0007_prediction_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791037706000,
+      "tag": "0013_prediction_lock_race_immutable",
+      "breakpoints": true
     }
   ]
 }
