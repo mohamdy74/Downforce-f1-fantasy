@@ -245,18 +245,21 @@ export function SprintGrid({
                   P{i + 1}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-1.5">
+                  <span className="block truncate font-display text-base font-extrabold italic uppercase leading-tight">
+                    {d ? (d.code ?? d.full_name) : "—"}
+                  </span>
+                  <span className="flex items-baseline gap-1.5 text-[11px] font-medium">
+                    <span className={cn("min-w-0 truncate", !d && "text-muted-foreground")}>
+                      {d ? d.team : isActive ? "Pick a driver" : "Empty"}
+                    </span>
                     {d?.number != null && (
-                      <span className="font-mono text-[11px] font-bold tabular-nums text-muted-foreground">
+                      <span
+                        className="shrink-0 font-mono text-[11px] font-bold tabular-nums"
+                        style={{ color }}
+                      >
                         #{d.number}
                       </span>
                     )}
-                    <span className="min-w-0 truncate font-display text-base font-extrabold italic uppercase leading-tight">
-                      {d ? (d.code ?? d.full_name) : "—"}
-                    </span>
-                  </span>
-                  <span className="block truncate text-[11px] font-medium text-muted-foreground">
-                    {d ? d.team : isActive ? "Pick a driver" : "Empty"}
                   </span>
                 </span>
               </button>
