@@ -59,9 +59,44 @@
       "breakpoints": true
     },
     {
+      "idx": 8,
+      "version": "7",
+      "when": 1791332328883,
+      "tag": "0008_sprint_predictions_and_locks",
+      "breakpoints": true
+    },
+    {
       "idx": 9,
       "version": "7",
-      "when": 1791037706000,
+      "when": 1791418728883,
+      "tag": "0009_f1_fantasy_schema_alignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791505128883,
+      "tag": "0010_fix_scores_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791591528883,
+      "tag": "0011_fix_prediction_logs_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791677928883,
+      "tag": "0012_add_performance_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791764328883,
       "tag": "0013_prediction_lock_race_immutable",
       "breakpoints": true
     }
