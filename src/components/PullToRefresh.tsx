@@ -104,7 +104,9 @@ export function PullToRefresh() {
     };
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
-    document.addEventListener("touchmove", handleTouchMove, { passive: true });
+    // Non-passive on purpose: the handler calls preventDefault() once the pull
+    // threshold is passed, so the browser must not treat it as passive-only.
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     return () => {

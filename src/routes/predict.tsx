@@ -342,6 +342,10 @@ function Predict() {
     navigator.vibrate?.([12, 40, 18]);
     setLightsOut(true);
     queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
+    // Keep Home (PickStatus) and the reminders views in sync with the save.
+    queryClient.invalidateQueries({ queryKey: ["has-prediction", race.id, user.id] });
+    queryClient.invalidateQueries({ queryKey: ["submission-status", race.id] });
+    queryClient.invalidateQueries({ queryKey: ["missing-preds", race.id] });
   }
 
   // Pole can be saved alone (before the top 10 is ready) until qualifying starts.
@@ -387,6 +391,8 @@ function Predict() {
     }).catch(() => null);
     writePoleAt(user!.id, race!.id, pole);
     queryClient.invalidateQueries({ queryKey: ["prediction", race!.id, user!.id] });
+    queryClient.invalidateQueries({ queryKey: ["submission-status", race.id] });
+    queryClient.invalidateQueries({ queryKey: ["missing-preds", race.id] });
   }
 
   const savedPole = prediction?.pole_driver_id ?? null;
