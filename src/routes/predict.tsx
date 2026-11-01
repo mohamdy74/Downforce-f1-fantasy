@@ -15,7 +15,13 @@ import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { generateIdempotencyKey, idempotencyHeaders, isInFlight, markCompleted, markInFlight } from "@/lib/idempotency";
+import {
+  generateIdempotencyKey,
+  idempotencyHeaders,
+  isInFlight,
+  markCompleted,
+  markInFlight,
+} from "@/lib/idempotency";
 import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";

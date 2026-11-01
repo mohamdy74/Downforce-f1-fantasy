@@ -9,7 +9,13 @@ import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { generateIdempotencyKey, idempotencyHeaders, isInFlight, markCompleted, markInFlight } from "@/lib/idempotency";
+import {
+  generateIdempotencyKey,
+  idempotencyHeaders,
+  isInFlight,
+  markCompleted,
+  markInFlight,
+} from "@/lib/idempotency";
 import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
 import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
 import { assertDeadlineOpen } from "@/lib/reminders.functions";
