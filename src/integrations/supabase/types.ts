@@ -271,7 +271,7 @@ export type Database = {
           qualifying_at?: string | null
           race_at: string
           round: number
-          season: number
+          season?: number
           sprint_at?: string | null
           sprint_qualifying_at?: string | null
         }
