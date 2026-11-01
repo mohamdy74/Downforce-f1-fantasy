@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 API = "https://api.openf1.org"
 STATE_PATH = os.environ.get("STATE_PATH", "state/seen.json")
 KEYWORDS = re.compile(
-    r"PENALT|INVESTIGAT|GRID DROP|PLACE GRID|DISQUALIF|SUMMON|REPRIMAND", re.I
+    r"PENALT|INVESTIGAT|IMPED|GRID DROP|PLACE GRID|DISQUALIF|SUMMON|REPRIMAND", re.I
 )
 
 try:
