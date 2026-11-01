@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Send, Users, UserX, Clock } from "lucide-react";
+import { Send, Users, UserX, Clock, Loader2 } from "lucide-react";
 
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { nextRace, racesQuery } from "@/lib/queries";
-import { getReminderStats } from "@/lib/reminder.functions";
+import { getReminderStatsPaginated, type PaginatedReminderStatsResult } from "@/lib/reminder.functions";
 
 export function ReminderList() {
   const { data: races } = useQuery(racesQuery);
@@ -14,14 +15,34 @@ export function ReminderList() {
 
   const race = races ? nextRace(races) : null;
 
-  const { data: missing, isLoading: missingLoading } = useQuery({
-    queryKey: ["missing-preds", race?.id],
-    enabled: !!race && !!user,
-    staleTime: 2 * 60_000, // 2 minutes
-    queryFn: async () => {
-      return await getReminderStats({ data: { raceId: race!.id } });
+  // Use infinite query for paginated results
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isLoading: missingLoading,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["missing-preds-paginated", race?.id],
+    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+      return await getReminderStatsPaginated({
+        data: { 
+          raceId: race!.id,
+          limit: DEFAULT_PAGE_SIZE,
+          cursor: pageParam,
+        },
+      });
     },
+    initialPageParam: null,
+    getNextPageParam: (lastPage: PaginatedReminderStatsResult) => lastPage.nextCursor,
+    enabled: !!race && !!user,
+    staleTime: 2 * 60_000,
   });
+
+  // Merge all pages
+  const allMissing = data?.pages.flatMap((page: PaginatedReminderStatsResult) => page.missing) ?? [];
+  const totalSubmitted = data?.pages[0]?.submitted ?? 0;
+  const totalCount = data?.pages[0]?.total ?? 0;
 
   if (!race || !races) return null;
   if (missingLoading) {
@@ -46,17 +67,17 @@ export function ReminderList() {
       </div>
     );
   }
-  if (!missing || !missing.missing) {
+  if (!data && !missingLoading) {
     return (
       <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">
-        Couldn&apos;t load reminder list — check that predictions table is accessible.
+        Couldn&apos;t load reminder list \u2014 check that predictions table is accessible.
       </div>
     );
   }
-  if (missing.missing.length === 0) return null;
+  if (allMissing.length === 0) return null;
 
   const whatsappMsg = encodeURIComponent(
-    `DOWNFORCE reminder: ${race.name} picks close at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} — lock in your predictions!`,
+    `DOWNFORCE reminder: ${race.name} picks close at ${new Date(race.race_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" })} \u2014 lock in your predictions!`,
   );
   const waLink = `https://wa.me/?text=${whatsappMsg}`;
 
@@ -68,12 +89,12 @@ export function ReminderList() {
           Who hasn&apos;t submitted
         </h2>
         <span className="font-mono text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          {missing.submitted} submitted / {missing.missing.length} missing
+          {totalSubmitted} submitted / {allMissing.length} missing
         </span>
       </div>
 
       <div className="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
-        {missing.missing.map((m) => (
+        {allMissing.map((m) => (
           <div
             key={m.id}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-secondary/30"
@@ -115,6 +136,27 @@ export function ReminderList() {
             timeZone: "Africa/Cairo",
           })}{" "}
           (Cairo)
+        </div>
+      )}
+
+      {hasNextPage && (
+        <div className="mt-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full h-9"
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                Loading more...
+              </>
+            ) : (
+              "Load more players"
+            )}
+          </Button>
         </div>
       )}
     </div>

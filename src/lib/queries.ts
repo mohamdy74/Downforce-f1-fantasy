@@ -275,6 +275,67 @@ export const leaderboardQuery = queryOptions({
   },
 });
 
+// Paginated version of leaderboard query for large leagues
+export interface LeaderboardPageResult {
+  entries: LeaderboardEntry[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export const leaderboardPageQuery = (limit: number = 20, cursor: string | null = null) =>
+  queryOptions({
+    queryKey: ["leaderboard-page", SEASON, limit, cursor],
+    staleTime: 2 * 60_000,
+    queryFn: async (): Promise<LeaderboardPageResult> => {
+      const { data: sData } = await supabase.auth.getSession();
+      if (!sData.session) return { entries: [], nextCursor: null, hasMore: false };
+
+      const effectiveLimit = Math.min(Math.max(1, limit), 100);
+      
+      // Fetch scores with pagination
+      const { data: scores, error: sErr } = await supabase
+        .from("scores")
+        .select("user_id, race_id, points")
+        .order("points", { ascending: false })
+        .limit(effectiveLimit + 1);
+      
+      if (sErr) throw sErr;
+      
+      // Fetch all profiles (small dataset)
+      const { data: profiles, error: pErr } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url");
+      
+      if (pErr) throw pErr;
+      
+      // Fetch race rows
+      const { data: raceRows, error: rErr } = await supabase
+        .from("races")
+        .select("id, round")
+        .eq("season", SEASON)
+        .gte("round", LEAGUE_START_ROUND);
+      
+      if (rErr) throw rErr;
+      
+      // Compute entries
+      const allEntries = computeLeaderboardEntries(
+        profiles ?? [],
+        scores ?? [],
+        raceRows ?? []
+      );
+      
+      const hasMore = allEntries.length > effectiveLimit;
+      const entries = hasMore ? allEntries.slice(0, effectiveLimit) : allEntries;
+      const nextCursor = hasMore ? String(entries[entries.length - 1]?.points ?? 0) : null;
+      
+      return {
+        entries,
+        nextCursor,
+        hasMore,
+      };
+    },
+  });
+
 export function nextRace(races: Race[], nowMs?: number | undefined): Race | null {
   const now = nowMs ?? getTrustedNow();
   return (
