@@ -1098,4 +1098,3 @@ function StewardsPage() {
     </main>
   );
 }
-

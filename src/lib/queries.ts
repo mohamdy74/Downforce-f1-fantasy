@@ -374,4 +374,3 @@ export const raceUpdatesQuery = queryOptions({
     return (data ?? []) as RaceUpdate[];
   },
 });
-

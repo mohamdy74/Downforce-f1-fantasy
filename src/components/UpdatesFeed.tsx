@@ -11,12 +11,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  driversQuery,
-  raceUpdatesQuery,
-  racesQuery,
-  type RaceUpdate,
-} from "@/lib/queries";
+import { driversQuery, raceUpdatesQuery, racesQuery, type RaceUpdate } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const SEEN_KEY = "dfr-updates-seen";
@@ -66,10 +61,7 @@ export function UpdatesFeed() {
   // badge stays quiet during reading instead of re-lighting on every refetch.
   useEffect(() => {
     if (!open) return;
-    const newest = updates.reduce(
-      (acc, u) => Math.max(acc, new Date(u.created_at).getTime()),
-      0,
-    );
+    const newest = updates.reduce((acc, u) => Math.max(acc, new Date(u.created_at).getTime()), 0);
     const next = Math.max(newest, Date.now());
     if (next > lastSeen) {
       setLastSeen(next);
@@ -129,10 +121,7 @@ export function UpdatesFeed() {
                 {updates.map((u) => {
                   const chip = TYPE_STYLES[u.type] ?? TYPE_STYLES.general;
                   return (
-                    <li
-                      key={u.id}
-                      className="rounded-lg border border-border/70 bg-card/60 p-3"
-                    >
+                    <li key={u.id} className="rounded-lg border border-border/70 bg-card/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
