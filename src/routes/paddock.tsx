@@ -90,13 +90,19 @@ function Paddock() {
     queryFn: async () => getLiveRaceTelemetry({ data: { raceId: race!.id } }),
   });
 
-  const { data, fetchNextPage, hasNextPage, isLoading: paddockLoading, isFetchingNextPage } = useInfiniteQuery({
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isLoading: paddockLoading,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["paddock-paginated", race?.id, user?.id],
     enabled: !!race && !!user,
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       const limit = DEFAULT_PAGE_SIZE;
       const cursor = pageParam;
-      
+
       const [preds, profiles, results, scores] = await Promise.all([
         supabase
           .from("predictions")
@@ -125,15 +131,17 @@ function Paddock() {
         arr.push(l);
         logMap.set(l.user_id, arr);
       }
-      
+
       const profileData = profiles.data ?? [];
       const hasMore = profileData.length > limit;
       const resultProfiles = hasMore ? profileData.slice(0, -1) : profileData;
-      const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
-      
+      const nextCursor = hasMore
+        ? (resultProfiles[resultProfiles.length - 1]?.display_name ?? null)
+        : null;
+
       return {
         preds: (preds.data ?? []) as Pred[],
-        names: new Map((profileData).map((p) => [p.id, p.display_name])),
+        names: new Map(profileData.map((p) => [p.id, p.display_name])),
         results: results.data ?? [],
         points: new Map((scores.data ?? []).map((s) => [s.user_id, s.points])),
         logs: logMap,
@@ -153,7 +161,7 @@ function Paddock() {
     const allPoints = new Map<string, number>();
     const allLogs = new Map<string, { action: string; changes: unknown; created_at: string }[]>();
     const allResults = pages[0]?.results ?? [];
-    
+
     for (const page of pages) {
       allPreds.push(...(page.preds ?? []));
       if (page.names) {
@@ -172,7 +180,7 @@ function Paddock() {
         }
       }
     }
-    
+
     return {
       preds: allPreds,
       names: allNames,
@@ -229,7 +237,8 @@ function Paddock() {
   const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
   const activeResults =
     (allData.results?.length ?? 0) > 0 ? allData.results : (liveTelemetryQ.data?.results ?? []);
-  const isLiveScoring = !allData.results?.length && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
+  const isLiveScoring =
+    !allData.results?.length && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
 
   const finish = new Map<string, number>();
   const dnfs = new Set<string>();

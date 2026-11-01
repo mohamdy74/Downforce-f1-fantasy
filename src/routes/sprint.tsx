@@ -97,13 +97,18 @@ function Sprint() {
     },
   });
 
-  const { data: groupData, fetchNextPage: fetchNextGroupPage, hasNextPage: groupHasNextPage, isFetchingNextPage: groupIsFetchingNextPage } = useInfiniteQuery({
+  const {
+    data: groupData,
+    fetchNextPage: fetchNextGroupPage,
+    hasNextPage: groupHasNextPage,
+    isFetchingNextPage: groupIsFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["sprint-group-paginated", race?.id, user?.id, sprintLocked],
     enabled: !!race && !!user && sprintLocked,
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       const limit = DEFAULT_PAGE_SIZE;
       const cursor = pageParam;
-      
+
       const [preds, profiles] = await Promise.all([
         supabase
           .from("sprint_predictions")
@@ -117,16 +122,18 @@ function Sprint() {
           .gt("display_name", cursor ?? ""),
       ]);
       if (preds.error) throw preds.error;
-      
+
       const profileData = profiles.data ?? [];
       const hasMore = profileData.length > limit;
       const resultProfiles = hasMore ? profileData.slice(0, -1) : profileData;
-      const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
-      
+      const nextCursor = hasMore
+        ? (resultProfiles[resultProfiles.length - 1]?.display_name ?? null)
+        : null;
+
       const names: Record<string, string> = {};
       for (const p of profileData) names[p.id] = p.display_name;
-      return { 
-        preds: preds.data ?? [], 
+      return {
+        preds: preds.data ?? [],
         names,
         nextCursor,
         hasMore,
@@ -139,14 +146,18 @@ function Sprint() {
 
   const group = useMemo(() => {
     const pages = groupData?.pages ?? [];
-    const allPreds: Array<{ user_id: string; top8: string[] | null; pole_driver_id: string | null }> = [];
+    const allPreds: Array<{
+      user_id: string;
+      top8: string[] | null;
+      pole_driver_id: string | null;
+    }> = [];
     const allNames: Record<string, string> = {};
-    
+
     for (const page of pages) {
       allPreds.push(...(page.preds ?? []));
       Object.assign(allNames, page.names);
     }
-    
+
     return { preds: allPreds, names: allNames };
   }, [groupData?.pages]);
 

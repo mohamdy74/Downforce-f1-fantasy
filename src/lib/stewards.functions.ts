@@ -66,7 +66,13 @@ export interface StewardDashboardResult {
     updated_at: string;
   }>;
   scores: Array<{ user_id: string; points: number; breakdown: Json }>;
-  results: Array<{ driver_id: string; position: number | null; finished: boolean; fastest_lap: boolean; pole: boolean }>;
+  results: Array<{
+    driver_id: string;
+    position: number | null;
+    finished: boolean;
+    fastest_lap: boolean;
+    pole: boolean;
+  }>;
   pushUserIds: string[];
   vapidPublicKey: string;
 }
@@ -133,10 +139,7 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }): Promise<PaginatedStewardDashboardResult> => {
     const sb = await requireSteward(context);
-    const effectiveLimit = Math.min(
-      Math.max(1, data.limit ?? DEFAULT_PAGE_SIZE),
-      MAX_PAGE_SIZE,
-    );
+    const effectiveLimit = Math.min(Math.max(1, data.limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
     const [
       { data: profiles, error: profilesError },
@@ -185,7 +188,9 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
 
     const hasMore = (profiles?.length ?? 0) > effectiveLimit;
     const resultProfiles = hasMore ? (profiles ?? []).slice(0, -1) : (profiles ?? []);
-    const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
+    const nextCursor = hasMore
+      ? (resultProfiles[resultProfiles.length - 1]?.display_name ?? null)
+      : null;
 
     return {
       profiles: resultProfiles as Array<{ id: string; display_name: string; created_at: string }>,

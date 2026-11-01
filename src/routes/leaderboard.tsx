@@ -772,10 +772,10 @@ function Leaderboard() {
   });
 
   // Paginated leaderboard for large leagues
-  const { 
-    data: paginatedBoard, 
+  const {
+    data: paginatedBoard,
     fetchNextPage: fetchNextBoardPage,
-    hasNextPage: boardHasNextPage, 
+    hasNextPage: boardHasNextPage,
     isFetchingNextPage: boardIsFetchingNextPage,
   } = useInfiniteQuery({
     queryKey: ["leaderboard-paginated", SEASON],
