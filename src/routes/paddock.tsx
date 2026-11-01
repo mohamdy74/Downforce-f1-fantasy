@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
@@ -449,6 +449,89 @@ function Paddock() {
         </div>
       )}
     </main>
+  );
+}
+
+/** AI-written Arabic debrief for a finished race, cached server-side per round. */
+function RaceDebriefCard({ raceId }: { raceId: string }) {
+  const queryClient = useQueryClient();
+  const q = useQuery({
+    queryKey: ["race-debrief", raceId],
+    queryFn: () => getRaceDebrief({ data: { raceId } }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const regenerate = useMutation({
+    mutationFn: () => getRaceDebrief({ data: { raceId, force: true } }),
+    onSuccess: (res) => {
+      if (res.status === "ok") {
+        queryClient.setQueryData(["race-debrief", raceId], res);
+        toast.success("Debrief regenerated");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to regenerate"),
+  });
+
+  if (q.isLoading)
+    return (
+      <section className="carbon-panel rounded-lg border border-gold/40 p-4" aria-busy="true">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Sparkles className="h-4 w-4 text-gold" />
+          The analyst is writing the debrief...
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        </div>
+      </section>
+    );
+  if (q.isError || !q.data || q.data.status === "no_results") return null;
+
+  const d: DebriefJson = q.data.debrief;
+  const busy = regenerate.isPending || q.isFetching;
+  return (
+    <section className="carbon-panel rounded-lg border border-gold/40 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-gold">
+          <Sparkles className="h-3.5 w-3.5" />
+          AI Analyst
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 font-mono text-[11px]"
+          onClick={() => regenerate.mutate()}
+          disabled={busy}
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Regenerate"}
+        </Button>
+      </div>
+      <h2 dir="rtl" className="mt-1 text-right text-xl font-bold text-gold">
+        {d.headline}
+      </h2>
+      <p dir="rtl" className="mt-1 text-right text-sm leading-relaxed text-foreground/90">
+        {d.summary}
+      </p>
+      {d.bullets.length > 0 && (
+        <ul dir="rtl" className="mt-2 space-y-1 text-right text-sm text-muted-foreground">
+          {d.bullets.map((b, i) => (
+            <li key={i} className="flex gap-1.5">
+              <span className="text-primary">•</span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {q.data.generatedAt && (
+        <p dir="rtl" className="mt-2 text-left font-mono text-[10px] text-muted-foreground/70">
+          {new Date(q.data.generatedAt).toLocaleString("en-GB", {
+            timeZone: "Africa/Cairo",
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}{" "}
+          Cairo
+        </p>
+      )}
+    </section>
   );
 }
 
