@@ -13,7 +13,7 @@ import type {} from "@/ai-gateway.types";
 
 const MODEL = "openai/gpt-6-astra" as const;
 
-type DebriefJson = {
+export type DebriefJson = {
   headline: string;
   summary: string;
   bullets: string[];
