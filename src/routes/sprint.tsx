@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -7,6 +7,7 @@ import { Countdown } from "@/components/Countdown";
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -16,6 +17,7 @@ import {
   markCompleted,
   markInFlight,
 } from "@/lib/idempotency";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
 import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
 import { assertDeadlineOpen } from "@/lib/reminders.functions";
@@ -95,23 +97,58 @@ function Sprint() {
     },
   });
 
-  const { data: group } = useQuery({
-    queryKey: ["sprint-group", race?.id, user?.id, sprintLocked],
+  const { data: groupData, fetchNextPage: fetchNextGroupPage, hasNextPage: groupHasNextPage, isFetchingNextPage: groupIsFetchingNextPage } = useInfiniteQuery({
+    queryKey: ["sprint-group-paginated", race?.id, user?.id, sprintLocked],
     enabled: !!race && !!user && sprintLocked,
-    queryFn: async () => {
+    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+      const limit = DEFAULT_PAGE_SIZE;
+      const cursor = pageParam;
+      
       const [preds, profiles] = await Promise.all([
         supabase
           .from("sprint_predictions")
           .select("user_id, top8, pole_driver_id")
           .eq("race_id", race!.id),
-        supabase.from("profiles").select("id, display_name"),
+        supabase
+          .from("profiles")
+          .select("id, display_name")
+          .order("display_name", { ascending: true })
+          .limit(limit + 1)
+          .gt("display_name", cursor ?? ""),
       ]);
       if (preds.error) throw preds.error;
+      
+      const profileData = profiles.data ?? [];
+      const hasMore = profileData.length > limit;
+      const resultProfiles = hasMore ? profileData.slice(0, -1) : profileData;
+      const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
+      
       const names: Record<string, string> = {};
-      for (const p of profiles.data ?? []) names[p.id] = p.display_name;
-      return { preds: preds.data ?? [], names };
+      for (const p of profileData) names[p.id] = p.display_name;
+      return { 
+        preds: preds.data ?? [], 
+        names,
+        nextCursor,
+        hasMore,
+      };
     },
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 2 * 60_000,
   });
+
+  const group = useMemo(() => {
+    const pages = groupData?.pages ?? [];
+    const allPreds: Array<{ user_id: string; top8: string[] | null; pole_driver_id: string | null }> = [];
+    const allNames: Record<string, string> = {};
+    
+    for (const page of pages) {
+      allPreds.push(...(page.preds ?? []));
+      Object.assign(allNames, page.names);
+    }
+    
+    return { preds: allPreds, names: allNames };
+  }, [groupData?.pages]);
 
   const [top8, setTop8] = useState<string[]>(Array(SPRINT_SLOTS).fill(EMPTY));
   const [pole, setPole] = useState(EMPTY);
@@ -523,6 +560,26 @@ function Sprint() {
                 );
               })}
             </ul>
+          )}
+          {groupHasNextPage && (
+            <div className="mt-4">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => fetchNextGroupPage()}
+                disabled={groupIsFetchingNextPage}
+                className="w-full h-9"
+              >
+                {groupIsFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                    Loading more...
+                  </>
+                ) : (
+                  "Load more players"
+                )}
+              </Button>
+            </div>
           )}
         </section>
       )}

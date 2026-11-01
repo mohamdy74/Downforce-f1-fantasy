@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_PAGE_SIZE, type PaginatedResult } from "@/lib/pagination";
 import {
   driversQuery,
   getTrustedNow,
@@ -88,16 +90,24 @@ function Paddock() {
     queryFn: async () => getLiveRaceTelemetry({ data: { raceId: race!.id } }),
   });
 
-  const { data, isLoading: paddockLoading } = useQuery({
-    queryKey: ["paddock", race?.id, user?.id],
+  const { data, fetchNextPage, hasNextPage, isLoading: paddockLoading, isFetchingNextPage } = useInfiniteQuery({
+    queryKey: ["paddock-paginated", race?.id, user?.id],
     enabled: !!race && !!user,
-    queryFn: async () => {
+    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+      const limit = DEFAULT_PAGE_SIZE;
+      const cursor = pageParam;
+      
       const [preds, profiles, results, scores] = await Promise.all([
         supabase
           .from("predictions")
           .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
           .eq("race_id", race!.id),
-        supabase.from("profiles").select("id, display_name"),
+        supabase
+          .from("profiles")
+          .select("id, display_name")
+          .order("display_name", { ascending: true })
+          .limit(limit + 1)
+          .gt("display_name", cursor ?? ""),
         supabase
           .from("race_results")
           .select("driver_id, position, finished, fastest_lap, pole")
@@ -115,15 +125,62 @@ function Paddock() {
         arr.push(l);
         logMap.set(l.user_id, arr);
       }
+      
+      const profileData = profiles.data ?? [];
+      const hasMore = profileData.length > limit;
+      const resultProfiles = hasMore ? profileData.slice(0, -1) : profileData;
+      const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
+      
       return {
         preds: (preds.data ?? []) as Pred[],
-        names: new Map((profiles.data ?? []).map((p) => [p.id, p.display_name])),
+        names: new Map((profileData).map((p) => [p.id, p.display_name])),
         results: results.data ?? [],
         points: new Map((scores.data ?? []).map((s) => [s.user_id, s.points])),
         logs: logMap,
+        nextCursor,
+        hasMore,
       };
     },
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 2 * 60_000,
   });
+
+  const allData = useMemo(() => {
+    const pages = data?.pages ?? [];
+    const allPreds: Pred[] = [];
+    const allNames = new Map<string, string>();
+    const allPoints = new Map<string, number>();
+    const allLogs = new Map<string, { action: string; changes: unknown; created_at: string }[]>();
+    const allResults = pages[0]?.results ?? [];
+    
+    for (const page of pages) {
+      allPreds.push(...(page.preds ?? []));
+      if (page.names) {
+        for (const [key, value] of page.names) {
+          allNames.set(key, value);
+        }
+      }
+      if (page.points) {
+        for (const [key, value] of page.points) {
+          allPoints.set(key, value);
+        }
+      }
+      if (page.logs) {
+        for (const [key, value] of page.logs) {
+          allLogs.set(key, value);
+        }
+      }
+    }
+    
+    return {
+      preds: allPreds,
+      names: allNames,
+      results: allResults,
+      points: allPoints,
+      logs: allLogs,
+    };
+  }, [data?.pages]);
 
   useEffect(() => {
     if (liveTelemetryQ.data?.finalizedNow || liveTelemetryQ.data?.state === "official") {
@@ -171,8 +228,8 @@ function Paddock() {
 
   const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
   const activeResults =
-    (data?.results?.length ?? 0) > 0 ? data!.results : (liveTelemetryQ.data?.results ?? []);
-  const isLiveScoring = !data?.results?.length && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
+    (allData.results?.length ?? 0) > 0 ? allData.results : (liveTelemetryQ.data?.results ?? []);
+  const isLiveScoring = !allData.results?.length && (liveTelemetryQ.data?.results.length ?? 0) >= 10;
 
   const finish = new Map<string, number>();
   const dnfs = new Set<string>();
@@ -184,11 +241,11 @@ function Paddock() {
     if (r.pole) poleId = r.driver_id;
     if (r.fastest_lap) flId = r.driver_id;
   }
-  const hasResults = (!!race?.has_results && (data?.results.length ?? 0) > 0) || isLiveScoring;
+  const hasResults = (!!race?.has_results && (allData.results.length ?? 0) > 0) || isLiveScoring;
 
   const computedPoints = new Map<string, number>();
-  for (const p of data?.preds ?? []) {
-    const dbPt = data?.points.get(p.user_id);
+  for (const p of allData.preds ?? []) {
+    const dbPt = allData.points.get(p.user_id);
     const serverLivePt = liveTelemetryQ.data?.liveScores?.[p.user_id];
     if (dbPt != null && !isLiveScoring) {
       computedPoints.set(p.user_id, dbPt);
@@ -210,7 +267,7 @@ function Paddock() {
     }
   }
 
-  const sorted = [...(data?.preds ?? [])].sort(
+  const sorted = [...(allData.preds ?? [])].sort(
     (a, b) => (computedPoints.get(b.user_id) ?? 0) - (computedPoints.get(a.user_id) ?? 0),
   );
 
@@ -251,7 +308,7 @@ function Paddock() {
       )}
 
       {race && paddockLoading && <PaddockCardsSkeleton className="mt-6" />}
-      {race && !paddockLoading && sorted.length === 0 && (
+      {race && !paddockLoading && allData.preds.length === 0 && (
         <p className="mt-8 text-sm text-muted-foreground">No one submitted picks for this race.</p>
       )}
 
@@ -289,7 +346,7 @@ function Paddock() {
             <section key={p.user_id} className="carbon-panel rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg">
-                  {data?.names.get(p.user_id) ?? "Driver"}
+                  {allData.names.get(p.user_id) ?? "Driver"}
                   {p.user_id === user.id && <span className="ml-2 text-xs text-primary">YOU</span>}
                 </h2>
                 {hasResults && pts != null && (
@@ -350,13 +407,34 @@ function Paddock() {
                 />
               </div>
               <AuditTrail
-                entries={data?.logs.get(p.user_id) ?? []}
+                entries={allData.logs.get(p.user_id) ?? []}
                 code={(id) => byId.get(id)?.code ?? id}
               />
             </section>
           );
         })}
       </div>
+
+      {hasNextPage && (
+        <div className="mt-6">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full h-9"
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                Loading more...
+              </>
+            ) : (
+              "Load more players"
+            )}
+          </Button>
+        </div>
+      )}
     </main>
   );
 }

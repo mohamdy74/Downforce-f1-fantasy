@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { scorePrediction, NO_SUBMISSION_PENALTY, type ResultRow } from "./scoring";
 import { scoreSprint, type SprintResultRow } from "./sprintScoring";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type PaginatedResult } from "./pagination";
 
 export const STEWARD_EMAIL = "mohamdy008@gmail.com";
 
@@ -53,6 +54,29 @@ export const savePushSubscription = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export interface StewardDashboardResult {
+  profiles: Array<{ id: string; display_name: string; created_at: string }>;
+  preds: Array<{
+    id: string;
+    user_id: string;
+    top10: string[] | null;
+    pole_driver_id: string | null;
+    fastest_lap_driver_id: string | null;
+    dnf_driver_id: string | null;
+    updated_at: string;
+  }>;
+  scores: Array<{ user_id: string; points: number; breakdown: Json }>;
+  results: Array<{ driver_id: string; position: number | null; finished: boolean; fastest_lap: boolean; pole: boolean }>;
+  pushUserIds: string[];
+  vapidPublicKey: string;
+}
+
+export interface PaginatedStewardDashboardResult extends StewardDashboardResult {
+  nextCursor: string | null;
+  hasMore: boolean;
+  totalCount: number;
+}
+
 export const getStewardsDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { raceId: string }) => d)
@@ -97,6 +121,82 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
       results: results ?? [],
       pushUserIds,
       vapidPublicKey,
+    } as StewardDashboardResult;
+  });
+
+export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { raceId: string; limit?: number; cursor?: string | null }) => ({
+    raceId: d.raceId,
+    limit: d.limit,
+    cursor: d.cursor ?? null,
+  }))
+  .handler(async ({ data, context }): Promise<PaginatedStewardDashboardResult> => {
+    const sb = await requireSteward(context);
+    const effectiveLimit = Math.min(
+      Math.max(1, data.limit ?? DEFAULT_PAGE_SIZE),
+      MAX_PAGE_SIZE,
+    );
+
+    const [
+      { data: profiles, error: profilesError },
+      { data: preds },
+      { data: scores },
+      { data: results },
+      { data: subRows },
+      { count: totalCount },
+    ] = await Promise.all([
+      sb
+        .from("profiles")
+        .select("id, display_name, created_at", { head: false, count: "exact" })
+        .order("display_name")
+        .limit(effectiveLimit + 1),
+      sb
+        .from("predictions")
+        .select(
+          "id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at",
+        )
+        .eq("race_id", data.raceId),
+      sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
+      sb
+        .from("race_results")
+        .select("driver_id, position, finished, fastest_lap, pole")
+        .eq("race_id", data.raceId),
+      sb.from("sync_state").select("key").like("key", "push_sub:%"),
+      sb.from("profiles").select("*", { head: true, count: "exact" }),
+    ]);
+
+    if (profilesError) {
+      throw new Error(
+        `Unable to load profiles: ${profilesError instanceof Error ? profilesError.message : String(profilesError)}`,
+      );
+    }
+
+    const pushUserIds = Array.from(
+      new Set(
+        (subRows ?? [])
+          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
+          .filter((x): x is string => !!x),
+      ),
+    );
+
+    const { resolveServerVapidKeys } = await import("./webpush-native");
+    const { publicKey: vapidPublicKey } = await resolveServerVapidKeys();
+
+    const hasMore = (profiles?.length ?? 0) > effectiveLimit;
+    const resultProfiles = hasMore ? (profiles ?? []).slice(0, -1) : (profiles ?? []);
+    const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
+
+    return {
+      profiles: resultProfiles as Array<{ id: string; display_name: string; created_at: string }>,
+      preds: preds ?? [],
+      scores: scores ?? [],
+      results: results ?? [],
+      pushUserIds,
+      vapidPublicKey,
+      nextCursor,
+      hasMore,
+      totalCount: totalCount ?? 0,
     };
   });
 
@@ -543,13 +643,32 @@ export const exportLeagueBackup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const sb = await requireSteward(context);
-    const [profiles, races, predictions, sprintPredictions, scores, logs] = await Promise.all([
+    const [
+      profiles,
+      races,
+      predictions,
+      sprintPredictions,
+      scores,
+      logs,
+      profilesCount,
+      racesCount,
+      predictionsCount,
+      sprintPredictionsCount,
+      scoresCount,
+      logsCount,
+    ] = await Promise.all([
       sb.from("profiles").select("*").order("display_name"),
       sb.from("races").select("*").order("round"),
       sb.from("predictions").select("*"),
       sb.from("sprint_predictions").select("*"),
       sb.from("scores").select("*"),
       sb.from("prediction_logs").select("*").order("created_at", { ascending: false }).limit(500),
+      sb.from("profiles").select("*", { head: true, count: "exact" }),
+      sb.from("races").select("*", { head: true, count: "exact" }),
+      sb.from("predictions").select("*", { head: true, count: "exact" }),
+      sb.from("sprint_predictions").select("*", { head: true, count: "exact" }),
+      sb.from("scores").select("*", { head: true, count: "exact" }),
+      sb.from("prediction_logs").select("*", { head: true, count: "exact" }),
     ]);
     return {
       exportedAt: new Date().toISOString(),
@@ -560,5 +679,13 @@ export const exportLeagueBackup = createServerFn({ method: "POST" })
       sprintPredictions: sprintPredictions.data ?? [],
       scores: scores.data ?? [],
       recentLogs: logs.data ?? [],
+      totalCounts: {
+        profiles: profilesCount.count ?? 0,
+        races: racesCount.count ?? 0,
+        predictions: predictionsCount.count ?? 0,
+        sprintPredictions: sprintPredictionsCount.count ?? 0,
+        scores: scoresCount.count ?? 0,
+        logs: logsCount.count ?? 0,
+      },
     };
   });

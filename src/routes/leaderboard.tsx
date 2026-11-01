@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { STEWARD_EMAIL } from "@/lib/stewards.functions";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { leaderboardPageQuery, type LeaderboardPageResult } from "@/lib/queries";
 import { driversQuery, leaderboardQuery, racesQuery, SEASON, type Driver } from "@/lib/queries";
 import { writeQueryCache } from "@/lib/queryPersist";
 import { teamColor, teamLabel, teamRank } from "@/lib/teams";
@@ -768,6 +770,36 @@ function Leaderboard() {
     ...leaderboardQuery,
     enabled: !!user,
   });
+
+  // Paginated leaderboard for large leagues
+  const { 
+    data: paginatedBoard, 
+    fetchNextPage: fetchNextBoardPage,
+    hasNextPage: boardHasNextPage, 
+    isFetchingNextPage: boardIsFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["leaderboard-paginated", SEASON],
+    enabled: !!user,
+    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+      const limit = DEFAULT_PAGE_SIZE;
+      const cursor = pageParam;
+      const options = leaderboardPageQuery(limit, cursor);
+      const result = await queryClient.fetchQuery(options);
+      return result as LeaderboardPageResult;
+    },
+    initialPageParam: null,
+    getNextPageParam: (lastPage: LeaderboardPageResult) => lastPage.nextCursor,
+    staleTime: 2 * 60_000,
+  });
+
+  const allBoard = useMemo(() => {
+    const pages = paginatedBoard?.pages ?? [];
+    const allEntries: typeof board = [];
+    for (const page of pages) {
+      allEntries.push(...(page.entries ?? []));
+    }
+    return allEntries.length > 0 ? allEntries : (board ?? []);
+  }, [paginatedBoard?.pages, board]);
   const { data: races } = useQuery(racesQuery);
   const { data: f1Data, isLoading: f1Loading } = useQuery(f1StandingsQuery);
 
@@ -912,10 +944,10 @@ function Leaderboard() {
             </div>
           ) : (
             <>
-              {board && board.length > 0 && (
+              {allBoard && allBoard.length > 0 && (
                 <div className="grid grid-cols-3 items-end gap-2">
                   {[1, 0, 2].map((i) => {
-                    const e = board[i];
+                    const e = allBoard[i];
                     if (!e) return <div key={i} />;
                     const color = ["var(--gold)", "var(--silver)", "var(--bronze)"][i];
                     return (
@@ -937,12 +969,12 @@ function Leaderboard() {
               )}
 
               <div ref={listRef} className="mt-8 space-y-2">
-                {!board?.length && (
+                {!allBoard?.length && (
                   <p className="text-sm text-muted-foreground">
                     No players yet. Sign in to claim P1.
                   </p>
                 )}
-                {board?.map((entry, index) => (
+                {allBoard?.map((entry, index) => (
                   <div key={entry.userId}>
                     <button
                       type="button"
@@ -1030,6 +1062,26 @@ function Leaderboard() {
                   </div>
                 ))}
               </div>
+              {boardHasNextPage && (
+                <div className="mt-6">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => fetchNextBoardPage()}
+                    disabled={boardIsFetchingNextPage}
+                    className="w-full h-9"
+                  >
+                    {boardIsFetchingNextPage ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                        Loading more...
+                      </>
+                    ) : (
+                      "Load more players"
+                    )}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </section>
@@ -1316,7 +1368,7 @@ function Leaderboard() {
             </div>
           </div>
 
-          {user && board && board.length > 0 && (
+          {user && allBoard && allBoard.length > 0 && (
             <div>
               <p className="mb-2.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 League Highlights
@@ -1328,11 +1380,11 @@ function Leaderboard() {
                       League Leader
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
-                      {board[0]?.name ?? "–"}
+                      {allBoard[0]?.name ?? "–"}
                     </p>
                   </div>
                   <span className="font-mono text-lg font-bold tabular-nums text-gold">
-                    {board[0]?.points ?? 0}
+                    {allBoard[0]?.points ?? 0}
                   </span>
                 </div>
 
