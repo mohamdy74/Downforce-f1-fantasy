@@ -13,6 +13,7 @@ import {
   Trash2,
   Edit3,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ import {
 } from "@/components/PushOptIn";
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
 import {
@@ -130,12 +132,17 @@ function StewardsPage() {
   const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
   const upcoming = nextRace(races) ?? races[races.length - 1];
   const [selectedRaceId, setSelectedRaceId] = useState<string>("");
-  const activeRace = races.find((r) => r.id === selectedRaceId) ?? upcoming;
+  const { debouncedValue: debouncedRaceId, loading: raceIdLoading } = useDebouncedValue(
+    selectedRaceId,
+    300,
+    0, // No minimum length for race selector - any selection is valid
+  );
+  const activeRace = races.find((r) => r.id === debouncedRaceId) ?? upcoming;
 
   const { data: dash, refetch: refetchDash } = useQuery({
-    queryKey: ["stewards-dash", activeRace?.id],
-    enabled: !!isSteward && !!activeRace?.id,
-    queryFn: () => getStewardsDashboard({ data: { raceId: activeRace!.id } }),
+    queryKey: ["stewards-dash", debouncedRaceId],
+    enabled: !!isSteward && !!debouncedRaceId,
+    queryFn: () => getStewardsDashboard({ data: { raceId: debouncedRaceId! } }),
   });
 
   const [busy, setBusy] = useState(false);
@@ -343,18 +350,28 @@ function StewardsPage() {
         <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           Target Grand Prix Round
         </label>
-        <select
-          value={activeRace?.id ?? ""}
-          onChange={(e) => setSelectedRaceId(e.target.value)}
-          className="mt-1.5 h-10 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-xs font-bold sm:text-sm"
-        >
-          {races.map((r) => (
-            <option key={r.id} value={r.id}>
-              R{r.round} · {r.name.replace("Grand Prix", "GP")}{" "}
-              {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={selectedRaceId}
+            onChange={(e) => setSelectedRaceId(e.target.value)}
+            className="mt-1.5 h-10 w-full min-w-0 rounded-md border border-input bg-background px-2.5 font-mono text-xs font-bold sm:text-sm pr-8"
+            disabled={raceIdLoading}
+          >
+            {raceIdLoading ? (
+              <option value="">Loading...</option>
+            ) : (
+              races.map((r) => (
+                <option key={r.id} value={r.id}>
+                  R{r.round} · {r.name.replace("Grand Prix", "GP")}{" "}
+                  {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
+                </option>
+              ))
+            )}
+          </select>
+          {raceIdLoading && (
+            <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
       </div>
 
       {/* 1. Live Pick Status Radar */}
