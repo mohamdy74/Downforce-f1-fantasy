@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import type { PoleCardData } from "@/lib/shareCard";
+import { CARD_H, CARD_W, type PoleCardData } from "@/lib/shareCard";
 import { saveBlob, shareImageFile, shareOrCopyText, formatCairoDate } from "@/lib/shareActions";
 
 /**
@@ -140,6 +140,9 @@ export function SharePole({
             <img
               src={preview}
               alt={`${shownName}'s pole pick for ${raceName}`}
+              width={CARD_W}
+              height={CARD_H}
+              decoding="async"
               className="h-full w-full"
             />
           ) : (

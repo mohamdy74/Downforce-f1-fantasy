@@ -1,12 +1,15 @@
-const CACHE_NAME = "dfr:v2";
+const CACHE_NAME = "dfr:v3";
 const PRECACHE_ASSETS = [
   "/",
   "/favicon.svg",
+  // favicon.png doubles as the push-notification icon — cheap to keep cached.
   "/favicon.png",
-  "/apple-touch-icon.png",
-  "/icon-192.png",
-  "/icon-512.png",
   "/manifest.webmanifest",
+  // NOTE: apple-touch-icon.png and the manifest icons (icon-192/icon-512) were
+  // removed from the precache (~29KB saved on every first visit): the browser
+  // fetches them in its OWN context at add-to-homescreen / install-prompt time,
+  // which never consults this service worker's cache — precaching them was pure
+  // dead weight.
 ];
 // NOTE: fonts are intentionally NOT precached. Vite emits them content-hashed
 // under /assets/, so the v1 "/assets/fonts/<name>.woff2" paths never existed —

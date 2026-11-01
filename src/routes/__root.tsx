@@ -128,8 +128,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      // PNG first, SVG last: browsers that take the "last supported" icon
+      // (Chrome/Firefox) get the 0.6KB SVG; engines without SVG favicon support
+      // fall back to the PNG. The old order made Chrome fetch the 2.2KB PNG on
+      // every page load.
       { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       // NOTE: manual font preloads removed — Vite emits fonts content-hashed,

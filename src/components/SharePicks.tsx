@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Driver } from "@/lib/queries";
-import type { CardData, CardDriver } from "@/lib/shareCard";
+import { CARD_H, CARD_W, type CardData, type CardDriver } from "@/lib/shareCard";
 import { saveBlob, shareImageFile, shareOrCopyText } from "@/lib/shareActions";
 
 const MEDAL = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
@@ -152,6 +152,9 @@ export function SharePicks({
             <img
               src={preview}
               alt={`${shownName}'s picks for ${raceName}`}
+              width={CARD_W}
+              height={CARD_H}
+              decoding="async"
               className="h-full w-full"
             />
           ) : (
