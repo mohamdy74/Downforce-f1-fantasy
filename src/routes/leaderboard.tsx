@@ -771,7 +771,7 @@ function Leaderboard() {
   const { data: races } = useQuery(racesQuery);
   const { data: f1Data, isLoading: f1Loading } = useQuery(f1StandingsQuery);
 
-  useQuery(driversQuery);
+  // Removed redundant driversQuery call - it's already fetched via f1StandingsQuery
 
   const scored = board?.[0]?.races || (races?.filter((r) => r.has_results).length ?? 0);
 

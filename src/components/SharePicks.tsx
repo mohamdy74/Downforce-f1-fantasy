@@ -6,8 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import type { Driver } from "@/lib/queries";
+import { profileQuery, type Driver, type Profile } from "@/lib/queries";
 import { CARD_H, CARD_W, type CardData, type CardDriver } from "@/lib/shareCard";
 import { saveBlob, shareImageFile, shareOrCopyText } from "@/lib/shareActions";
 
@@ -36,20 +35,8 @@ export function SharePicks({
 }) {
   const { user } = useAuth();
   // Use the same name the league table shows; fall back to the Google name.
-  const { data: leagueName } = useQuery({
-    queryKey: ["profile-name", user?.id],
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user!.id)
-        .maybeSingle();
-      return data?.display_name ?? null;
-    },
-  });
-  const shownName = (leagueName || playerName || "Player").trim();
+  const { data: profile } = useQuery(profileQuery(user?.id ?? ""));
+  const shownName = (profile?.display_name || playerName || "Player").trim();
 
   const byId = new Map(drivers.map((d) => [d.id, d]));
   const name = (id: string | null) => (id ? (byId.get(id)?.full_name ?? "—") : "—");

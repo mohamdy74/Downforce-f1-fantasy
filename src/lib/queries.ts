@@ -61,8 +61,8 @@ export type Driver = {
 
 export const racesQuery = queryOptions({
   queryKey: ["races", SEASON],
-  staleTime: 0,
-  gcTime: 5 * 60_000,
+  staleTime: 2 * 60_000, // 2 minutes - reuse cached data across pages
+  gcTime: 15 * 60_000, // 15 minutes - keep in cache longer
   queryFn: async (): Promise<Race[]> => {
     void syncServerClock();
     const { data, error } = await supabase
@@ -122,8 +122,8 @@ const AUSTIN_2026_DRIVERS_FALLBACK: Driver[] = [
 
 export const driversQuery = queryOptions({
   queryKey: ["drivers"],
-  staleTime: 0,
-  gcTime: 5 * 60_000,
+  staleTime: 2 * 60_000, // 2 minutes - reuse cached data across pages
+  gcTime: 15 * 60_000, // 15 minutes - keep in cache longer
   queryFn: async (): Promise<Driver[]> => {
     const { data, error } = await supabase
       .from("drivers")
@@ -149,6 +149,28 @@ export type LeaderboardEntry = {
   byRound: Record<number, number>;
   fahl: boolean;
 };
+
+export type Profile = {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+};
+
+export const profileQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["profile", userId],
+    staleTime: 5 * 60_000, // 5 minutes
+    gcTime: 30 * 60_000,
+    queryFn: async (): Promise<Profile | null> => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as Profile | null;
+    },
+  });
 
 export function computeLeaderboardEntries(
   profiles: Array<{ id: string; display_name: string; avatar_url: string | null }>,
@@ -224,7 +246,7 @@ export function computeLeaderboardEntries(
 
 export const leaderboardQuery = queryOptions({
   queryKey: ["leaderboard", SEASON],
-  staleTime: 0,
+  staleTime: 2 * 60_000, // 2 minutes - reuse cached data across pages
   queryFn: async (): Promise<LeaderboardEntry[]> => {
     const { data: sData } = await supabase.auth.getSession();
     if (!sData.session) return [];

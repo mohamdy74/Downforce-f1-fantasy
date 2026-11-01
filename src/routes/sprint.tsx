@@ -9,6 +9,7 @@ import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { generateIdempotencyKey, idempotencyHeaders, isInFlight, markCompleted, markInFlight } from "@/lib/idempotency";
 import { driversQuery, getTrustedNow, racesQuery } from "@/lib/queries";
 import { sprintPoleLockAt, sprintWeekend } from "@/lib/sprint";
 import { assertDeadlineOpen } from "@/lib/reminders.functions";
@@ -205,6 +206,14 @@ function Sprint() {
       toast.error(`Pick all ${SPRINT_SLOTS} positions before submitting.`);
       return;
     }
+    // Generate idempotency key to prevent duplicate submissions
+    const idemKey = generateIdempotencyKey("sprint-prediction", user!.id, race!.id);
+    if (isInFlight(idemKey)) {
+      toast.error("Already saving, please wait...");
+      return;
+    }
+    markInFlight(idemKey);
+
     setSaving(true);
     // Once sprint qualifying has started the pole pick is frozen, so we never send it.
     const fields = {
@@ -236,6 +245,7 @@ function Sprint() {
       error = ins.error;
     }
     setSaving(false);
+    markCompleted(idemKey, "sprint-prediction", user!.id, race!.id);
     if (error) {
       toast.error(error.message);
       return;
@@ -257,6 +267,14 @@ function Sprint() {
       toast.error("Choose a sprint pole driver first.");
       return;
     }
+    // Generate idempotency key to prevent duplicate pole saves
+    const idemKey = generateIdempotencyKey("sprint-pole", user!.id, race!.id);
+    if (isInFlight(idemKey)) {
+      toast.error("Already saving, please wait...");
+      return;
+    }
+    markInFlight(idemKey);
+
     setSaving(true);
     const upd = await supabase
       .from("sprint_predictions")
@@ -272,6 +290,7 @@ function Sprint() {
       error = ins.error;
     }
     setSaving(false);
+    markCompleted(idemKey, "sprint-pole", user!.id, race!.id);
     if (error) {
       toast.error(error.message);
       return;

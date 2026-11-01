@@ -15,6 +15,7 @@ import { SharePole } from "@/components/SharePole";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { generateIdempotencyKey, idempotencyHeaders, isInFlight, markCompleted, markInFlight } from "@/lib/idempotency";
 import { driversQuery, nextRace, racesQuery, type Driver } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
@@ -301,6 +302,14 @@ function Predict() {
       return;
     }
 
+    // Generate idempotency key to prevent duplicate submissions
+    const idemKey = generateIdempotencyKey("prediction", user!.id, race!.id);
+    if (isInFlight(idemKey)) {
+      toast.error("Already saving, please wait...");
+      return;
+    }
+    markInFlight(idemKey);
+
     setSaving(true);
     // Once qualifying has started the pole pick is frozen, so we never send it.
     // (An upsert would also run the database's "insert" checks against the pole
@@ -337,6 +346,7 @@ function Predict() {
       error = ins.error;
     }
     setSaving(false);
+    markCompleted(idemKey, "prediction", user!.id, race!.id);
 
     if (error) {
       toast.error(error.message);
@@ -380,6 +390,14 @@ function Predict() {
       toast.error("Choose a pole driver first.");
       return;
     }
+    // Generate idempotency key to prevent duplicate pole saves
+    const idemKey = generateIdempotencyKey("pole", user!.id, race!.id);
+    if (isInFlight(idemKey)) {
+      toast.error("Already saving, please wait...");
+      return;
+    }
+    markInFlight(idemKey);
+
     setSaving(true);
     const upd = await supabase
       .from("predictions")
@@ -395,6 +413,7 @@ function Predict() {
       error = ins.error;
     }
     setSaving(false);
+    markCompleted(idemKey, "prediction", user!.id, race!.id);
     if (error) {
       toast.error(error.message);
       return;

@@ -39,7 +39,10 @@ const DESKTOP_LINK =
   "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground md:inline [&.active]:text-primary";
 
 function useSprintWeek(): boolean {
-  const { data: races } = useQuery(racesQuery);
+  const { data: races } = useQuery({
+    ...racesQuery,
+    staleTime: 5 * 60_000, // 5 minutes - header doesn't need ultra-fresh data
+  });
   return !!races && !!sprintWeekend(races);
 }
 
