@@ -1,6 +1,6 @@
 /**
  * Pagination utilities for cursor-based pagination
- * 
+ *
  * Features:
  * - Cursor-based pagination (more efficient than offset-based)
  * - Default limit of 20 items per page
@@ -20,7 +20,7 @@ export const MIN_PAGE_SIZE = 1;
 
 /**
  * Result type for paginated queries
- * 
+ *
  * @template T - The type of items in the list
  */
 export interface PaginatedResult<T> {
@@ -54,17 +54,12 @@ export interface PaginationInput {
 
 /**
  * Get normalized pagination options from input
- * 
+ *
  * @param input - Input from client
  * @returns Normalized pagination options
  */
-export function getPaginationOptions(
-  input?: PaginationInput | null,
-): PaginationOptions {
-  const limit = Math.min(
-    Math.max(MIN_PAGE_SIZE, input?.limit ?? DEFAULT_PAGE_SIZE),
-    MAX_PAGE_SIZE,
-  );
+export function getPaginationOptions(input?: PaginationInput | null): PaginationOptions {
+  const limit = Math.min(Math.max(MIN_PAGE_SIZE, input?.limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
   return {
     limit,
     cursor: input?.cursor ?? null,
@@ -73,7 +68,7 @@ export function getPaginationOptions(
 
 /**
  * Helper to extract next cursor from a sorted array
- * 
+ *
  * @param items - Array of items with a cursor field
  * @param cursorField - Field name to use as cursor
  * @param order - Sort order ('asc' or 'desc')
@@ -85,32 +80,32 @@ export function getNextCursor<T>(
   order: "asc" | "desc" = "asc",
 ): string | null {
   if (items.length === 0) return null;
-  
+
   const lastItem = items[items.length - 1]!;
   const cursorValue = lastItem[cursorField];
-  
+
   if (cursorValue === null || cursorValue === undefined) return null;
-  
+
   // Handle different types of cursor values
   if (typeof cursorValue === "string") {
     return cursorValue;
   }
-  
+
   if (typeof cursorValue === "number") {
     return String(cursorValue);
   }
-  
+
   if (cursorValue instanceof Date) {
     return cursorValue.toISOString();
   }
-  
+
   // For other types, convert to string
   return String(cursorValue);
 }
 
 /**
  * Helper to check if there are more items
- * 
+ *
  * @param fetchedCount - Number of items fetched
  * @param limit - Requested limit
  * @returns Whether there are more items
@@ -121,7 +116,7 @@ export function hasMoreItems(fetchedCount: number, limit: number): boolean {
 
 /**
  * Create a paginated result from query results
- * 
+ *
  * @param items - All items fetched (may include extra item for hasMore check)
  * @param limit - Requested limit
  * @param cursorField - Field name to use as cursor
@@ -137,7 +132,7 @@ export function createPaginatedResult<T>(
   const hasMore = hasMoreItems(items.length, limit);
   const data = hasMore ? items.slice(0, -1) : items;
   const nextCursor = hasMore ? getNextCursor(data, cursorField, order) : null;
-  
+
   return {
     data,
     nextCursor,
@@ -147,13 +142,11 @@ export function createPaginatedResult<T>(
 
 /**
  * Type guard for PaginatedResult
- * 
+ *
  * @param result - Value to check
  * @returns Whether the value is a PaginatedResult
  */
-export function isPaginatedResult<T>(
-  result: unknown,
-): result is PaginatedResult<T> {
+export function isPaginatedResult<T>(result: unknown): result is PaginatedResult<T> {
   return (
     typeof result === "object" &&
     result !== null &&
@@ -166,7 +159,7 @@ export function isPaginatedResult<T>(
 
 /**
  * Empty paginated result
- * 
+ *
  * @returns Empty paginated result
  */
 export function emptyPaginatedResult<T>(): PaginatedResult<T> {
@@ -198,7 +191,7 @@ export interface SupabasePaginationOptions<T> {
 
 /**
  * Apply cursor-based pagination to a Supabase query
- * 
+ *
  * @param query - Supabase query builder
  * @param cursorField - Field to use as cursor
  * @param cursor - Cursor value
@@ -215,9 +208,9 @@ export function withCursorPagination<T>(
 ): { query: unknown; effectiveLimit: number } {
   // For cursor-based pagination, we fetch limit + 1 to check if there are more
   const effectiveLimit = limit + 1;
-  
+
   let modifiedQuery = query;
-  
+
   if (cursor !== null) {
     // Apply cursor filter based on order
     if (order === "asc") {
@@ -230,13 +223,13 @@ export function withCursorPagination<T>(
       modifiedQuery = modifiedQuery.gt?.(cursorField, cursor) || modifiedQuery;
     }
   }
-  
+
   return { query: modifiedQuery, effectiveLimit };
 }
 
 /**
  * Create pagination metadata for API responses
- * 
+ *
  * @param page - Current page number (1-based)
  * @param pageSize - Items per page
  * @param totalCount - Total number of items (if known)

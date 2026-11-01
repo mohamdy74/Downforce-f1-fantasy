@@ -78,12 +78,9 @@ export const getReminderStatsPaginated = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server");
-    
+
     // Normalize pagination options
-    const effectiveLimit = Math.min(
-      Math.max(1, limit ?? DEFAULT_PAGE_SIZE),
-      MAX_PAGE_SIZE
-    );
+    const effectiveLimit = Math.min(Math.max(1, limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
     // Returns only submission counts and missing player names (never exposes pick contents).
     const { data: preds, error: predictionsError } = await supabase
@@ -107,7 +104,7 @@ export const getReminderStatsPaginated = createServerFn({ method: "POST" })
       .select("id, display_name")
       .order("display_name", { ascending: true })
       .limit(effectiveLimit + 1); // +1 to check if there are more
-    
+
     if (cursor) {
       query.gt("display_name", cursor);
     }
@@ -123,7 +120,9 @@ export const getReminderStatsPaginated = createServerFn({ method: "POST" })
     const missing = (profiles ?? []).filter((profile) => !submittedIds.includes(profile.id));
     const hasMore = (profiles ?? []).length > effectiveLimit;
     const resultProfiles = hasMore ? (profiles ?? []).slice(0, -1) : (profiles ?? []);
-    const nextCursor = hasMore ? resultProfiles[resultProfiles.length - 1]?.display_name ?? null : null;
+    const nextCursor = hasMore
+      ? (resultProfiles[resultProfiles.length - 1]?.display_name ?? null)
+      : null;
 
     return {
       submitted: submittedIds.length,

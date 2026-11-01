@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { nextRace, racesQuery } from "@/lib/queries";
-import { getReminderStatsPaginated, type PaginatedReminderStatsResult } from "@/lib/reminder.functions";
+import {
+  getReminderStatsPaginated,
+  type PaginatedReminderStatsResult,
+} from "@/lib/reminder.functions";
 
 export function ReminderList() {
   const { data: races } = useQuery(racesQuery);
@@ -26,7 +29,7 @@ export function ReminderList() {
     queryKey: ["missing-preds-paginated", race?.id],
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       return await getReminderStatsPaginated({
-        data: { 
+        data: {
           raceId: race!.id,
           limit: DEFAULT_PAGE_SIZE,
           cursor: pageParam,
@@ -40,7 +43,8 @@ export function ReminderList() {
   });
 
   // Merge all pages
-  const allMissing = data?.pages.flatMap((page: PaginatedReminderStatsResult) => page.missing) ?? [];
+  const allMissing =
+    data?.pages.flatMap((page: PaginatedReminderStatsResult) => page.missing) ?? [];
   const totalSubmitted = data?.pages[0]?.submitted ?? 0;
   const totalCount = data?.pages[0]?.total ?? 0;
 
