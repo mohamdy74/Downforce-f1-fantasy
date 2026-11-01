@@ -50,7 +50,10 @@ function parseDebrief(raw: string): DebriefJson | null {
     return {
       headline: parsed.headline.slice(0, 200),
       summary: parsed.summary.slice(0, 1200),
-      bullets: parsed.bullets.filter((b) => typeof b === "string").slice(0, 6).map((b) => b.slice(0, 300)),
+      bullets: parsed.bullets
+        .filter((b) => typeof b === "string")
+        .slice(0, 6)
+        .map((b) => b.slice(0, 300)),
     };
   } catch {
     return null;
@@ -103,7 +106,10 @@ export const getRaceDebrief = createServerFn({ method: "POST" })
     const [{ data: drivers }, { data: preds }, { data: scores }, { data: profiles }] =
       await Promise.all([
         db.from("drivers").select("id, code, full_name, team"),
-        db.from("predictions").select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id").eq("race_id", race.id),
+        db
+          .from("predictions")
+          .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
+          .eq("race_id", race.id),
         db.from("scores").select("user_id, points, updated_at").eq("race_id", race.id),
         db.from("profiles").select("id, display_name"),
       ]);
@@ -135,7 +141,13 @@ export const getRaceDebrief = createServerFn({ method: "POST" })
         if (!stale) {
           try {
             const parsed = parseDebrief(cached.content);
-            if (parsed) return { status: "ok" as const, cached: true, debrief: parsed, generatedAt: cached.updated_at };
+            if (parsed)
+              return {
+                status: "ok" as const,
+                cached: true,
+                debrief: parsed,
+                generatedAt: cached.updated_at,
+              };
           } catch {
             /* fall through to regeneration */
           }
@@ -146,7 +158,10 @@ export const getRaceDebrief = createServerFn({ method: "POST" })
     // Build compact race facts for the model.
     const podium = (results ?? [])
       .filter((r) => r.finished && r.position != null && r.position <= 3)
-      .map((r) => `P${r.position} ${codeOf.get(r.driver_id) ?? r.driver_id} (${teamOf.get(r.driver_id)})`);
+      .map(
+        (r) =>
+          `P${r.position} ${codeOf.get(r.driver_id) ?? r.driver_id} (${teamOf.get(r.driver_id)})`,
+      );
     const top10 = (results ?? [])
       .filter((r) => r.finished && r.position != null && r.position <= 10)
       .map((r) => `P${r.position} ${codeOf.get(r.driver_id) ?? r.driver_id}`);
@@ -164,8 +179,10 @@ export const getRaceDebrief = createServerFn({ method: "POST" })
         .map((x, i) => `P${i + 1} ${codeOf.get(x) ?? x}`)
         .join(", ");
       const bonuses: string[] = [];
-      if (p.pole_driver_id) bonuses.push(`pole=${codeOf.get(p.pole_driver_id) ?? p.pole_driver_id}`);
-      if (p.fastest_lap_driver_id) bonuses.push(`FL=${codeOf.get(p.fastest_lap_driver_id) ?? p.fastest_lap_driver_id}`);
+      if (p.pole_driver_id)
+        bonuses.push(`pole=${codeOf.get(p.pole_driver_id) ?? p.pole_driver_id}`);
+      if (p.fastest_lap_driver_id)
+        bonuses.push(`FL=${codeOf.get(p.fastest_lap_driver_id) ?? p.fastest_lap_driver_id}`);
       if (p.dnf_driver_id) bonuses.push(`DNF=${codeOf.get(p.dnf_driver_id) ?? p.dnf_driver_id}`);
       return `- ${name}: ${pts ?? "?"} pts | picks: ${picks || "(none)"}${bonuses.length ? ` | ${bonuses.join(", ")}` : ""}`;
     });
@@ -201,14 +218,22 @@ export const getRaceDebrief = createServerFn({ method: "POST" })
       const parsed = parseDebrief(text);
       if (!parsed) throw new Error("The analyst came back empty this time — try again.");
       const payload = JSON.stringify(parsed);
-      const { error: upErr } = await db
-        .from("race_debriefs")
-        .upsert(
-          { race_id: race.id, content: payload, model: MODEL, updated_at: new Date().toISOString() },
-          { onConflict: "race_id" },
-        );
+      const { error: upErr } = await db.from("race_debriefs").upsert(
+        {
+          race_id: race.id,
+          content: payload,
+          model: MODEL,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "race_id" },
+      );
       if (upErr) throw new Error("Could not save the debrief");
-      return { status: "ok" as const, cached: false, debrief: parsed, generatedAt: new Date().toISOString() };
+      return {
+        status: "ok" as const,
+        cached: false,
+        debrief: parsed,
+        generatedAt: new Date().toISOString(),
+      };
     } catch (err) {
       if (err instanceof GatewayError) {
         if (err.code === "payment_required")

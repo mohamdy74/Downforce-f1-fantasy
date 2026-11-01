@@ -350,9 +350,7 @@ function Paddock() {
               </div>
             );
           })()}
-        {race && hasResults && !isLiveScoring && (
-          <RaceDebriefCard raceId={race.id} />
-        )}
+        {race && hasResults && !isLiveScoring && <RaceDebriefCard raceId={race.id} />}
         {sorted.map((p) => {
           const pts = computedPoints.get(p.user_id);
           return (
