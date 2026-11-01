@@ -6,10 +6,11 @@ import { toast } from "sonner";
 
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_PAGE_SIZE, type PaginatedResult } from "@/lib/pagination";
+import { getRaceDebrief, type DebriefJson } from "@/lib/ai-debrief.functions";
 import {
   driversQuery,
   getTrustedNow,
