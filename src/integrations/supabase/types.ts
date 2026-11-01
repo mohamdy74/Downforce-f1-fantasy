@@ -203,6 +203,38 @@ export type Database = {
         }
         Relationships: []
       }
+      race_debriefs: {
+        Row: {
+          content: string
+          created_at: string
+          model: string
+          race_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          model?: string
+          race_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          model?: string
+          race_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_debriefs_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: true
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       race_results: {
         Row: {
           driver_id: string

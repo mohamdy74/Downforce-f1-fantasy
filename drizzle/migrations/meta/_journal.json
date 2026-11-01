@@ -113,6 +113,13 @@
       "when": 1793531508675,
       "tag": "0015_drop_sprint_results_public_read",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793549917868,
+      "tag": "0016_create_race_debriefs",
+      "breakpoints": true
     }
   ]
 }
