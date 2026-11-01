@@ -120,6 +120,13 @@
       "when": 1793549917868,
       "tag": "0016_create_race_debriefs",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793550071134,
+      "tag": "0017_tighten_race_debriefs_policies",
+      "breakpoints": true
     }
   ]
 }
