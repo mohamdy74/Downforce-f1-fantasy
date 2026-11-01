@@ -1,0 +1,73 @@
+name: Penalty Watch
+
+# Watches openF1 race control messages during live F1 sessions for
+# penalties / grid changes / investigations and emails the steward, so
+# nothing has to be checked manually. A 13-minute lookback vs the
+# 10-minute cron may re-alert on a boundary message — an occasional
+# duplicate email is fine, a missed alert is not. Quiet no-op until
+# the Gmail secrets exist.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll openF1 race control & email penalty alerts
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          set +e
+          if [ -z "${GMAIL_USER}" ] || [ -z "${GMAIL_APP_PASSWORD}" ]; then
+            echo "Gmail secrets not configured yet — penalty watch in quiet no-op mode."
+            exit 0
+          fi
+          TO_ADDR="mohamdy008@gmail.com"
+          SINCE=$(date -u -d '13 minutes ago' +%Y-%m-%dT%H:%M:%S)
+          curl -4 -sS --max-time 40 -o /tmp/rc.json \
+            "https://api.openf1.org/v1/race_control?session_key=latest&date%3E${SINCE}" 2>/tmp/curl.err
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::PENALTY-WATCH: curl exit ${status} — $(head -c 180 /tmp/curl.err)"
+            exit 1
+          fi
+          if ! jq -e 'type == "array"' /tmp/rc.json >/dev/null 2>&1; then
+            echo "openF1 returned no session array (no live session) — quiet exit."
+            exit 0
+          fi
+          jq -r \
+            '.[] | select((.message // "") | test("penalt|grid drop|grid place|place penalty|investigat|summoned|reprimand|disqualif"; "i")) | "\(.date) [\(.category)] CAR \(.driver_number // \"-\"): \(.message)"' \
+            /tmp/rc.json > /tmp/hits.txt
+          if [ ! -s /tmp/hits.txt ]; then
+            echo "No penalty/grid/investigation messages in the last 13 minutes — quiet exit."
+            exit 0
+          fi
+          count=$(grep -c . /tmp/hits.txt)
+          echo "Matched ${count} penalty/grid message(s) — emailing the steward."
+          {
+            echo "Subject: [DOWNFORCE] F1 Penalty/Grid Alert (${count} new)"
+            echo "From: ${GMAIL_USER}"
+            echo "To: ${TO_ADDR}"
+            echo "Content-Type: text/plain; charset=UTF-8"
+            echo ""
+            echo "Race control penalty/grid messages from the last 13 minutes:"
+            echo ""
+            cat /tmp/hits.txt
+          } > /tmp/mail.txt
+          curl -4 -sS --max-time 30 --url "smtps://smtp.gmail.com:465" \
+            --mail-from "${GMAIL_USER}" \
+            --mail-rcpt "${TO_ADDR}" \
+            --user "${GMAIL_USER}:${GMAIL_APP_PASSWORD}" \
+            -T /tmp/mail.txt
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::PENALTY-WATCH: alert email failed (curl exit ${status})"
+            exit 1
+          fi
+          echo "Alert email sent."

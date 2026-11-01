@@ -31,14 +31,25 @@ import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
 import { syncF1Data } from "@/lib/f1-sync.functions";
-import { driversQuery, nextRace, racesQuery, raceUpdatesQuery } from "@/lib/queries";
+import {
+  driversQuery,
+  nextRace,
+  racesQuery,
+  raceUpdatesQuery,
+  type RaceUpdate,
+} from "@/lib/queries";
 import {
   executeStewardAction,
   exportLeagueBackup,
   getStewardsDashboard,
   STEWARD_EMAIL,
 } from "@/lib/stewards.functions";
-import { deleteRaceUpdate, postRaceUpdate, type RaceUpdateType } from "@/lib/updates.functions";
+import {
+  deleteRaceUpdate,
+  postRaceUpdate,
+  updateRaceUpdate,
+  type RaceUpdateType,
+} from "@/lib/updates.functions";
 import { Download } from "lucide-react";
 import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -203,6 +214,7 @@ function StewardsPage() {
   const [updTitle, setUpdTitle] = useState("");
   const [updBody, setUpdBody] = useState("");
   const [updBusy, setUpdBusy] = useState(false);
+  const [updEditId, setUpdEditId] = useState<string | null>(null);
 
   if (loading)
     return (
@@ -282,6 +294,22 @@ function StewardsPage() {
   const driverById = new Map(drivers.map((d) => [d.id, d.code ?? d.full_name]));
   const activeUpdates = raceUpdates.filter((u) => u.race_id === activeRace?.id);
 
+  function resetUpdateForm() {
+    setUpdEditId(null);
+    setUpdTitle("");
+    setUpdBody("");
+    setUpdDriver(EMPTY);
+    setUpdType("penalty");
+  }
+
+  function startEditUpdate(u: RaceUpdate) {
+    setUpdEditId(u.id);
+    setUpdType(u.type);
+    setUpdDriver(u.driver_id ?? EMPTY);
+    setUpdTitle(u.title);
+    setUpdBody(u.body ?? "");
+  }
+
   async function postUpdate() {
     if (!activeRace || !updTitle.trim()) {
       toast.error("A title is required.");
@@ -289,22 +317,20 @@ function StewardsPage() {
     }
     setUpdBusy(true);
     try {
-      const res = await postRaceUpdate({
-        data: {
-          raceId: activeRace.id,
-          type: updType,
-          driverId: updDriver === EMPTY ? null : updDriver,
-          title: updTitle,
-          body: updBody,
-        },
-      });
+      const payload = {
+        type: updType,
+        driverId: updDriver === EMPTY ? null : updDriver,
+        title: updTitle,
+        body: updBody,
+      };
+      const res = updEditId
+        ? await updateRaceUpdate({ data: { id: updEditId, ...payload } })
+        : await postRaceUpdate({ data: { raceId: activeRace.id, ...payload } });
       if (res.ok === false) {
         toast.error(res.msg, { duration: 7000 });
       } else {
         toast.success(res.msg);
-        setUpdTitle("");
-        setUpdBody("");
-        setUpdDriver(EMPTY);
+        resetUpdateForm();
         await queryClient.invalidateQueries({ queryKey: ["race-updates"] });
       }
     } catch (e) {
@@ -323,6 +349,7 @@ function StewardsPage() {
         toast.error(res.msg);
       } else {
         toast.success(res.msg);
+        if (updEditId === id) resetUpdateForm();
         await queryClient.invalidateQueries({ queryKey: ["race-updates"] });
       }
     } catch (e) {
@@ -601,15 +628,22 @@ function StewardsPage() {
             placeholder="Details (optional) — what happened and how it affects the starting grid"
             className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm"
           />
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={updBusy || !activeRace || !updTitle.trim()}
-            onClick={postUpdate}
-          >
-            <Megaphone className="mr-1.5 h-3.5 w-3.5 text-gold" />
-            Publish to League
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={updBusy || !activeRace || !updTitle.trim()}
+              onClick={postUpdate}
+            >
+              <Megaphone className="mr-1.5 h-3.5 w-3.5 text-gold" />
+              {updEditId ? "Save Changes" : "Publish to League"}
+            </Button>
+            {updEditId && (
+              <Button size="sm" variant="outline" disabled={updBusy} onClick={resetUpdateForm}>
+                Cancel
+              </Button>
+            )}
+          </div>
 
           {activeUpdates.length > 0 && (
             <div className="divide-y divide-border rounded-lg border border-border/70">
@@ -622,15 +656,31 @@ function StewardsPage() {
                       {u.driver_id ? ` · ${driverById.get(u.driver_id) ?? u.driver_id}` : ""}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={updBusy}
-                    onClick={() => removeUpdate(u.id)}
-                    className="hit-slop mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-                    aria-label="Delete update"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="mt-0.5 flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={updBusy}
+                      onClick={() => startEditUpdate(u)}
+                      className={cn(
+                        "hit-slop inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                        updEditId === u.id
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:bg-primary/15 hover:text-primary",
+                      )}
+                      aria-label="Edit update"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updBusy}
+                      onClick={() => removeUpdate(u.id)}
+                      className="hit-slop inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                      aria-label="Delete update"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
