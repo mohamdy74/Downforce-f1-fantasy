@@ -618,6 +618,7 @@ a, button, summary, select, [role="button"], [role="tab"] {
 @media (prefers-reduced-motion: reduce) {
   .start-light { animation: none !important; }
   .animate-pulse { animation: none !important; }
+  .skeleton-shimmer { animation: none !important; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

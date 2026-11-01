@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CalendarPlus, CheckCircle2 } from "lucide-react";
 
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { PushOptIn } from "@/components/PushOptIn";
 import { useAuth } from "@/hooks/useAuth";
@@ -123,7 +124,28 @@ export function PickStatus({ race }: { race: Race }) {
     );
   }
 
-  if (submitted === undefined) return null;
+  if (submitted === undefined) {
+    // Reserved-height stand-in so the banner slot never collapses while the
+    // has-prediction query resolves — removes the home-page layout shift.
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label="Checking your pick status"
+        className="carbon-panel mb-6 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-3 rounded-lg border-l-4 border-border p-4"
+      >
+        <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+        <div className="col-start-2 flex flex-wrap gap-2">
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-20 rounded-md" />
+        </div>
+      </div>
+    );
+  }
   const ok = !!submitted;
 
   return (

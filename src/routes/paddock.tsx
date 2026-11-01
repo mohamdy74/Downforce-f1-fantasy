@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,7 +88,7 @@ function Paddock() {
     queryFn: async () => getLiveRaceTelemetry({ data: { raceId: race!.id } }),
   });
 
-  const { data } = useQuery({
+  const { data, isLoading: paddockLoading } = useQuery({
     queryKey: ["paddock", race?.id, user?.id],
     enabled: !!race && !!user,
     queryFn: async () => {
@@ -143,7 +144,21 @@ function Paddock() {
     queryClient,
   ]);
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading...</main>;
+  if (loading)
+    return (
+      <main
+        className="mx-auto max-w-3xl px-4 pb-28 pt-10"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading paddock"
+      >
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="mt-1.5 h-8 w-56" />
+        <Skeleton className="mt-2 h-4 w-4/5" />
+        <Skeleton className="mt-6 h-16 w-full rounded-lg" />
+        <PaddockCardsSkeleton className="mt-6" />
+      </main>
+    );
   if (!user)
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
@@ -235,7 +250,8 @@ function Paddock() {
         </div>
       )}
 
-      {race && sorted.length === 0 && (
+      {race && paddockLoading && <PaddockCardsSkeleton className="mt-6" />}
+      {race && !paddockLoading && sorted.length === 0 && (
         <p className="mt-8 text-sm text-muted-foreground">No one submitted picks for this race.</p>
       )}
 
@@ -342,6 +358,39 @@ function Paddock() {
         })}
       </div>
     </main>
+  );
+}
+
+/** Stand-in for player debrief cards while the paddock query loads — same
+ * panel geometry as the real cards, so the list never flashes a false
+ * "no one submitted picks" empty state. */
+function PaddockCardsSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn("space-y-4", className)}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading player picks"
+    >
+      {Array.from({ length: 2 }).map((_, c) => (
+        <section key={c} className="carbon-panel rounded-lg p-3">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-7 w-16" />
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-7 w-full rounded-sm" />
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-full rounded-sm" />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 

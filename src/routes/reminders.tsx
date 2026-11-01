@@ -63,7 +63,12 @@ function Reminders() {
       </p>
 
       {isLoading ? (
-        <div className="mt-6 space-y-2">
+        <div
+          className="mt-6 space-y-2"
+          role="status"
+          aria-busy="true"
+          aria-label="Loading reminder stats"
+        >
           <div className="skeleton-shimmer h-8 w-full rounded-lg" />
           <div className="grid grid-cols-3 gap-4 text-center">
             {[1, 2, 3].map((i) => (

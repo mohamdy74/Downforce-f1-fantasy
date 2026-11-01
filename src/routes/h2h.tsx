@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { FahlBadge } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries";
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/h2h")({
 });
 
 function H2H() {
-  const { data: board = [] } = useQuery(leaderboardQuery);
+  const { data: board = [], isLoading: boardLoading } = useQuery(leaderboardQuery);
   const { data: races = [] } = useQuery(racesQuery);
   const { user } = useAuth();
   const [a, setA] = useState("");
@@ -116,7 +117,24 @@ function H2H() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-3xl">Head-to-head</h1>
-      {board.length < 2 ? (
+      {boardLoading ? (
+        <div className="mt-4" role="status" aria-busy="true" aria-label="Loading head-to-head">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <Skeleton className="h-11 w-full rounded-lg sm:h-12" />
+            <Skeleton className="h-6 w-10 rounded" />
+            <Skeleton className="h-11 w-full rounded-lg sm:h-12" />
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:gap-4">
+            <Skeleton className="h-20 w-full rounded-lg" />
+            <Skeleton className="h-20 w-full rounded-lg" />
+          </div>
+          <div className="mt-4 space-y-1.5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-full rounded-md" />
+            ))}
+          </div>
+        </div>
+      ) : board.length < 2 ? (
         <p className="mt-6 text-sm text-muted-foreground">
           Need at least two players for a battle.
         </p>

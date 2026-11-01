@@ -1,5 +1,15 @@
 import { cn } from "@/lib/utils";
 
+/**
+ * Single shimmer block — the shared primitive every skeleton in the app is
+ * composed from. Uses the design-system .skeleton-shimmer class (pulsing
+ * gradient, light/dark aware, and disabled under prefers-reduced-motion
+ * via the global rule in styles.css).
+ */
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cn("skeleton-shimmer rounded", className)} />;
+}
+
 interface LoadingSkeletonProps {
   className?: string;
   rows?: number;
@@ -12,7 +22,12 @@ interface LoadingSkeletonProps {
  */
 export function LoadingSkeleton({ className, rows = 5, showHeader = false }: LoadingSkeletonProps) {
   return (
-    <div role="status" aria-label="Loading content" className={cn("space-y-2", className)}>
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading content"
+      className={cn("space-y-2", className)}
+    >
       {showHeader && (
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <div className="skeleton-shimmer h-5 w-32 rounded" />
@@ -34,6 +49,33 @@ export function LoadingSkeleton({ className, rows = 5, showHeader = false }: Loa
 }
 
 /**
+ * Skeleton for tower-row lists (weekend classifications, standings, debrief
+ * rows). Mirrors the real tower-row geometry — position block, two text
+ * lines, right-hand value — so swapping in real rows causes no layout shift.
+ */
+export function TowerRowsSkeleton({ rows = 6, className }: { rows?: number; className?: string }) {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading classification"
+      className={cn("space-y-1.5", className)}
+    >
+      {Array.from({ length: rows }).map((_, idx) => (
+        <div key={idx} className="tower-row flex items-center gap-3 rounded-md px-3 py-2">
+          <Skeleton className="h-5 w-8 shrink-0" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-4 w-14 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Card-style loading skeleton for panels
  */
 export function CardLoadingSkeleton({
@@ -46,6 +88,7 @@ export function CardLoadingSkeleton({
   return (
     <div
       role="status"
+      aria-busy="true"
       aria-label="Loading"
       className={cn("carbon-panel rounded-xl border border-border p-6", className)}
     >
@@ -74,6 +117,7 @@ export function StatsLoadingSkeleton({
   return (
     <div
       role="status"
+      aria-busy="true"
       aria-label="Loading statistics"
       className={cn("grid gap-2 sm:grid-cols-2 lg:grid-cols-4", className)}
     >

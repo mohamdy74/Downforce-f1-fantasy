@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Countdown } from "@/components/Countdown";
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { DriverSelect, EMPTY, SprintGrid } from "@/components/SprintGrid";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -125,10 +126,20 @@ function Sprint() {
   if (loading) {
     return (
       <Shell>
-        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-        <div className="mt-3 h-8 w-64 animate-pulse rounded bg-muted" />
-        <div className="mt-4 h-12 w-full animate-pulse rounded-md bg-muted/60" />
-        <div className="mt-6 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
+        <div role="status" aria-busy="true" aria-label="Loading sprint predictions">
+          <Skeleton className="h-3.5 w-20" />
+          <Skeleton className="mt-2 h-8 w-64" />
+          <Skeleton className="mt-1.5 h-4 w-44" />
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-14 w-full rounded-lg" />
+          </div>
+          <div className="mt-6 space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-full rounded-md" />
+            ))}
+          </div>
+        </div>
       </Shell>
     );
   }

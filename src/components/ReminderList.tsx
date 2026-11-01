@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Send, Users, UserX, Clock } from "lucide-react";
 
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { nextRace, racesQuery } from "@/lib/queries";
@@ -13,7 +14,7 @@ export function ReminderList() {
 
   const race = races ? nextRace(races) : null;
 
-  const { data: missing } = useQuery({
+  const { data: missing, isLoading: missingLoading } = useQuery({
     queryKey: ["missing-preds", race?.id],
     enabled: !!race && !!user,
     staleTime: 2 * 60_000, // 2 minutes
@@ -23,6 +24,28 @@ export function ReminderList() {
   });
 
   if (!race || !races) return null;
+  if (missingLoading) {
+    // Skeleton stand-in instead of flashing the "Couldn't load" error panel
+    // while the stats query is still in flight.
+    return (
+      <div
+        className="carbon-panel-strong mt-6 rounded-lg p-4 sm:p-5"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading reminder list"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+        <div className="mt-3 space-y-1.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!missing || !missing.missing) {
     return (
       <div className="carbon-panel-strong rounded-lg p-4 text-sm text-muted-foreground">

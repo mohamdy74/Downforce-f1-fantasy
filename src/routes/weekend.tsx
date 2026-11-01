@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Countdown } from "@/components/Countdown";
+import { Skeleton, TowerRowsSkeleton } from "@/components/LoadingSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { driversQuery, getTrustedNow, racesQuery, type Driver, type Race } from "@/lib/queries";
 import { teamColor } from "@/lib/teams";
@@ -345,8 +346,24 @@ function Weekend() {
   if (isLoading || now === null || !races) {
     return (
       <Shell>
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="mt-6 h-40 animate-pulse rounded-lg bg-muted/60" />
+        <div role="status" aria-busy="true" aria-label="Loading race weekend">
+          <div className="flex gap-1.5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-7 w-11 rounded-full" />
+            ))}
+          </div>
+          <Skeleton className="mt-4 h-3 w-20" />
+          <Skeleton className="mt-1.5 h-8 w-60" />
+          <Skeleton className="mt-1 h-4 w-44" />
+          <div className="mt-5 grid grid-cols-4 gap-1.5">
+            {TABS.map((t) => (
+              <Skeleton key={t.id} className="min-h-11 w-full rounded-md" />
+            ))}
+          </div>
+          <div className="mt-4">
+            <TowerRowsSkeleton rows={5} />
+          </div>
+        </div>
       </Shell>
     );
   }
@@ -582,7 +599,7 @@ function SessionResults({
     },
   });
 
-  if (q.isLoading) return <div className="h-40 animate-pulse rounded-lg bg-muted/60" />;
+  if (q.isLoading) return <TowerRowsSkeleton rows={8} />;
   if (q.isError && !q.data) {
     return (
       <Empty
@@ -847,7 +864,25 @@ function RaceResults({ race, now }: { race: Race; now: number }) {
   const isShowingLive = !hasOfficial && liveRows.length > 0;
   const rows: ResultRow[] = hasOfficial ? dbRows : liveRows;
 
-  if (isLoading) return <div className="h-40 animate-pulse rounded-lg bg-muted/60" />;
+  if (isLoading)
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label="Loading race results"
+        className="space-y-4"
+      >
+        <div className="carbon-panel grid grid-cols-2 gap-3 rounded-lg p-4 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+          ))}
+        </div>
+        <TowerRowsSkeleton rows={8} />
+      </div>
+    );
   if (isError && !rows.length)
     return <Empty text="Couldn't load results right now. Try again in a moment." />;
 

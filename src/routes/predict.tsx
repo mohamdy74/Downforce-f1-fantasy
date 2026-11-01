@@ -8,6 +8,7 @@ import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { SprintGrid } from "@/components/SprintGrid";
 import { LightsOut } from "@/components/LightsOut";
 import { MissingPlayers } from "@/components/MissingPlayers";
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { assertDeadlineOpen, logPredAudit } from "@/lib/prediction.functions";
 import { SharePicks } from "@/components/SharePicks";
 import { SharePole } from "@/components/SharePole";
@@ -203,15 +204,34 @@ function Predict() {
   if (loading) {
     return (
       <Shell>
-        <div
-          role="status"
-          aria-label="Loading prediction page"
-          className="h-4 w-24 animate-pulse rounded bg-muted"
-        />
-        <div className="mt-3 h-8 w-64 animate-pulse rounded bg-muted" />
-        <div className="mt-4 h-12 w-full animate-pulse rounded-md bg-muted/60" />
-        <div className="mt-6 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
-        <div className="mt-4 h-40 w-full animate-pulse rounded-lg bg-muted/60" />
+        <div role="status" aria-busy="true" aria-label="Loading prediction page">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Skeleton className="h-3.5 w-20" />
+            <Skeleton className="h-6 w-28 rounded-full" />
+          </div>
+          <Skeleton className="mt-2 h-8 w-64" />
+          <Skeleton className="mt-1.5 h-4 w-44" />
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-14 w-full rounded-lg" />
+          </div>
+          <div className="carbon-panel mt-6 rounded-lg border-l-4 border-gold p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-5 w-36" />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="mt-4 h-11 w-full rounded-md" />
+            <Skeleton className="mt-3 h-11 w-40 rounded-md" />
+          </div>
+          <div className="mt-6 space-y-2">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-full rounded-md" />
+            ))}
+          </div>
+        </div>
       </Shell>
     );
   }

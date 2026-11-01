@@ -17,6 +17,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import {
@@ -186,7 +187,27 @@ function StewardsPage() {
   const [renameId, setRenameId] = useState("");
   const [renameVal, setRenameVal] = useState("");
 
-  if (loading) return <main className="mx-auto max-w-3xl px-4 py-16">Loading Stewards Room…</main>;
+  if (loading)
+    return (
+      <main
+        className="mx-auto max-w-3xl px-4 py-16"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading stewards room"
+      >
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="mt-2 h-4 w-72" />
+        <div className="mt-6 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="carbon-panel rounded-xl p-4">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="mt-3 h-11 w-full rounded-md" />
+              <Skeleton className="mt-2 h-11 w-full rounded-md" />
+            </div>
+          ))}
+        </div>
+      </main>
+    );
   if (!user || !isSteward) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 text-center">
