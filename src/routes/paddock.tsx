@@ -520,14 +520,16 @@ function RaceDebriefCard({ raceId }: { raceId: string }) {
         </ul>
       )}
       {q.data.generatedAt && (
-        <p dir="rtl" className="mt-2 text-left font-mono text-[10px] text-muted-foreground/70">
-          {new Date(q.data.generatedAt).toLocaleString("en-GB", {
-            timeZone: "Africa/Cairo",
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}{" "}
+        <p className="mt-2 font-mono text-[10px] text-muted-foreground/70">
+          <bdi>
+            {new Date(q.data.generatedAt).toLocaleString("en-GB", {
+              timeZone: "Africa/Cairo",
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </bdi>{" "}
           Cairo
         </p>
       )}
