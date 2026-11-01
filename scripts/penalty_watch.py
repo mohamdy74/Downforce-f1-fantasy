@@ -128,6 +128,17 @@ def ident(m):
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
+def driver_code_map(headers, session_key):
+    rows = openf1_get("/v1/drivers", {"session_key": session_key}, headers)
+    out = {}
+    for d in rows:
+        num = d.get("driver_number")
+        if num is None:
+            continue
+        out[str(num)] = str(d.get("name_acronym") or "").strip() or str(num)
+    return out
+
+
 def load_state():
     try:
         with open(STATE_PATH) as f:
@@ -181,6 +192,9 @@ def main():
     else:
         warn("could not read session info; continuing anyway")
 
+    drivers = driver_code_map(headers, session_key)
+    log(f"drivers: {len(drivers)} loaded")
+
     msgs = openf1_get("/v1/race_control", {"session_key": session_key}, headers)
     matched = [m for m in msgs if KEYWORDS.search(str(m.get("message") or ""))]
     seen = {} if replay else load_state()
@@ -203,17 +217,49 @@ def main():
             save_state(seen)
         return
 
+    def code_of(m):
+        num = m.get("driver_number")
+        return drivers.get(str(num)) if num is not None else None
+
     shown = min(max_lines, 5) if replay else max_lines
     lines = []
     for d, _, m in fresh[:shown]:
         lap = m.get("lap_number")
         lap_txt = f" L{lap}" if lap else ""
-        lines.append(f"{d.astimezone(LOCAL_TZ).strftime('%H:%M')}{lap_txt} · {m.get('message')}")
+        code = code_of(m)
+        prefix = f"{code} · " if code else ""
+        lines.append(
+            f"{d.astimezone(LOCAL_TZ).strftime('%H:%M')}{lap_txt} · {prefix}{m.get('message')}"
+        )
     extra = len(fresh) - len(lines)
     if extra > 0:
         lines.append(f"+{extra} more")
+
+    # Publish-ready block for the newest message — copy straight into the
+    # Stewards Room form (title <= 140, details <= 500 chars).
+    nd, _, newest = fresh[-1]
+    raw_msg = str(newest.get("message") or "").strip()
+    ncode = code_of(newest)
+    ntime = nd.astimezone(LOCAL_TZ).strftime('%H:%M')
+    where = session_name if session_name != "?" else "F1 session"
+    country = str((session or {}).get("country_name") or "").strip()
+    where_full = f"{where}, {country}" if country else where
+    copy_title = f"{ncode} — {raw_msg}" if ncode else raw_msg
+    copy_title = copy_title[:140]
+    copy_details = (
+        f'Race control ({where_full}) at {ntime} {LOCAL_LABEL}: "{raw_msg}". '
+        "Verify against official FIA documents before publishing."
+    )[:500]
+    copy_block = (
+        "———— Copy to site ————\n"
+        f"Title: {copy_title}\n"
+        f"Details: {copy_details}"
+    )
+
     title = f"🚨 Penalty Watch · {session_name}" + (" (replay)" if replay else "")
-    send_telegram(bot, chat, f"{title} ({LOCAL_LABEL} time)\n\n" + "\n".join(lines))
+    send_telegram(
+        bot, chat, f"{title} ({LOCAL_LABEL} time)\n\n" + "\n".join(lines) + "\n\n" + copy_block
+    )
     log(f"sent: {len(fresh)} message(s)")
 
     if not replay:
