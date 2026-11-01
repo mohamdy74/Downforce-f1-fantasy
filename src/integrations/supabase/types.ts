@@ -270,6 +270,51 @@ export type Database = {
           },
         ];
       };
+      race_updates: {
+        Row: {
+          body: string | null;
+          created_at: string;
+          driver_id: string | null;
+          id: string;
+          race_id: string;
+          title: string;
+          type: string;
+        };
+        Insert: {
+          body?: string | null;
+          created_at?: string;
+          driver_id?: string | null;
+          id?: string;
+          race_id: string;
+          title: string;
+          type: string;
+        };
+        Update: {
+          body?: string | null;
+          created_at?: string;
+          driver_id?: string | null;
+          id?: string;
+          race_id?: string;
+          title?: string;
+          type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "race_updates_driver_id_fkey";
+            columns: ["driver_id"];
+            isOneToOne: false;
+            referencedRelation: "drivers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "race_updates_race_id_fkey";
+            columns: ["race_id"];
+            isOneToOne: false;
+            referencedRelation: "races";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       races: {
         Row: {
           circuit: string | null;
