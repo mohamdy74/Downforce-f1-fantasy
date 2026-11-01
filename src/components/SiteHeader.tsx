@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { AccountAndOnboarding } from "@/components/AccountAndOnboarding";
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
 import { PushOptIn } from "@/components/PushOptIn";
+import { UpdatesFeed } from "@/components/UpdatesFeed";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -210,6 +211,7 @@ export function SiteHeader() {
           >
             Rules
           </Link>
+          <UpdatesFeed />
           <Button
             variant="ghost"
             size="icon"
@@ -304,3 +306,4 @@ export function FahlBadge() {
     </span>
   );
 }
+

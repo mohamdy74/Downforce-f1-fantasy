@@ -349,3 +349,29 @@ export function lastRace(races: Race[]): Race | null {
   const done = races.filter((r) => r.has_results && r.round >= LEAGUE_START_ROUND);
   return done.length ? done[done.length - 1]! : null;
 }
+
+export type RaceUpdate = {
+  id: string;
+  race_id: string;
+  type: "penalty" | "grid_change" | "investigation" | "general";
+  driver_id: string | null;
+  title: string;
+  body: string | null;
+  created_at: string;
+};
+
+export const raceUpdatesQuery = queryOptions({
+  queryKey: ["race-updates"],
+  staleTime: 60_000, // 1 minute — news feed, kept reasonably fresh but not hot
+  gcTime: 10 * 60_000,
+  queryFn: async (): Promise<RaceUpdate[]> => {
+    const { data, error } = await supabase
+      .from("race_updates")
+      .select("id, race_id, type, driver_id, title, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return (data ?? []) as RaceUpdate[];
+  },
+});
+

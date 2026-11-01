@@ -14,6 +14,7 @@ import {
   Edit3,
   ChevronDown,
   Loader2,
+  Megaphone,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -30,13 +31,14 @@ import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
 import { syncF1Data } from "@/lib/f1-sync.functions";
-import { driversQuery, nextRace, racesQuery } from "@/lib/queries";
+import { driversQuery, nextRace, racesQuery, raceUpdatesQuery } from "@/lib/queries";
 import {
   executeStewardAction,
   exportLeagueBackup,
   getStewardsDashboard,
   STEWARD_EMAIL,
 } from "@/lib/stewards.functions";
+import { deleteRaceUpdate, postRaceUpdate, type RaceUpdateType } from "@/lib/updates.functions";
 import { Download } from "lucide-react";
 import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
@@ -194,6 +196,14 @@ function StewardsPage() {
   const [renameId, setRenameId] = useState("");
   const [renameVal, setRenameVal] = useState("");
 
+  const { data: raceUpdates = [] } = useQuery(raceUpdatesQuery);
+
+  const [updType, setUpdType] = useState<RaceUpdateType>("penalty");
+  const [updDriver, setUpdDriver] = useState(EMPTY);
+  const [updTitle, setUpdTitle] = useState("");
+  const [updBody, setUpdBody] = useState("");
+  const [updBusy, setUpdBusy] = useState(false);
+
   if (loading)
     return (
       <main
@@ -269,6 +279,58 @@ function StewardsPage() {
   const scoreByUser = new Map((dash?.scores ?? []).map((s) => [s.user_id, s.points]));
   const pushUserSet = new Set(dash?.pushUserIds ?? []);
   const sortedDrivers = sortByTeam(drivers);
+  const driverById = new Map(drivers.map((d) => [d.id, d.code ?? d.full_name]));
+  const activeUpdates = raceUpdates.filter((u) => u.race_id === activeRace?.id);
+
+  async function postUpdate() {
+    if (!activeRace || !updTitle.trim()) {
+      toast.error("A title is required.");
+      return;
+    }
+    setUpdBusy(true);
+    try {
+      const res = await postRaceUpdate({
+        data: {
+          raceId: activeRace.id,
+          type: updType,
+          driverId: updDriver === EMPTY ? null : updDriver,
+          title: updTitle,
+          body: updBody,
+        },
+      });
+      if (res.ok === false) {
+        toast.error(res.msg, { duration: 7000 });
+      } else {
+        toast.success(res.msg);
+        setUpdTitle("");
+        setUpdBody("");
+        setUpdDriver(EMPTY);
+        await queryClient.invalidateQueries({ queryKey: ["race-updates"] });
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to publish update");
+    } finally {
+      setUpdBusy(false);
+    }
+  }
+
+  async function removeUpdate(id: string) {
+    if (!window.confirm("Remove this update from the players' feed?")) return;
+    setUpdBusy(true);
+    try {
+      const res = await deleteRaceUpdate({ data: { id } });
+      if (res.ok === false) {
+        toast.error(res.msg);
+      } else {
+        toast.success(res.msg);
+        await queryClient.invalidateQueries({ queryKey: ["race-updates"] });
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete update");
+    } finally {
+      setUpdBusy(false);
+    }
+  }
 
   const totalPlayers = dash?.profiles?.length ?? 0;
   const lockedPlayers = (dash?.profiles ?? []).filter((p) => {
@@ -482,7 +544,101 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 2. Score & Penalty Override */}
+      {/* 2. Race Updates & News Feed */}
+      <StewardAccordionCard
+        id="updates"
+        openId={openSection}
+        onToggle={toggleSection}
+        icon={<Megaphone className="h-4 w-4 text-gold" />}
+        title="Race Updates & News"
+        subtitle="Publish penalties, grid changes & announcements to every player's Updates bell"
+        badge={
+          activeUpdates.length > 0 ? (
+            <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+              {activeUpdates.length} Posted
+            </span>
+          ) : undefined
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Update Type
+              </label>
+              <select
+                value={updType}
+                onChange={(e) => setUpdType(e.target.value as RaceUpdateType)}
+                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm font-bold"
+              >
+                <option value="penalty">Penalty</option>
+                <option value="grid_change">Grid Change</option>
+                <option value="investigation">Investigation</option>
+                <option value="general">General News</option>
+              </select>
+            </div>
+            <div>
+              <span className="mb-1 block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Affected Driver (optional)
+              </span>
+              <DriverPicker drivers={drivers} value={updDriver} onChange={setUpdDriver} />
+            </div>
+          </div>
+
+          <input
+            type="text"
+            value={updTitle}
+            onChange={(e) => setUpdTitle(e.target.value)}
+            maxLength={140}
+            placeholder="Title — e.g. VER handed a 3-place grid penalty"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm font-bold"
+          />
+          <textarea
+            value={updBody}
+            onChange={(e) => setUpdBody(e.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder="Details (optional) — what happened and how it affects the starting grid"
+            className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          />
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={updBusy || !activeRace || !updTitle.trim()}
+            onClick={postUpdate}
+          >
+            <Megaphone className="mr-1.5 h-3.5 w-3.5 text-gold" />
+            Publish to League
+          </Button>
+
+          {activeUpdates.length > 0 && (
+            <div className="divide-y divide-border rounded-lg border border-border/70">
+              {activeUpdates.map((u) => (
+                <div key={u.id} className="flex items-start justify-between gap-2 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-foreground">{u.title}</p>
+                    <p className="mt-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                      {u.type.replace("_", " ")}
+                      {u.driver_id ? ` · ${driverById.get(u.driver_id) ?? u.driver_id}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={updBusy}
+                    onClick={() => removeUpdate(u.id)}
+                    className="hit-slop mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                    aria-label="Delete update"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </StewardAccordionCard>
+
+      {/* 3. Score & Penalty Override */}
       <StewardAccordionCard
         id="scores"
         openId={openSection}
@@ -546,7 +702,7 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 3. Stewards Pick Override */}
+      {/* 4. Stewards Pick Override */}
       <StewardAccordionCard
         id="picks"
         openId={openSection}
@@ -644,7 +800,7 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 4. Adjust Lock Deadlines */}
+      {/* 5. Adjust Lock Deadlines */}
       <StewardAccordionCard
         id="deadlines"
         openId={openSection}
@@ -774,7 +930,7 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 5. Manual Race Results Entry */}
+      {/* 6. Manual Race Results Entry */}
       <StewardAccordionCard
         id="results"
         openId={openSection}
@@ -873,7 +1029,7 @@ function StewardsPage() {
         </div>
       </StewardAccordionCard>
 
-      {/* 6. Player Manager */}
+      {/* 7. Player Manager */}
       <StewardAccordionCard
         id="players"
         openId={openSection}
@@ -942,3 +1098,4 @@ function StewardsPage() {
     </main>
   );
 }
+
