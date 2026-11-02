@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { FahlBadge } from "@/components/SiteHeader";
@@ -783,25 +783,46 @@ function Leaderboard() {
   const topDriverPoints = f1Drivers[0]?.points ?? 0;
   const topTeamPoints = f1Constructors[0]?.points ?? 0;
 
-  const mostWinsDriver = [...f1Drivers].sort((a, b) => b.wins - a.wins || b.points - a.points)[0];
-  const mostPolesDriver = [...f1Drivers].sort(
-    (a, b) => b.poles - a.poles || b.points - a.points,
-  )[0];
-  const mostPodiumsDriver = [...f1Drivers].sort(
-    (a, b) => b.podiums - a.podiums || b.points - a.points,
-  )[0];
-  const mostFastestLapsDriver = [...f1Drivers].sort(
-    (a, b) => b.fastestLaps - a.fastestLaps || b.points - a.points,
-  )[0];
-  const mostTop10Driver = [...f1Drivers].sort(
-    (a, b) => b.top10 - a.top10 || b.points - a.points,
-  )[0];
-  const mostDnfsDriver = [...f1Drivers].sort((a, b) => b.dnfs - a.dnfs || a.points - b.points)[0];
+  // The six "season leaders" sorts and the two league aggregates back the
+  // stats tab only, but previously ran on every render — including every
+  // player-row expand/collapse. Memoized on the stable query-data refs so
+  // they recompute only when the underlying data changes.
+  const mostWinsDriver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.wins - a.wins || b.points - a.points)[0],
+    [f1Drivers],
+  );
+  const mostPolesDriver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.poles - a.poles || b.points - a.points)[0],
+    [f1Drivers],
+  );
+  const mostPodiumsDriver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.podiums - a.podiums || b.points - a.points)[0],
+    [f1Drivers],
+  );
+  const mostFastestLapsDriver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.fastestLaps - a.fastestLaps || b.points - a.points)[0],
+    [f1Drivers],
+  );
+  const mostTop10Driver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.top10 - a.top10 || b.points - a.points)[0],
+    [f1Drivers],
+  );
+  const mostDnfsDriver = useMemo(
+    () => [...f1Drivers].sort((a, b) => b.dnfs - a.dnfs || a.points - b.points)[0],
+    [f1Drivers],
+  );
 
-  const bestSingleRoundEntry = [...(board ?? [])].sort((a, b) => (b.best ?? 0) - (a.best ?? 0))[0];
-  const bestAverageEntry = [...(board ?? [])]
-    .filter((e) => e.races > 0)
-    .sort((a, b) => b.points / b.races - a.points / a.races)[0];
+  const bestSingleRoundEntry = useMemo(
+    () => [...(board ?? [])].sort((a, b) => (b.best ?? 0) - (a.best ?? 0))[0],
+    [board],
+  );
+  const bestAverageEntry = useMemo(
+    () =>
+      [...(board ?? [])]
+        .filter((e) => e.races > 0)
+        .sort((a, b) => b.points / b.races - a.points / a.races)[0],
+    [board],
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">

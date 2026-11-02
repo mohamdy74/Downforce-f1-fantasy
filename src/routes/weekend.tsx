@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Countdown } from "@/components/Countdown";
@@ -90,6 +90,23 @@ function useNow(ms = 15_000) {
     }, ms);
     return () => clearInterval(t);
   }, [ms]);
+  return now;
+}
+
+/**
+ * Client-only clock for subtrees that render after the page-level null gate:
+ * they never render on the server, so they can start from the trusted clock
+ * immediately (no hydration mismatch) and skip ticks while `enabled` is
+ * false — a disabled clock never triggers a re-render.
+ */
+function useLocalNow(ms = 15_000, enabled = true) {
+  const [now, setNow] = useState(() => getTrustedNow());
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (enabled && document.visibilityState === "visible") setNow(getTrustedNow());
+    }, ms);
+    return () => clearInterval(t);
+  }, [ms, enabled]);
   return now;
 }
 
@@ -433,13 +450,13 @@ function Weekend() {
       </div>
 
       <div ref={tabRef} className="mt-4">
-        <WeekendBody race={race} now={now} tab={tab} />
+        <WeekendBody race={race} tab={tab} />
       </div>
     </Shell>
   );
 }
 
-function WeekendBody({ race, now, tab }: { race: Race; now: number; tab: Tab }) {
+const WeekendBody = memo(function WeekendBody({ race, tab }: { race: Race; tab: Tab }) {
   const schedQ = useQuery({
     queryKey: ["weekend-schedule", race.id],
     staleTime: 30 * MIN,
@@ -452,11 +469,13 @@ function WeekendBody({ race, now, tab }: { race: Race; now: number; tab: Tab }) 
   ];
   const sessions = schedQ.data && schedQ.data.length ? schedQ.data : fallback;
 
-  if (tab === "schedule") return <Schedule sessions={sessions} now={now} />;
-  return <SessionPane key={tab} race={race} sessions={sessions} group={tab} now={now} />;
+  if (tab === "schedule") return <Schedule sessions={sessions} />;
+  return <SessionPane key={tab} race={race} sessions={sessions} group={tab} />;
 }
 
-function Schedule({ sessions, now }: { sessions: ScheduleItem[]; now: number }) {
+function Schedule({ sessions }: { sessions: ScheduleItem[] }) {
+  // Local clock: the 15s tick re-renders only this small list, not the route.
+  const now = useLocalNow();
   const items = sessions.map((s) => ({ ...s, status: statusOf(s.startsAt, s.type, now) }));
   const next = items.find((s) => s.status !== "completed");
 
@@ -500,18 +519,23 @@ function SessionPane({
   race,
   sessions,
   group,
-  now,
 }: {
   race: Race;
   sessions: ScheduleItem[];
   group: Exclude<Tab, "schedule">;
-  now: number;
 }) {
-  const available = GROUPS[group]
-    .map((t) => sessions.find((s) => s.type === t))
-    .filter((s): s is ScheduleItem => !!s);
+  const available = useMemo(
+    () =>
+      GROUPS[group]
+        .map((t) => sessions.find((s) => s.type === t))
+        .filter((s): s is ScheduleItem => !!s),
+    [sessions, group],
+  );
 
   const [picked, setPicked] = useState<SessionType | null>(null);
+  // The clock only drives the default "most recent started session" pick;
+  // once the user has chosen a session it stops, so no more tick re-renders.
+  const now = useLocalNow(15_000, picked === null);
 
   if (!available.length) {
     return (
@@ -552,14 +576,13 @@ function SessionPane({
         </div>
       )}
       {selected.type === "race" ? (
-        <RaceResults race={race} now={now} />
+        <RaceResults race={race} />
       ) : (
         <SessionResults
           key={selected.type}
           raceId={race.id}
           type={selected.type}
           startsAt={selected.startsAt}
-          now={now}
         />
       )}
     </div>
@@ -572,12 +595,10 @@ function SessionResults({
   raceId,
   type,
   startsAt,
-  now,
 }: {
   raceId: string;
   type: SessionType;
   startsAt: string;
-  now: number;
 }) {
   const q = useQuery({
     queryKey: ["weekend-session", raceId, type],
@@ -598,6 +619,10 @@ function SessionResults({
       return r;
     },
   });
+
+  // The clock only drives the no-data status fallback; once session data
+  // exists it stops ticking, so ready sessions never re-render on a timer.
+  const now = useLocalNow(15_000, !q.data);
 
   if (q.isLoading) return <TowerRowsSkeleton rows={8} />;
   if (q.isError && !q.data) {
@@ -675,13 +700,21 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
   const { data: gridDrivers } = useQuery(driversQuery);
   const [pickedSeg, setPickedSeg] = useState<QualiSegment | null>(null);
 
+  // Hooks must run unconditionally, so the segment state and the expensive
+  // qualifying build are computed before the `quali` branch. The build
+  // (pooling + multi-key sorts over up to 22 rows) is memoized so parent
+  // re-renders and other queries' refetches no longer redo it.
+  const hasQ3 = useMemo(() => rows.some((r) => parseLapSec(r.q3) != null), [rows]);
+  const hasQ2 = useMemo(() => rows.some((r) => parseLapSec(r.q2) != null), [rows]);
+  const defaultSeg: QualiSegment = hasQ3 ? "q3" : hasQ2 ? "q2" : "q1";
+  const activeSeg: QualiSegment = pickedSeg ?? defaultSeg;
+  const segMeta = QUALI_SEGMENTS.find((s) => s.id === activeSeg) ?? QUALI_SEGMENTS[0]!;
+  const qRows = useMemo(
+    () => (quali ? buildQualifyingSegmentRows(rows, activeSeg, gridDrivers) : []),
+    [quali, rows, activeSeg, gridDrivers],
+  );
+
   if (quali) {
-    const hasQ3 = rows.some((r) => parseLapSec(r.q3) != null);
-    const hasQ2 = rows.some((r) => parseLapSec(r.q2) != null);
-    const defaultSeg: QualiSegment = hasQ3 ? "q3" : hasQ2 ? "q2" : "q1";
-    const activeSeg: QualiSegment = pickedSeg ?? defaultSeg;
-    const segMeta = QUALI_SEGMENTS.find((s) => s.id === activeSeg) ?? QUALI_SEGMENTS[0]!;
-    const qRows = buildQualifyingSegmentRows(rows, activeSeg, gridDrivers);
 
     return (
       <div className="space-y-3">
@@ -819,7 +852,10 @@ type ResultRow = {
   pole: boolean;
 };
 
-function RaceResults({ race, now }: { race: Race; now: number }) {
+function RaceResults({ race }: { race: Race }) {
+  // Local clock bounded to this tab: pre-results statuses and the live window
+  // keep updating every 15s without re-rendering the rest of the route.
+  const now = useLocalNow();
   const queryClient = useQueryClient();
   const { data: drivers } = useQuery(driversQuery);
   const { data, isLoading, isError } = useQuery({
