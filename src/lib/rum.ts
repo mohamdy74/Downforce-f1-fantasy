@@ -151,8 +151,7 @@ export function startRum(): void {
       push("cls", cls);
       push("inp", inp);
       const nav = performance.getEntriesByType("navigation")[0] as
-        | PerformanceNavigationTiming
-        | undefined;
+        PerformanceNavigationTiming | undefined;
       if (nav) {
         push("ttfb", nav.responseStart);
         if (nav.loadEventEnd > 0) push("load", nav.loadEventEnd);
