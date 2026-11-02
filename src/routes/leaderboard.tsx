@@ -1,17 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { toast } from "sonner";
 
 import { FahlBadge } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { syncF1Data } from "@/lib/f1-sync.functions";
-import { getSyncJobStatus } from "@/lib/jobs.functions";
-import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 import { driversQuery, leaderboardQuery, racesQuery, SEASON, type Driver } from "@/lib/queries";
 import { writeQueryCache } from "@/lib/queryPersist";
 import { teamColor, teamLabel, teamRank } from "@/lib/teams";
@@ -742,13 +738,11 @@ function StandingsSkeleton({
 
 function Leaderboard() {
   const { user, loading: authLoading } = useAuth();
-  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabKey>("league");
   const [openUser, setOpenUser] = useState<string | null>(null);
   const [openDriver, setOpenDriver] = useState<string | null>(null);
   const [listRef] = useAutoAnimate<HTMLDivElement>();
-  const [syncing, setSyncing] = useState(false);
 
   function switchTab(nextTab: TabKey) {
     if (nextTab === activeTab) return;
@@ -784,50 +778,6 @@ function Leaderboard() {
     : 0;
   const remainingRaces = Math.max(totalRounds - completedRounds, 0);
 
-  async function handleForceSync() {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const queued = await syncF1Data({ data: { force: true } });
-      if (!queued?.jobId) {
-        toast("Sync already running or data is fresh — nothing to queue.");
-        return;
-      }
-      // Poll the queue: each status call also drives the worker for this job.
-      let succeeded = false;
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 3_000));
-        const job = await getSyncJobStatus({ data: { jobId: queued.jobId } });
-        if (job.status === "succeeded") {
-          succeeded = true;
-          break;
-        }
-        if (job.status === "dead") {
-          toast.error(
-            job.lastError ? `Sync failed: ${job.lastError}` : "Sync failed after repeated retries.",
-          );
-          return;
-        }
-      }
-      if (!succeeded) {
-        toast("Sync still running in the background — results will appear shortly.");
-        return;
-      }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["races"] }),
-        queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
-        queryClient.invalidateQueries({
-          queryKey: ["f1-championship-standings"],
-        }),
-      ]);
-      toast.success("Standings and race results synced!");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not sync right now.");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   const f1Drivers = f1Data?.drivers ?? [];
   const f1Constructors = f1Data?.constructors ?? [];
   const topDriverPoints = f1Drivers[0]?.points ?? 0;
@@ -855,37 +805,21 @@ function Leaderboard() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      {/* Minimal Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">
-            {activeTab === "league" && "League standings"}
-            {activeTab === "drivers" && "Drivers standings"}
-            {activeTab === "constructors" && "Constructors"}
-            {activeTab === "stats" && "Season stats"}
-          </h1>
-          <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            {activeTab === "league"
-              ? `${scored} league race${scored === 1 ? "" : "s"} scored`
-              : `Round ${completedRounds} of ${totalRounds} · ${remainingRaces} race${remainingRaces === 1 ? "" : "s"} remaining`}
-          </p>
-        </div>
-        {user && (user.email ?? "").toLowerCase() === STEWARD_EMAIL && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={syncing}
-            onClick={handleForceSync}
-            className="hit-slop shrink-0 gap-1.5"
-            aria-label={syncing ? "Syncing standings data" : "Sync latest race results"}
-            aria-busy={syncing}
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-            {syncing ? "Syncing…" : "Sync results"}
-          </Button>
-        )}
-      </div>
+      {/* Header — same kicker → title → subtitle pattern as predict/paddock/weekend */}
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+        Season {SEASON} Standings
+      </p>
+      <h1 className="mt-1 text-3xl">
+        {activeTab === "league" && "League standings"}
+        {activeTab === "drivers" && "Drivers standings"}
+        {activeTab === "constructors" && "Constructors"}
+        {activeTab === "stats" && "Season stats"}
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {activeTab === "league"
+          ? `${scored} league race${scored === 1 ? "" : "s"} scored`
+          : `Round ${completedRounds} of ${totalRounds} · ${remainingRaces} race${remainingRaces === 1 ? "" : "s"} remaining`}
+      </p>
 
       {/* Clean Minimal Segmented Tab Bar */}
       <div
