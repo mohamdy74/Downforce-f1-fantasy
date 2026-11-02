@@ -367,26 +367,41 @@ export async function checkAndSendPushReminders(
 
   // The pure reminder-windows module owns the bands and payload copy, so this
   // sweep only handles dedup, batching and dead-subscription cleanup.
-  for (const entry of computeActiveReminders(upcomingRaces, now)) {
+  const entries = computeActiveReminders(upcomingRaces, now);
+  if (!entries.length) return 0;
+
+  // One sweep-wide read of dedup state and submissions instead of a pair of
+  // queries per reminder window (query count constant, not 2 per window).
+  const sweepRaceIds = [...new Set(entries.map((e) => e.race.id))];
+  const [{ data: remindedRows }, { data: sweepPreds }] = await Promise.all([
+    supabaseAdmin.from("sync_state").select("key").like("key", "reminded:%"),
+    supabaseAdmin
+      .from("predictions")
+      .select("race_id, user_id, top10, pole_driver_id")
+      .in("race_id", sweepRaceIds),
+  ]);
+  const remindedKeys = new Set((remindedRows ?? []).map((r) => r.key));
+  type SweepPred = NonNullable<typeof sweepPreds>[number];
+  const predsByRace = new Map<string, SweepPred[]>();
+  for (const p of sweepPreds ?? []) {
+    const arr = predsByRace.get(p.race_id) ?? [];
+    arr.push(p);
+    predsByRace.set(p.race_id, arr);
+  }
+
+  const deadKeys: string[] = [];
+  const dedupWrites: Array<{ key: string; synced_at: string }> = [];
+
+  for (const entry of entries) {
     const { race, type: t, window: w } = entry;
 
     // Per-user dedup (replaces the old per-race global window key) so players
     // who enable push mid-window still get their reminder and a partially
     // failed sweep retries on the next pass.
     const keyPrefix = `reminded:${race.id}:${t}:${w.label}:`;
-    const { data: sLogs } = await supabaseAdmin
-      .from("sync_state")
-      .select("key")
-      .like("key", keyPrefix + "%");
-    const sentSet = new Set((sLogs ?? []).map((r) => r.key.slice(keyPrefix.length)));
-
-    const { data: preds } = await supabaseAdmin
-      .from("predictions")
-      .select("user_id, top10, pole_driver_id")
-      .eq("race_id", race.id);
-
+    const preds = predsByRace.get(race.id) ?? [];
     const doneUsers = new Set(
-      (preds ?? [])
+      preds
         .filter((p) => (t === "pole" ? !!p.pole_driver_id : isCompleteTop10(p.top10)))
         .map((p) => p.user_id),
     );
@@ -394,10 +409,11 @@ export async function checkAndSendPushReminders(
     const payloadObj = buildReminderPayload(entry);
 
     const { sendNativeWebPush } = await import("./webpush-native");
-    const deadKeys: string[] = [];
     const pendingSubs = subRows.flatMap((r) => {
       const parsed = parsePushSubscriptionKey(r.key);
-      return parsed && !doneUsers.has(parsed.userId) && !sentSet.has(parsed.userId) ? [parsed] : [];
+      if (!parsed || doneUsers.has(parsed.userId)) return [];
+      if (remindedKeys.has(keyPrefix + parsed.userId)) return [];
+      return [parsed];
     });
     const BATCH_SIZE = 25;
     const newlyNotified = new Set<string>();
@@ -424,18 +440,17 @@ export async function checkAndSendPushReminders(
         }),
       );
     }
-    if (deadKeys.length > 0) {
-      await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
+    const stamp = new Date().toISOString();
+    for (const uid of newlyNotified) {
+      dedupWrites.push({ key: keyPrefix + uid, synced_at: stamp });
     }
-    if (newlyNotified.size > 0) {
-      await supabaseAdmin.from("sync_state").upsert(
-        Array.from(newlyNotified).map((uid) => ({
-          key: keyPrefix + uid,
-          synced_at: new Date().toISOString(),
-        })),
-        { onConflict: "key" },
-      );
-    }
+  }
+
+  if (deadKeys.length > 0) {
+    await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
+  }
+  if (dedupWrites.length > 0) {
+    await supabaseAdmin.from("sync_state").upsert(dedupWrites, { onConflict: "key" });
   }
   return totalSent;
 }
@@ -460,52 +475,86 @@ async function scoreAllRaces(targetRaceIds?: Set<string>) {
   }
   if (!toScore.length) return;
 
-  for (const race of toScore) {
-    const [
-      { data: profiles },
-      { data: results },
-      { data: predictions },
-      { data: sprintResults },
-      { data: sprintPreds },
-      { data: existingScores },
-    ] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id, created_at").lt("created_at", race.race_at),
-      supabaseAdmin
-        .from("race_results")
-        .select("driver_id, position, finished, fastest_lap, pole")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("predictions")
-        .select("user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("sprint_results")
-        .select("driver_id, position, finished, pole")
-        .eq("race_id", race.id),
-      supabaseAdmin
-        .from("sprint_predictions")
-        .select("user_id, top8, pole_driver_id")
-        .eq("race_id", race.id),
-      supabaseAdmin.from("scores").select("user_id, breakdown").eq("race_id", race.id),
-    ]);
+  // Bulk fetch: one query per table for ALL target races (instead of six
+  // queries per race), then group rows by race in memory. Query count is
+  // constant instead of growing with the number of races being scored.
+  const scoreRaceIds = toScore.map((r) => r.id);
+  let latestRaceAt = toScore[0]!.race_at;
+  for (const r of toScore) {
+    if (r.race_at > latestRaceAt) latestRaceAt = r.race_at;
+  }
+  const [
+    { data: profileRows },
+    { data: resultRows },
+    { data: predRows },
+    { data: sprintResultRows },
+    { data: sprintPredRows },
+    { data: existingScoreRows },
+  ] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id, created_at").lt("created_at", latestRaceAt),
+    supabaseAdmin
+      .from("race_results")
+      .select("race_id, driver_id, position, finished, fastest_lap, pole")
+      .in("race_id", scoreRaceIds),
+    supabaseAdmin
+      .from("predictions")
+      .select("race_id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id")
+      .in("race_id", scoreRaceIds),
+    supabaseAdmin
+      .from("sprint_results")
+      .select("race_id, driver_id, position, finished, pole")
+      .in("race_id", scoreRaceIds),
+    supabaseAdmin
+      .from("sprint_predictions")
+      .select("race_id, user_id, top8, pole_driver_id")
+      .in("race_id", scoreRaceIds),
+    supabaseAdmin.from("scores").select("race_id, user_id, breakdown").in("race_id", scoreRaceIds),
+  ]);
 
-    if (!profiles?.length || !results?.length) continue;
+  const groupByRace = <T extends { race_id: string }>(rows: T[] | null) => {
+    const grouped = new Map<string, T[]>();
+    for (const row of rows ?? []) {
+      const arr = grouped.get(row.race_id) ?? [];
+      arr.push(row);
+      grouped.set(row.race_id, arr);
+    }
+    return grouped;
+  };
+  const resultsByRace = groupByRace(resultRows);
+  const predsByRaceS = groupByRace(predRows);
+  const sprintResultsByRace = groupByRace(sprintResultRows);
+  const sprintPredsByRace = groupByRace(sprintPredRows);
+  const existingScoresByRace = groupByRace(existingScoreRows);
+  const allProfiles = (profileRows ?? []) as ProfileRecord[];
+
+  const allScoreRows: ReturnType<typeof buildRaceScoreRows> = [];
+  for (const race of toScore) {
+    const raceProfiles = allProfiles.filter((p) => p.created_at < race.race_at);
+    const raceResults = resultsByRace.get(race.id);
+    if (!raceProfiles.length || !raceResults?.length) continue;
+
+    const racePreds = predsByRaceS.get(race.id) ?? [];
+    const raceSprintResults = sprintResultsByRace.get(race.id) ?? [];
+    const raceSprintPreds = sprintPredsByRace.get(race.id) ?? [];
+    const raceExistingScores = existingScoresByRace.get(race.id) ?? [];
 
     const rows = buildRaceScoreRows({
       raceId: race.id,
       raceAt: race.race_at,
-      profiles: (profiles ?? []) as ProfileRecord[],
-      results: results as ResultRow[],
-      predictions: (predictions ?? []) as PredictionRecord[],
-      sprintResults: (sprintResults ?? []) as SprintResultRow[],
-      sprintPredictions: (sprintPreds ?? []) as SprintPredictionRecord[],
-      existingScores: (existingScores ?? []) as ScoreRecord[],
+      profiles: raceProfiles,
+      results: raceResults as unknown as ResultRow[],
+      predictions: racePreds as unknown as PredictionRecord[],
+      sprintResults: raceSprintResults as unknown as SprintResultRow[],
+      sprintPredictions: raceSprintPreds as unknown as SprintPredictionRecord[],
+      existingScores: raceExistingScores as unknown as ScoreRecord[],
       mode: "auto_sync",
     });
 
-    if (rows.length) {
-      await supabaseAdmin.from("scores").upsert(rows, { onConflict: "user_id,race_id" });
-    }
+    allScoreRows.push(...rows);
+  }
+
+  if (allScoreRows.length) {
+    await supabaseAdmin.from("scores").upsert(allScoreRows, { onConflict: "user_id,race_id" });
   }
 }
 
@@ -552,35 +601,50 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
     );
   };
 
-  for (const race of races) {
-    let poleDriverId: string | undefined;
-    const { data: qSess } = await supabaseAdmin
-      .from("weekend_sessions")
-      .select("classification")
-      .eq("race_id", race.id)
-      .eq("session_type", "qualifying")
-      .maybeSingle();
-    if (qSess && Array.isArray(qSess.classification)) {
-      const p1 = (
-        qSess.classification as Array<{
-          position?: number | undefined;
-          driverId?: string | undefined;
-          code?: string | undefined;
-          name?: string | undefined;
-          number?: number | undefined;
-        }>
-      ).find((r) => r.position === 1);
-      if (p1) {
-        const d = resolveDriver(lookup, {
-          driverId: p1.driverId,
-          code: p1.code,
-          name: p1.name,
-          number: p1.number,
-        });
-        if (lookup.byId.has(d.id)) poleDriverId = d.id;
-      }
-    }
+  // One query for every candidate race's cached qualifying classification
+  // instead of one maybeSingle() per race (query count no longer grows with
+  // the number of pending races).
+  const fallbackRaceIds = races.map((r) => r.id);
+  const { data: qSessions } = await supabaseAdmin
+    .from("weekend_sessions")
+    .select("race_id, classification")
+    .eq("session_type", "qualifying")
+    .in("race_id", fallbackRaceIds);
+  const poleByRace = new Map<string, string>();
+  for (const qSess of qSessions ?? []) {
+    if (!Array.isArray(qSess.classification)) continue;
+    const p1 = (
+      qSess.classification as Array<{
+        position?: number | undefined;
+        driverId?: string | undefined;
+        code?: string | undefined;
+        name?: string | undefined;
+        number?: number | undefined;
+      }>
+    ).find((r) => r.position === 1);
+    if (!p1) continue;
+    const d = resolveDriver(lookup, {
+      driverId: p1.driverId,
+      code: p1.code,
+      name: p1.name,
+      number: p1.number,
+    });
+    if (lookup.byId.has(d.id)) poleByRace.set(qSess.race_id, d.id);
+  }
 
+  const finalizeRows: Array<{
+    race_id: string;
+    driver_id: string;
+    position: number | null;
+    status: string;
+    finished: boolean;
+    fastest_lap: boolean;
+    pole: boolean;
+  }> = [];
+  const finalizedRaceIds: string[] = [];
+
+  for (const race of races) {
+    const poleDriverId = poleByRace.get(race.id);
     const raceElapsedMs = now - new Date(race.race_at).getTime();
     let finalRows: Array<{
       race_id: string;
@@ -681,12 +745,19 @@ async function openF1Fallback(officialRounds: Set<number>): Promise<Set<string>>
     }
 
     if (finalRows.length >= 10) {
-      await supabaseAdmin
-        .from("race_results")
-        .upsert(finalRows, { onConflict: "race_id,driver_id" });
-      await supabaseAdmin.from("races").update({ has_results: true }).eq("id", race.id);
+      finalizeRows.push(...finalRows);
+      finalizedRaceIds.push(race.id);
       finalized.add(race.id);
     }
+  }
+
+  // Batched finalize writes: one upsert + one flag update for ALL finalized
+  // races instead of two queries per race.
+  if (finalizeRows.length) {
+    await supabaseAdmin
+      .from("race_results")
+      .upsert(finalizeRows, { onConflict: "race_id,driver_id" });
+    await supabaseAdmin.from("races").update({ has_results: true }).in("id", finalizedRaceIds);
   }
   return finalized;
 }
@@ -743,3 +814,4 @@ async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRou
     await supabaseAdmin.from("sprint_results").upsert(rows, { onConflict: "race_id,driver_id" });
   }
 }
+

@@ -506,6 +506,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       }
       let sent = 0;
       let lastError = "";
+      const deadSubKeys: string[] = [];
       for (const r of subRows) {
         const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
         if (!m) continue;
@@ -526,9 +527,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
             res.status === 404 ||
             res.status === 410
           ) {
-            await sb.from("sync_state").delete().eq("key", r.key);
+            deadSubKeys.push(r.key);
           }
         }
+      }
+      // One batched cleanup instead of a delete per dead subscription.
+      if (deadSubKeys.length) {
+        await sb.from("sync_state").delete().in("key", deadSubKeys);
       }
       if (sent === 0) {
         return {
@@ -694,3 +699,4 @@ export const exportLeagueBackup = createServerFn({ method: "POST" })
       },
     };
   });
+

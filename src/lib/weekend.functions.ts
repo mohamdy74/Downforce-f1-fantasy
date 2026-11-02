@@ -319,6 +319,14 @@ async function loadRace(admin: Admin, raceId: string): Promise<DbRace | null> {
  */
 async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessRow[]) {
   const now = Date.now();
+  const updates: Array<{
+    id: SessRow["id"];
+    race_id: DbRace["id"];
+    session_type: SessRow["session_type"];
+    classification: Json;
+    status: string;
+    updated_at: string;
+  }> = [];
   for (const row of rows) {
     if (!row.starts_at || !isSessionType(row.session_type) || row.session_type === "race") continue;
     const type = row.session_type as SessionType;
@@ -337,19 +345,24 @@ async function backfillCompletedSessions(admin: Admin, race: DbRace, rows: SessR
         const merged = cached.length >= 5 ? mergeClassRows(fresh, type, cached) : fresh;
         if (merged.length >= 5) {
           const isComplete = hasCompleteTimingData(merged, type);
-          await admin
-            .from("weekend_sessions")
-            .update({
-              classification: merged as unknown as Json,
-              status: isComplete ? "completed" : "live",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", row.id);
+          updates.push({
+            id: row.id,
+            race_id: race.id,
+            session_type: row.session_type,
+            classification: merged as unknown as Json,
+            status: isComplete ? "completed" : "live",
+            updated_at: new Date().toISOString(),
+          });
         }
       } catch (error) {
         console.error("[weekend.functions] Background backfill failed:", error);
       }
     }
+  }
+
+  // One batched write instead of one update per session (N+1 to constant).
+  if (updates.length) {
+    await admin.from("weekend_sessions").upsert(updates, { onConflict: "id" });
   }
 }
 
@@ -1276,3 +1289,4 @@ export const getLiveRaceTelemetry = createServerFn({ method: "POST" })
     }
     return payload;
   });
+
