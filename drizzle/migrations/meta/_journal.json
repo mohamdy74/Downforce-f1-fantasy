@@ -141,6 +141,13 @@
       "when": 1793734400000,
       "tag": "0019_job_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793904000000,
+      "tag": "0020_index_audit",
+      "breakpoints": true
     }
   ]
 }
