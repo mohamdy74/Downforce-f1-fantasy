@@ -814,4 +814,3 @@ async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRou
     await supabaseAdmin.from("sprint_results").upsert(rows, { onConflict: "race_id,driver_id" });
   }
 }
-

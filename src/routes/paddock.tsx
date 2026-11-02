@@ -559,4 +559,3 @@ function AuditTrail({
     </details>
   );
 }
-
