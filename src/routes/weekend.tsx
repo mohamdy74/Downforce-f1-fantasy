@@ -471,7 +471,7 @@ const WeekendBody = memo(function WeekendBody({ race, tab }: { race: Race; tab: 
 
   if (tab === "schedule") return <Schedule sessions={sessions} />;
   return <SessionPane key={tab} race={race} sessions={sessions} group={tab} />;
-}
+});
 
 function Schedule({ sessions }: { sessions: ScheduleItem[] }) {
   // Local clock: the 15s tick re-renders only this small list, not the route.
@@ -715,7 +715,6 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
   );
 
   if (quali) {
-
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap gap-1.5">
