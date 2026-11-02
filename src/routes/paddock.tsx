@@ -140,12 +140,13 @@ function Paddock() {
     enabled: !!race && !!user,
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       const limit = DEFAULT_PAGE_SIZE;
-      const { data: profileData } = await supabase
+      const { data: profileRows } = await supabase
         .from("profiles")
         .select("id, display_name")
         .order("display_name", { ascending: true })
         .limit(limit + 1)
         .gt("display_name", pageParam ?? "");
+      const profileData = profileRows ?? [];
 
       const hasMore = profileData.length > limit;
       const resultProfiles = hasMore ? profileData.slice(0, -1) : profileData;
