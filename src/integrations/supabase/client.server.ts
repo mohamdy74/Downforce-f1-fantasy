@@ -4,6 +4,7 @@
 // For user-authenticated queries (with RLS), use the auth middleware instead.
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { withRequestTimeout } from "@/lib/fetch-timeout";
 import { withQueryCounting } from "@/lib/query-logger";
 
 function isNewSupabaseApiKey(value: string): boolean {
@@ -49,7 +50,9 @@ function createSupabaseAdminClient() {
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     global: {
-      fetch: withQueryCounting(createSupabaseFetch(SUPABASE_SERVICE_ROLE_KEY)),
+      fetch: withQueryCounting(
+        withRequestTimeout(createSupabaseFetch(SUPABASE_SERVICE_ROLE_KEY), 20_000),
+      ),
     },
     auth: {
       storage: undefined,

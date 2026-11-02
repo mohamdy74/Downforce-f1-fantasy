@@ -2,6 +2,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
+import { withRequestTimeout } from "@/lib/fetch-timeout";
 import type { Database } from "./types";
 
 function isNewSupabaseApiKey(value: string): boolean {
@@ -27,7 +28,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     headers.set("apikey", supabaseKey);
-    return fetch(input, { ...init, headers });
+    return withRequestTimeout(fetch, 10_000)(input, { ...init, headers });
   };
 }
 

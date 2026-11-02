@@ -9,6 +9,7 @@
  * requests during an active session on track.
  */
 
+import { withRequestTimeout } from "./fetch-timeout";
 import { fmtLap, getJson, parseLapTimeSeconds } from "./f1-parsers";
 import { hasChequeredFlag, type OpenF1RaceControlMessage } from "./liveStandings";
 import type { ClassRow, SessionType } from "./weekend";
@@ -317,7 +318,7 @@ async function fetchSignalRState(): Promise<{
 
   const hub = encodeURIComponent(JSON.stringify([{ name: "Streaming" }]));
   try {
-    const negRes = await fetch(
+    const negRes = await withRequestTimeout(fetch, 8_000)(
       `${F1_LIVE_BASE}/signalr/negotiate?clientProtocol=1.5&connectionData=${hub}`,
       {
         headers: {
@@ -338,7 +339,7 @@ async function fetchSignalRState(): Promise<{
           ...(cookie ? { Cookie: cookie } : {}),
         };
 
-        await fetch(
+        await withRequestTimeout(fetch, 20_000)(
           `${F1_LIVE_BASE}/signalr/connect?transport=longPolling&clientProtocol=1.5&connectionToken=${encToken}&connectionData=${hub}`,
           { headers: commonHeaders },
         ).catch(() => null);
@@ -359,7 +360,7 @@ async function fetchSignalRState(): Promise<{
           I: 1,
         });
 
-        const sendRes = await fetch(
+        const sendRes = await withRequestTimeout(fetch, 10_000)(
           `${F1_LIVE_BASE}/signalr/send?transport=longPolling&clientProtocol=1.5&connectionToken=${encToken}&connectionData=${hub}`,
           {
             method: "POST",
@@ -382,7 +383,7 @@ async function fetchSignalRState(): Promise<{
         }
 
         // Cleanly abort the temporary longPolling connection
-        void fetch(
+        void withRequestTimeout(fetch, 5_000)(
           `${F1_LIVE_BASE}/signalr/abort?transport=longPolling&clientProtocol=1.5&connectionToken=${encToken}&connectionData=${hub}`,
           { method: "POST", headers: commonHeaders },
         ).catch(() => null);

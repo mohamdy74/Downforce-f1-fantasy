@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 import { brokeredPreviewStorage } from "./previewAuthStorage";
+import { withRequestTimeout } from "@/lib/fetch-timeout";
 import { withQueryCounting } from "@/lib/query-logger";
 
 function isNewSupabaseApiKey(value: string): boolean {
@@ -50,7 +51,9 @@ function createSupabaseClient() {
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
-      fetch: withQueryCounting(createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY)),
+      fetch: withQueryCounting(
+        withRequestTimeout(createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY), 15_000),
+      ),
     },
     auth: {
       storage: brokeredPreviewStorage(),

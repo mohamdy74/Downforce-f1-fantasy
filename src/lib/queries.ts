@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
+import { withRequestTimeout } from "@/lib/fetch-timeout";
 import { writeQueryCache } from "@/lib/queryPersist";
 
 export const SEASON = 2026;
@@ -17,7 +18,10 @@ export async function syncServerClock(): Promise<void> {
   clockSynced = true;
   try {
     const t0 = Date.now();
-    const res = await fetch(window.location.origin, { method: "HEAD", cache: "no-store" });
+    const res = await withRequestTimeout(fetch, 5_000)(window.location.origin, {
+      method: "HEAD",
+      cache: "no-store",
+    });
     const dateHdr = res.headers.get("Date");
     if (dateHdr) {
       const serverMs = new Date(dateHdr).getTime();
