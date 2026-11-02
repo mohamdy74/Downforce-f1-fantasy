@@ -489,11 +489,7 @@ async function scoreAllRaces(targetRaceIds?: Set<string>) {
   // The races read and the (optional) already-scored read are independent —
   // fetch both together instead of serially.
   const [racesRes, scoredRes] = await Promise.all([
-    supabaseAdmin
-      .from("races")
-      .select("id, race_at")
-      .eq("season", SEASON)
-      .eq("has_results", true),
+    supabaseAdmin.from("races").select("id, race_at").eq("season", SEASON).eq("has_results", true),
     targetRaceIds ? supabaseAdmin.from("scores").select("race_id") : Promise.resolve(null),
   ]);
   const races = racesRes.data;
