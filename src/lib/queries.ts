@@ -292,15 +292,6 @@ export const leaderboardPageQuery = (limit: number = 20, cursor: string | null =
 
       const effectiveLimit = Math.min(Math.max(1, limit), 100);
 
-      // Fetch scores with pagination
-      const { data: scores, error: sErr } = await supabase
-        .from("scores")
-        .select("user_id, race_id, points")
-        .order("points", { ascending: false })
-        .limit(effectiveLimit + 1);
-
-      if (sErr) throw sErr;
-
       // Fetch all profiles (small dataset)
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
@@ -317,7 +308,14 @@ export const leaderboardPageQuery = (limit: number = 20, cursor: string | null =
 
       if (rErr) throw rErr;
 
-      // Compute entries
+      // Fetch ALL scores (we need to aggregate by user first, then paginate)
+      const { data: scores, error: sErr } = await supabase
+        .from("scores")
+        .select("user_id, race_id, points");
+
+      if (sErr) throw sErr;
+
+      // Compute ALL entries first (this gives us correct totals per player)
       const allEntries = computeLeaderboardEntries(profiles ?? [], scores ?? [], raceRows ?? []);
 
       const hasMore = allEntries.length > effectiveLimit;
