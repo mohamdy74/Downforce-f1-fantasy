@@ -183,6 +183,20 @@ export async function runSeasonSync(
     ]);
     const races = calendar?.MRData.RaceTable.Races ?? [];
 
+    // ---- Drivers (pure CPU from the standings — built here so the write can
+    // run in parallel with the races upsert below) ----
+    const entries = (
+      standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
+    ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
+    const driverRows = entries.map((e) => ({
+      id: e.Driver.driverId,
+      code: e.Driver.code ?? null,
+      full_name: `${e.Driver.givenName} ${e.Driver.familyName}`,
+      team: e.Constructors[0]?.name ?? null,
+      number: e.Driver.permanentNumber ? Number(e.Driver.permanentNumber) : null,
+      active: true,
+    }));
+
     if (races.length) {
       const [{ data: existingRaces }, { data: overrideRows }] = await Promise.all([
         supabaseAdmin
@@ -197,45 +211,36 @@ export async function runSeasonSync(
       );
       const existingByRound = new Map((existingRaces ?? []).map((r) => [r.round, r]));
 
-      await supabaseAdmin.from("races").upsert(
-        races.map((r) => {
-          const rd = Number(r.round);
-          const ex = existingByRound.get(rd);
-          const keepCustomDeadline = ex && overriddenIds.has(ex.id);
-          return {
-            season: Number(r.season),
-            round: rd,
-            name: r.raceName,
-            circuit: r.Circuit.circuitName,
-            country: r.Circuit.Location.country ?? null,
-            locality: r.Circuit.Location.locality ?? null,
-            race_at: keepCustomDeadline ? ex.race_at : toIso({ date: r.date, time: r.time })!,
-            qualifying_at: keepCustomDeadline ? ex.qualifying_at : toIso(r.Qualifying),
-            has_sprint: !!r.Sprint,
-            sprint_at: toIso(r.Sprint),
-            sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
-          };
-        }),
-        { onConflict: "season,round" },
-      );
-    }
-
-    // ---- Drivers ----
-    const entries = (
-      standings?.MRData.StandingsTable.StandingsLists?.[0]?.DriverStandings ?? []
-    ).filter((e) => !EXCLUDED_DRIVERS.has(e.Driver.driverId));
-    if (entries.length) {
-      await supabaseAdmin.from("drivers").upsert(
-        entries.map((e) => ({
-          id: e.Driver.driverId,
-          code: e.Driver.code ?? null,
-          full_name: `${e.Driver.givenName} ${e.Driver.familyName}`,
-          team: e.Constructors[0]?.name ?? null,
-          number: e.Driver.permanentNumber ? Number(e.Driver.permanentNumber) : null,
-          active: true,
-        })),
-        { onConflict: "id" },
-      );
+      // Races and drivers upserts hit different tables and depend only on the
+      // calendar/standings fetched above — write both together.
+      await Promise.all([
+        supabaseAdmin.from("races").upsert(
+          races.map((r) => {
+            const rd = Number(r.round);
+            const ex = existingByRound.get(rd);
+            const keepCustomDeadline = ex && overriddenIds.has(ex.id);
+            return {
+              season: Number(r.season),
+              round: rd,
+              name: r.raceName,
+              circuit: r.Circuit.circuitName,
+              country: r.Circuit.Location.country ?? null,
+              locality: r.Circuit.Location.locality ?? null,
+              race_at: keepCustomDeadline ? ex.race_at : toIso({ date: r.date, time: r.time })!,
+              qualifying_at: keepCustomDeadline ? ex.qualifying_at : toIso(r.Qualifying),
+              has_sprint: !!r.Sprint,
+              sprint_at: toIso(r.Sprint),
+              sprint_qualifying_at: toIso(r.SprintQualifying ?? r.SprintShootout),
+            };
+          }),
+          { onConflict: "season,round" },
+        ),
+        driverRows.length
+          ? supabaseAdmin.from("drivers").upsert(driverRows, { onConflict: "id" })
+          : Promise.resolve(null),
+      ]);
+    } else if (driverRows.length) {
+      await supabaseAdmin.from("drivers").upsert(driverRows, { onConflict: "id" });
     }
 
     // ---- Results (targeted: only fetch rounds that can have new data) ----
@@ -341,10 +346,12 @@ export async function runSeasonSync(
       await supabaseAdmin.from("races").update({ has_results: true }).in("id", ids);
     }
 
-    await syncSprintResults(roundToId, sprintTargetRounds);
-    const fallbackFinalized = await openF1Fallback(
-      new Set(racesWithResults.map((r) => Number(r.round))),
-    );
+    // Sprint results and the openF1 fallback touch different tables and depend
+    // only on the rounds already resolved above — run them together.
+    const [, fallbackFinalized] = await Promise.all([
+      syncSprintResults(roundToId, sprintTargetRounds),
+      openF1Fallback(new Set(racesWithResults.map((r) => Number(r.round)))),
+    ]);
     const scoreTargets = new Set<string>();
     for (const round of targetRounds) {
       const id = roundToId.get(round);
@@ -370,19 +377,19 @@ export async function checkAndSendPushReminders(
   supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
 ) {
   const now = Date.now();
-  const { data: upcomingRaces } = await supabaseAdmin
-    .from("races")
-    .select("id, name, qualifying_at, race_at")
-    .eq("season", SEASON)
-    .gte("race_at", new Date(now - 30 * 60_000).toISOString())
-    .lte("race_at", new Date(now + 4 * 24 * 3600_000).toISOString());
+  // The upcoming-races window and the push-subscription keys are independent
+  // reads — fetch them together.
+  const [{ data: upcomingRaces }, { data: subRows }] = await Promise.all([
+    supabaseAdmin
+      .from("races")
+      .select("id, name, qualifying_at, race_at")
+      .eq("season", SEASON)
+      .gte("race_at", new Date(now - 30 * 60_000).toISOString())
+      .lte("race_at", new Date(now + 4 * 24 * 3600_000).toISOString()),
+    supabaseAdmin.from("sync_state").select("key").like("key", "push_sub:%"),
+  ]);
 
   if (!upcomingRaces?.length) return 0;
-
-  const { data: subRows } = await supabaseAdmin
-    .from("sync_state")
-    .select("key")
-    .like("key", "push_sub:%");
   if (!subRows?.length) return 0;
 
   let totalSent = 0;
@@ -479,11 +486,17 @@ export async function checkAndSendPushReminders(
 async function scoreAllRaces(targetRaceIds?: Set<string>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: races } = await supabaseAdmin
-    .from("races")
-    .select("id, race_at")
-    .eq("season", SEASON)
-    .eq("has_results", true);
+  // The races read and the (optional) already-scored read are independent —
+  // fetch both together instead of serially.
+  const [racesRes, scoredRes] = await Promise.all([
+    supabaseAdmin
+      .from("races")
+      .select("id, race_at")
+      .eq("season", SEASON)
+      .eq("has_results", true),
+    targetRaceIds ? supabaseAdmin.from("scores").select("race_id") : Promise.resolve(null),
+  ]);
+  const races = racesRes.data;
   if (!races?.length) return;
 
   // Score only races whose results may have changed this sync (or that were
@@ -491,8 +504,9 @@ async function scoreAllRaces(targetRaceIds?: Set<string>) {
   // guarantees Steward manual score overrides are never clobbered.
   let toScore = races;
   if (targetRaceIds) {
-    const { data: scoredRows } = await supabaseAdmin.from("scores").select("race_id");
-    const scoredIds = new Set((scoredRows ?? []).map((r) => r.race_id as string));
+    const scoredIds = new Set(
+      ((scoredRes?.data ?? []) as { race_id: string }[]).map((r) => r.race_id as string),
+    );
     toScore = races.filter((r) => targetRaceIds.has(r.id) || !scoredIds.has(r.id));
   }
   if (!toScore.length) return;

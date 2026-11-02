@@ -266,9 +266,13 @@ export const executeStewardAction = createServerFn({ method: "POST" })
     }
 
     if (d.action === "delete_player" && d.userId) {
-      await sb.from("scores").delete().eq("user_id", d.userId);
-      await sb.from("predictions").delete().eq("user_id", d.userId);
-      await sb.from("sprint_predictions").delete().eq("user_id", d.userId);
+      // The three child-table deletes are independent of each other — same
+      // pattern as deleteMyAccount — then the profile row goes last.
+      await Promise.all([
+        sb.from("scores").delete().eq("user_id", d.userId),
+        sb.from("predictions").delete().eq("user_id", d.userId),
+        sb.from("sprint_predictions").delete().eq("user_id", d.userId),
+      ]);
       const { error } = await sb.from("profiles").delete().eq("id", d.userId);
       if (error) throw new Error(error.message);
       return { ok: true, msg: "Player and associated records removed." };
@@ -383,18 +387,17 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       await sb.from("race_results").upsert(rows, { onConflict: "race_id,driver_id" });
       await sb.from("races").update({ has_results: true }).eq("id", d.raceId);
 
-      const { data: raceRow } = await sb
-        .from("races")
-        .select("race_at")
-        .eq("id", d.raceId)
-        .single();
+      // The race_at read is independent of the other reads — one parallel
+      // batch instead of a serial read followed by the rest.
       const [
+        { data: raceRow },
         { data: profiles },
         { data: preds },
         { data: sprintResults },
         { data: sprintPreds },
         { data: existingScores },
       ] = await Promise.all([
+        sb.from("races").select("race_at").eq("id", d.raceId).single(),
         sb.from("profiles").select("id, created_at"),
         sb
           .from("predictions")
