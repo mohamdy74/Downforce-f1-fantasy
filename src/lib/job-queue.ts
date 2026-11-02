@@ -39,7 +39,7 @@ const JOB_HANDLERS: Record<string, JobHandler> = {
   // a retry after a timeout can never double-write or corrupt data.
   "season-sync": async (supabaseAdmin, payload) => {
     const { runSeasonSync } = await import("./f1-sync.functions");
-    return runSeasonSync(supabaseAdmin, { force: Boolean(payload.force) });
+    return runSeasonSync(supabaseAdmin, { force: Boolean(payload["force"]) });
   },
 };
 
