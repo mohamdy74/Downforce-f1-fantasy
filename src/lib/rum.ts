@@ -114,7 +114,7 @@ export function startRum(): void {
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       // LayoutShift is not in this project's TS lib — structural cast instead.
-      const shift = entry as { value: number; hadRecentInput?: boolean };
+      const shift = entry as unknown as { value: number; hadRecentInput?: boolean };
       if (!shift.hadRecentInput) cls += shift.value;
     }
   }).observe({ type: "layout-shift", buffered: true });
