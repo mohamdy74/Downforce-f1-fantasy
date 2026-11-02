@@ -31,6 +31,7 @@ import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { getSyncJobStatus } from "@/lib/jobs.functions";
 import {
   driversQuery,
   nextRace,
@@ -414,7 +415,31 @@ function StewardsPage() {
             onClick={async () => {
               setBusy(true);
               try {
-                await syncF1Data({ data: { force: true } });
+                const queued = await syncF1Data({ data: { force: true } });
+                if (queued?.jobId) {
+                  // Poll the queue: each status call also drives the worker.
+                  let succeeded = false;
+                  for (let i = 0; i < 20; i++) {
+                    await new Promise((r) => setTimeout(r, 3_000));
+                    const job = await getSyncJobStatus({ data: { jobId: queued.jobId } });
+                    if (job.status === "succeeded") {
+                      succeeded = true;
+                      break;
+                    }
+                    if (job.status === "dead") {
+                      toast.error(
+                        job.lastError
+                          ? `Sync failed: ${job.lastError}`
+                          : "Sync failed after repeated retries.",
+                      );
+                      return;
+                    }
+                  }
+                  if (!succeeded) {
+                    toast("Sync still running in the background — try again in a moment.");
+                    return;
+                  }
+                }
                 await Promise.all([
                   refetchDash(),
                   queryClient.invalidateQueries({ queryKey: ["races"] }),

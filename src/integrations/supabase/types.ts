@@ -35,6 +35,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      jobs: {
+        Row: {
+          attempts: number;
+          created_at: string;
+          created_by: string | null;
+          dedup_key: string | null;
+          finished_at: string | null;
+          id: string;
+          last_error: string | null;
+          max_attempts: number;
+          payload: Json;
+          result: Json | null;
+          run_after: string;
+          started_at: string | null;
+          status: string;
+          timeout_ms: number;
+          type: string;
+        };
+        Insert: {
+          attempts?: number;
+          created_at?: string;
+          created_by?: string | null;
+          dedup_key?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          last_error?: string | null;
+          max_attempts?: number;
+          payload?: Json;
+          result?: Json | null;
+          run_after?: string;
+          started_at?: string | null;
+          status?: string;
+          timeout_ms?: number;
+          type: string;
+        };
+        Update: {
+          attempts?: number;
+          created_at?: string;
+          created_by?: string | null;
+          dedup_key?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          last_error?: string | null;
+          max_attempts?: number;
+          payload?: Json;
+          result?: Json | null;
+          run_after?: string;
+          started_at?: string | null;
+          status?: string;
+          timeout_ms?: number;
+          type?: string;
+        };
+        Relationships: [];
+      };
       prediction_logs: {
         Row: {
           action: string;

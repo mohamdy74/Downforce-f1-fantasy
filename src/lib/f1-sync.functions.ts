@@ -100,11 +100,33 @@ export const syncF1Data = createServerFn({ method: "POST" })
       }
     }
     userSyncCalls.set(userId, Date.now());
-    if (!data.force && inFlightSyncLock) {
-      return { skipped: true as const };
+
+    // Fast path: a non-force sync while the season data is still fresh never
+    // touches the queue — same freshness window runSeasonSync used inline.
+    if (!data.force) {
+      const { data: state } = await supabaseAdmin
+        .from("sync_state")
+        .select("synced_at")
+        .eq("key", `season-${SEASON}`)
+        .maybeSingle();
+      const age = state?.synced_at ? Date.now() - new Date(state.synced_at).getTime() : Infinity;
+      if (age < STALE_MS) return { accepted: false as const, skipped: true as const, jobId: null };
     }
 
-    return runSeasonSync(supabaseAdmin, { force: data.force });
+    // The heavy season pipeline runs as a background job now: enqueue (the
+    // active-dedup unique index coalesces with any running sync and replaces
+    // the old in-memory in-flight lock) and return immediately with the job
+    // id. The RPC transport answers HTTP 200; `accepted` is the 202 semantic.
+    const { enqueueJob } = await import("./job-queue");
+    const { jobId, created } = await enqueueJob(supabaseAdmin, {
+      type: "season-sync",
+      payload: { force: data.force },
+      dedupKey: "season-sync",
+      createdBy: userId,
+      maxAttempts: 5,
+      timeoutMs: 60_000,
+    });
+    return { accepted: true as const, skipped: false as const, jobId, created };
   });
 
 /**

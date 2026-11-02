@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { syncBrowserSubscription } from "@/components/PushOptIn";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { getSyncJobStatus } from "@/lib/jobs.functions";
 import { checkAndSendRaceReminders } from "@/lib/push.functions";
 
 const MIN_GAP_MS = 10 * 60 * 1000;
@@ -57,10 +58,28 @@ export function BackgroundSync() {
         ) {
           await syncBrowserSubscription().catch(() => {});
         }
-        await Promise.allSettled([
+        const settled = await Promise.allSettled([
           syncF1Data({ data: {} }),
           checkAndSendRaceReminders({ data: {} }),
         ]);
+        const syncSettled = settled[0];
+        const jobId =
+          syncSettled.status === "fulfilled"
+            ? (syncSettled.value as { jobId?: string | null }).jobId
+            : null;
+        if (jobId) {
+          // Poll the queued sync (each poll also drives the queue worker)
+          // until it settles or we give up — never blocks the UI.
+          for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 3_000));
+            try {
+              const job = await getSyncJobStatus({ data: { jobId } });
+              if (job.status === "succeeded" || job.status === "dead") break;
+            } catch {
+              break;
+            }
+          }
+        }
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["races"] }),
           queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),

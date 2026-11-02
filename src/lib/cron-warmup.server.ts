@@ -24,7 +24,18 @@ export async function runRemindersWarmUp(): Promise<void> {
   // function: the header was already validated above, and this keeps working
   // even once checkAndSendRaceReminders starts enforcing x-cron-secret.
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { checkAndSendPushReminders, runSeasonSync } = await import("./f1-sync.functions");
+  const { checkAndSendPushReminders } = await import("./f1-sync.functions");
+  const { enqueueJob, processDueJobs } = await import("./job-queue");
   await checkAndSendPushReminders(supabaseAdmin).catch(() => null);
-  void runSeasonSync(supabaseAdmin, { force: false }).catch(() => null);
+  // Season sync runs as a queue job now: enqueue (dedup coalesces with any
+  // active job), then process everything due inline — the cron curl waits
+  // long enough (GH workflow --max-time 150) for the job to finish here.
+  await enqueueJob(supabaseAdmin, {
+    type: "season-sync",
+    payload: { force: false },
+    dedupKey: "season-sync",
+    maxAttempts: 5,
+    timeoutMs: 60_000,
+  }).catch(() => null);
+  await processDueJobs(supabaseAdmin, { limit: 3 }).catch(() => 0);
 }

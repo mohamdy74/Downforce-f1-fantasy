@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
+import { getSyncJobStatus } from "@/lib/jobs.functions";
 import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 import { driversQuery, leaderboardQuery, racesQuery, SEASON, type Driver } from "@/lib/queries";
 import { writeQueryCache } from "@/lib/queryPersist";
@@ -787,7 +788,31 @@ function Leaderboard() {
     if (syncing) return;
     setSyncing(true);
     try {
-      await syncF1Data({ data: { force: true } });
+      const queued = await syncF1Data({ data: { force: true } });
+      if (!queued?.jobId) {
+        toast("Sync already running or data is fresh — nothing to queue.");
+        return;
+      }
+      // Poll the queue: each status call also drives the worker for this job.
+      let succeeded = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 3_000));
+        const job = await getSyncJobStatus({ data: { jobId: queued.jobId } });
+        if (job.status === "succeeded") {
+          succeeded = true;
+          break;
+        }
+        if (job.status === "dead") {
+          toast.error(
+            job.lastError ? `Sync failed: ${job.lastError}` : "Sync failed after repeated retries.",
+          );
+          return;
+        }
+      }
+      if (!succeeded) {
+        toast("Sync still running in the background — results will appear shortly.");
+        return;
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["races"] }),
         queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
