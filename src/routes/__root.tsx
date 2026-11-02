@@ -20,6 +20,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader, BottomNav } from "@/components/SiteHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { startRum } from "@/lib/rum";
 
 function NotFoundComponent() {
   return (
@@ -166,6 +167,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
+    startRum();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch((error) => {
         console.error("[__root.tsx] Service Worker registration failed:", error);

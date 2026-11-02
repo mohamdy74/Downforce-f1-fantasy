@@ -581,6 +581,36 @@ export type Database = {
           },
         ];
       };
+      web_vitals: {
+        Row: {
+          conn: string;
+          created_at: string;
+          device: string;
+          id: number;
+          metric: string;
+          route: string;
+          value: number;
+        };
+        Insert: {
+          conn: string;
+          created_at?: string;
+          device: string;
+          id?: number;
+          metric: string;
+          route: string;
+          value: number;
+        };
+        Update: {
+          conn?: string;
+          created_at?: string;
+          device?: string;
+          id?: number;
+          metric?: string;
+          route?: string;
+          value?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

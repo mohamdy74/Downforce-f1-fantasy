@@ -148,6 +148,13 @@
       "when": 1793904000000,
       "tag": "0020_index_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794076800000,
+      "tag": "0021_web_vitals_rum",
+      "breakpoints": true
     }
   ]
 }
