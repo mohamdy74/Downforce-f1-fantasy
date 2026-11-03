@@ -423,7 +423,7 @@ function Leaderboard() {
 
       {/* Clean Minimal Segmented Tab Bar */}
       <div
-        role="tablist"
+        role="group"
         aria-label="Standings view"
         className="mt-6 grid grid-cols-4 gap-1 rounded-lg border border-border bg-secondary/40 p-1"
       >
@@ -433,8 +433,7 @@ function Leaderboard() {
             <button
               key={t.key}
               type="button"
-              role="tab"
-              aria-selected={isActive}
+              aria-pressed={isActive}
               onClick={() => switchTab(t.key)}
               className={cn(
                 "rounded-md py-2 text-center font-mono text-[11px] font-bold uppercase tracking-wider transition-colors sm:text-xs",
@@ -495,7 +494,7 @@ function Leaderboard() {
                 </div>
               )}
 
-              <div ref={listRef} className="mt-8 space-y-2">
+              <div ref={listRef} className="cv-auto mt-8 space-y-2">
                 {!board?.length && (
                   <p className="text-sm text-muted-foreground">
                     No players yet. Sign in to claim P1.
@@ -549,7 +548,7 @@ function Leaderboard() {
                     </button>
                     {openUser === entry.userId && (
                       <div className="carbon-panel mt-1 grid grid-cols-4 gap-1 rounded-md p-2 sm:grid-cols-6">
-                        <div className="col-span-full mb-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase">
+                        <div className="col-span-full mb-1 flex flex-wrap gap-1.5 font-mono text-[11px] uppercase">
                           <span className="rounded bg-secondary px-2 py-0.5">
                             Avg {entry.races ? (entry.points / entry.races).toFixed(1) : 0} pts
                           </span>
@@ -576,7 +575,7 @@ function Leaderboard() {
                               key={r.id}
                               className="rounded-sm bg-muted/60 px-1 py-1 text-center"
                             >
-                              <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                              <p className="font-mono text-[11px] uppercase text-muted-foreground">
                                 R{r.round}
                               </p>
                               <p className="font-mono text-sm font-bold tabular-nums">
@@ -625,7 +624,7 @@ function Leaderboard() {
                 </div>
               )}
 
-              <div className="mt-8 space-y-2">
+              <div className="cv-auto mt-8 space-y-2">
                 {f1Drivers.map((d, index) => {
                   const tColor = teamColor(d.team);
                   const gap = index === 0 ? "LEADER" : `-${topDriverPoints - d.points}`;
@@ -666,7 +665,7 @@ function Leaderboard() {
                             )}
                           </div>
 
-                          <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                             <span className="truncate">{d.team}</span>
                             <span className="opacity-40">·</span>
                             <span className="hit-slop inline-flex shrink-0 items-center gap-1 font-semibold text-foreground/80">
@@ -689,7 +688,7 @@ function Leaderboard() {
                           <p className="font-mono text-lg font-bold tabular-nums leading-none">
                             {d.points}
                           </p>
-                          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                             {gap}
                           </p>
                         </div>
@@ -698,25 +697,25 @@ function Leaderboard() {
                       {isOpen && (
                         <div className="carbon-panel mt-1 grid grid-cols-3 gap-1 rounded-md p-2 sm:grid-cols-6">
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               Wins
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">{d.wins}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               Podiums
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">{d.podiums}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               Poles
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">{d.poles}</p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               Fastest
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">
@@ -724,7 +723,7 @@ function Leaderboard() {
                             </p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               Best
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">
@@ -732,7 +731,7 @@ function Leaderboard() {
                             </p>
                           </div>
                           <div className="rounded-sm bg-muted/60 px-2 py-1 text-center">
-                            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <p className="font-mono text-[11px] uppercase text-muted-foreground">
                               DNFs
                             </p>
                             <p className="font-mono text-sm font-bold tabular-nums">{d.dnfs}</p>
@@ -754,7 +753,7 @@ function Leaderboard() {
           {f1Loading ? (
             <StandingsSkeleton rows={10} showPodium={false} />
           ) : (
-            <div className="space-y-2">
+            <div className="cv-auto space-y-2">
               {f1Constructors.map((c, index) => {
                 const tColor = teamColor(c.team);
                 const gap = index === 0 ? "LEADER" : `-${topTeamPoints - c.points}`;
@@ -784,7 +783,7 @@ function Leaderboard() {
                           {c.team}
                         </p>
                         {metaParts.length > 0 && (
-                          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                             {metaParts.join(" · ")}
                           </span>
                         )}
@@ -811,7 +810,7 @@ function Leaderboard() {
                       <p className="font-mono text-xl font-bold tabular-nums leading-none">
                         {c.points}
                       </p>
-                      <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                         {gap}
                       </p>
                     </div>
@@ -859,13 +858,13 @@ function Leaderboard() {
                   }}
                 >
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                       {stat.label}
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
                       {stat.d ? stat.d.code : "–"}
                     </p>
-                    <p className="truncate font-mono text-[10px] uppercase text-muted-foreground">
+                    <p className="truncate font-mono text-[11px] uppercase text-muted-foreground">
                       {stat.d?.team ?? ""}
                     </p>
                   </div>
@@ -883,7 +882,7 @@ function Leaderboard() {
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="tower-row flex items-center justify-between rounded-md border-l-gold px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                       League Leader
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
@@ -897,7 +896,7 @@ function Leaderboard() {
 
                 <div className="tower-row flex items-center justify-between rounded-md border-l-primary px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                       Best Round
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">
@@ -911,7 +910,7 @@ function Leaderboard() {
 
                 <div className="tower-row flex items-center justify-between rounded-md px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                       Best Average
                     </p>
                     <p className="mt-0.5 truncate font-display text-sm font-extrabold italic uppercase">

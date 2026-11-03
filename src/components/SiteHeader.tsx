@@ -36,7 +36,7 @@ const links = [
 ] as const;
 
 const DESKTOP_LINK =
-  "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground md:inline [&.active]:text-primary";
+  "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground hover:underline hover:decoration-border hover:underline-offset-[5px] md:inline [&.active]:text-primary [&.active]:underline [&.active]:decoration-gold [&.active]:decoration-2 [&.active]:underline-offset-[5px]";
 
 function useSprintWeek(): boolean {
   const { data: races } = useQuery({
@@ -89,7 +89,7 @@ export function SiteHeader() {
               <LogOut className="h-5 w-5" />
             </span>
             <div>
-              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
                 Confirm Action
               </p>
               <DialogTitle className="mt-0.5 text-lg font-black uppercase tracking-wide text-foreground">
@@ -244,7 +244,7 @@ export function BottomNav() {
                 key={l.to}
                 to={l.to}
                 activeOptions={{ exact: l.to === "/" }}
-                className="flex h-16 touch-manipulation select-none flex-col items-center justify-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground active:bg-secondary/60 [&.active]:text-primary"
+                className="flex h-16 touch-manipulation select-none flex-col items-center justify-center gap-1 font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground active:bg-secondary/60 [&.active]:text-primary"
               >
                 <Icon className="h-5 w-5" />
                 {l.label}
@@ -254,7 +254,7 @@ export function BottomNav() {
         {sprintOn && (
           <Link
             to="/sprint"
-            className="flex h-16 touch-manipulation select-none flex-col items-center justify-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground active:bg-secondary/60 [&.active]:text-primary"
+            className="flex h-16 touch-manipulation select-none flex-col items-center justify-center gap-1 font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground active:bg-secondary/60 [&.active]:text-primary"
           >
             <Zap className="h-5 w-5" />
             Sprint

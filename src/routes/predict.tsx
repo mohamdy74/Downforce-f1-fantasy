@@ -481,19 +481,18 @@ function Predict() {
           className="carbon-panel mt-4 overflow-hidden rounded-xl border p-3.5 sm:p-4"
           style={{
             borderColor: "color-mix(in oklch, var(--gold) 45%, rgba(255, 255, 255, 0.14))",
-            boxShadow:
-              "inset 0 0 28px -12px color-mix(in oklch, var(--gold) 35%, transparent), 0 10px 26px -12px rgba(0, 0, 0, 0.5)",
+            boxShadow: "0 10px 26px -12px rgba(0, 0, 0, 0.5)",
           }}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-gold/15 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-gold/15 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
                   <span className="h-1.5 w-1.5 rounded-full bg-gold animate-pulse" />
                   Action Needed · {usedInTop10.length}/10 Picked
                 </span>
                 {savedPoleDriver && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-success">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/15 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest text-success">
                     Pole: {savedPoleDriver.code ?? savedPoleDriver.full_name} ✓
                   </span>
                 )}
@@ -512,7 +511,7 @@ function Predict() {
               type="button"
               size="sm"
               onClick={scrollToPicker}
-              className="h-10 shrink-0 rounded-lg px-4 font-display text-xs font-extrabold italic uppercase tracking-wider shadow-md"
+              className="h-10 shrink-0 rounded-lg px-4 font-mono text-xs font-bold uppercase tracking-wider shadow-md"
             >
               Start picking ↓
             </Button>
@@ -550,7 +549,7 @@ function Predict() {
           </div>
           <span
             className={cn(
-              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest",
+              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest",
               poleLocked
                 ? "border-border text-muted-foreground"
                 : savedPole && !poleDirty
@@ -759,12 +758,12 @@ function TrackStatus({ target }: { target: string }) {
         : { label: "Track open", color: "var(--track-green)" };
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest"
+      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-widest"
       style={{ borderColor: state.color, color: state.color }}
     >
       <span
         className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full"
-        style={{ background: state.color, boxShadow: `0 0 10px ${state.color}` }}
+        style={{ background: state.color }}
       />
       {state.label}
     </div>

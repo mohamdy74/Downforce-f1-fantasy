@@ -61,7 +61,7 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-6 rounded-lg border border-border/70 bg-card/40 p-4">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-gold">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-gold">
             Unofficial fan project · Non-profit
           </p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">

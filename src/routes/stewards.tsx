@@ -374,7 +374,7 @@ function StewardsPage() {
     <main className="mx-auto w-full max-w-3xl space-y-3 overflow-x-clip px-3 pb-28 pt-6 sm:px-4">
       <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
             FIA Stewards &amp; Race Control
           </p>
           <h1 className="text-2xl sm:text-3xl">Stewards Room</h1>
@@ -461,7 +461,7 @@ function StewardsPage() {
       </div>
 
       <div className="carbon-panel rounded-xl border border-border/70 p-3">
-        <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <label className="block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           Target Grand Prix Round
         </label>
         <div className="relative">
@@ -497,7 +497,7 @@ function StewardsPage() {
         title="Live Pick Status Radar"
         subtitle={`See who locked in for ${activeRace?.name ?? "this round"} and check each player's Push status`}
         badge={
-          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-gold">
+          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] font-bold text-gold">
             {lockedPlayers}/{totalPlayers} Locked
           </span>
         }
@@ -554,7 +554,7 @@ function StewardsPage() {
                           : "Has not tapped Enable Alerts on phone yet"
                       }
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-[10px]",
+                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-[11px]",
                         hasPush ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
                       )}
                     >
@@ -606,7 +606,7 @@ function StewardsPage() {
         subtitle="Publish penalties, grid changes & announcements to every player's Updates bell"
         badge={
           activeUpdates.length > 0 ? (
-            <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+            <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] font-bold text-muted-foreground">
               {activeUpdates.length} Posted
             </span>
           ) : undefined
@@ -615,7 +615,7 @@ function StewardsPage() {
         <div className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <label className="mb-1 block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 Update Type
               </label>
               <select
@@ -630,7 +630,7 @@ function StewardsPage() {
               </select>
             </div>
             <div>
-              <span className="mb-1 block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span className="mb-1 block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 Affected Driver (optional)
               </span>
               <DriverPicker drivers={drivers} value={updDriver} onChange={setUpdDriver} />
@@ -676,7 +676,7 @@ function StewardsPage() {
                 <div key={u.id} className="flex items-start justify-between gap-2 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-foreground">{u.title}</p>
-                    <p className="mt-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                    <p className="mt-0.5 font-mono text-[11px] uppercase text-muted-foreground">
                       {u.type.replace("_", " ")}
                       {u.driver_id ? ` · ${driverById.get(u.driver_id) ?? u.driver_id}` : ""}
                     </p>
@@ -813,19 +813,19 @@ function StewardsPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                  <span className="mb-1 block font-mono text-[11px] uppercase text-muted-foreground">
                     Pole Pick
                   </span>
                   <DriverPicker drivers={drivers} value={pickPole} onChange={setPickPole} />
                 </div>
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                  <span className="mb-1 block font-mono text-[11px] uppercase text-muted-foreground">
                     Fastest Lap
                   </span>
                   <DriverPicker drivers={drivers} value={pickFl} onChange={setPickFl} />
                 </div>
                 <div>
-                  <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+                  <span className="mb-1 block font-mono text-[11px] uppercase text-muted-foreground">
                     DNF Pick
                   </span>
                   <DriverPicker
@@ -904,7 +904,7 @@ function StewardsPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-              <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+              <label className="block font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
                 Exact Qualifying Lock Time
               </label>
               <div className="mt-2 flex gap-2">
@@ -933,7 +933,7 @@ function StewardsPage() {
             </div>
 
             <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-              <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+              <label className="block font-mono text-[11px] font-bold uppercase tracking-widest text-primary">
                 Exact Race Lock Time
               </label>
               <div className="mt-2 flex gap-2">
@@ -1017,13 +1017,13 @@ function StewardsPage() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+              <span className="mb-1 block font-mono text-[11px] uppercase text-muted-foreground">
                 Actual Pole Winner
               </span>
               <DriverPicker drivers={drivers} value={resPole} onChange={setResPole} />
             </div>
             <div>
-              <span className="mb-1 block font-mono text-[10px] uppercase text-muted-foreground">
+              <span className="mb-1 block font-mono text-[11px] uppercase text-muted-foreground">
                 Actual Fastest Lap
               </span>
               <DriverPicker drivers={drivers} value={resFl} onChange={setResFl} />
@@ -1047,7 +1047,7 @@ function StewardsPage() {
                 <button
                   type="button"
                   onClick={() => setResDnfList([])}
-                  className="font-mono text-[10px] uppercase text-muted-foreground underline"
+                  className="font-mono text-[11px] uppercase text-muted-foreground underline"
                 >
                   Clear DNFs
                 </button>
@@ -1070,7 +1070,7 @@ function StewardsPage() {
                     style={{ borderLeft: `4px solid ${teamColor(d.team)}` }}
                   >
                     <span className="truncate">{d.code ?? d.full_name}</span>
-                    {isDnf && <span className="ml-1 shrink-0 text-[9px]">DNF</span>}
+                    {isDnf && <span className="ml-1 shrink-0 text-[10px]">DNF</span>}
                   </button>
                 );
               })}
@@ -1113,7 +1113,7 @@ function StewardsPage() {
         title="Player Manager"
         subtitle="Rename player display names or remove test accounts"
         badge={
-          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+          <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] font-bold text-muted-foreground">
             {totalPlayers} Players
           </span>
         }

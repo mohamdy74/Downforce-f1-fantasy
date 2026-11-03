@@ -388,7 +388,7 @@ function Sprint() {
           </div>
           <span
             className={cn(
-              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest",
+              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest",
               poleLocked
                 ? "border-border text-muted-foreground"
                 : savedPole && !poleDirty

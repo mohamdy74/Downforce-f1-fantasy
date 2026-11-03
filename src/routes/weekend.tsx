@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { Countdown } from "@/components/Countdown";
+import { RoundChips } from "@/components/RoundChips";
 import { Skeleton, TowerRowsSkeleton } from "@/components/LoadingSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { driversQuery, getTrustedNow, racesQuery, type Driver, type Race } from "@/lib/queries";
@@ -398,27 +399,15 @@ function Weekend() {
 
   return (
     <Shell>
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
-        {races
+      <RoundChips
+        rounds={races
           .filter((r) => r.has_results || r.id === defRace?.id)
           .slice(-6)
-          .reverse()
-          .map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setRId(r.id)}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 font-mono text-xs font-bold",
-                r.id === race.id
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border text-muted-foreground",
-              )}
-            >
-              R{r.round}
-            </button>
-          ))}
-      </div>
+          .reverse()}
+        activeId={race.id}
+        onSelect={setRId}
+        className="mb-3"
+      />
       <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Round {race.round}
       </p>
@@ -429,13 +418,12 @@ function Weekend() {
         {race.country ? `, ${race.country}` : ""}
       </p>
 
-      <div role="tablist" aria-label="Weekend sections" className="mt-5 grid grid-cols-4 gap-1.5">
+      <div role="group" aria-label="Weekend sections" className="mt-5 grid grid-cols-4 gap-1.5">
         {TABS.map((t) => (
           <button
             key={t.id}
-            role="tab"
             type="button"
-            aria-selected={tab === t.id}
+            aria-pressed={tab === t.id}
             onClick={() => setTab(t.id)}
             className={cn(
               "min-h-11 touch-manipulation rounded-md border px-1 font-mono text-[11px] font-bold uppercase tracking-wider transition",
@@ -498,7 +486,7 @@ function Schedule({ sessions }: { sessions: ScheduleItem[] }) {
               </p>
             </div>
             <span
-              className="shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest"
+              className="shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest"
               style={{ borderColor: st.color, color: st.color }}
             >
               {st.label}
@@ -675,7 +663,7 @@ function SessionResults({
             type="button"
             onClick={() => void q.refetch()}
             disabled={q.isFetching}
-            className="shrink-0 rounded border border-primary/40 bg-primary/15 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-primary transition hover:bg-primary/25 disabled:opacity-50"
+            className="shrink-0 rounded border border-primary/40 bg-primary/15 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-primary transition hover:bg-primary/25 disabled:opacity-50"
           >
             {q.isFetching ? "Syncing..." : "Refresh timing"}
           </button>
@@ -771,7 +759,7 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
                     {[r.name, r.team].filter(Boolean).join(" \u00B7 ")}
                   </span>
                   {sub && (
-                    <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
                       {sub}
                     </span>
                   )}
@@ -789,7 +777,7 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
             );
           })}
           {segMeta.cutoff != null && qRows.length > segMeta.cutoff && (
-            <p className="pt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <p className="pt-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
               {`Dashed line = top ${segMeta.cutoff}`}
             </p>
           )}
@@ -826,7 +814,7 @@ function ClassTable({ rows, type }: { rows: ClassRow[]; type: SessionType }) {
                 {[r.name, r.team].filter(Boolean).join(" \u00B7 ")}
               </span>
               {sub && (
-                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                <span className="block truncate font-mono text-[11px] text-muted-foreground">
                   {sub}
                 </span>
               )}
@@ -953,7 +941,7 @@ function RaceResults({ race }: { race: Race }) {
         <Fact label="Pole" d={pole && byId.get(pole.driver_id)} />
         <Fact label="Fastest lap" d={fl && byId.get(fl.driver_id)} purple />
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
             DNFs
           </p>
           <p className="font-display text-lg font-extrabold italic">{dnfs.length}</p>
@@ -973,7 +961,7 @@ function RaceResults({ race }: { race: Race }) {
                 {r.position}
               </span>
               <DriverName d={d} fallback={r.driver_id} />
-              <span className="ml-auto flex shrink-0 gap-1 font-mono text-[10px] font-bold uppercase">
+              <span className="ml-auto flex shrink-0 gap-1 font-mono text-[11px] font-bold uppercase">
                 {r.pole && (
                   <span className="rounded bg-gold px-1.5 py-0.5 text-gold-foreground">Pole</span>
                 )}
@@ -1033,7 +1021,7 @@ function Fact({
     <div>
       <p
         className={cn(
-          "font-mono text-[10px] uppercase tracking-widest",
+          "font-mono text-[11px] uppercase tracking-widest",
           purple ? "text-purple" : "text-muted-foreground",
         )}
       >

@@ -206,7 +206,7 @@ export function AccountAndOnboarding() {
                 Welcome · Step {step} of 3
               </div>
             ) : (
-              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-gold">
                 Driver Profile &amp; Account
               </p>
             )}
@@ -298,7 +298,7 @@ export function AccountAndOnboarding() {
             <p className="font-mono text-xs text-muted-foreground">{user.email}</p>
 
             <div className="space-y-1.5">
-              <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <label className="block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 League Display Name
               </label>
               <div className="flex gap-2">
@@ -335,7 +335,7 @@ export function AccountAndOnboarding() {
             </div>
 
             <div className="border-t border-border/60 pt-3">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 Legal
               </p>
               <div className="mt-2 flex flex-wrap gap-2">

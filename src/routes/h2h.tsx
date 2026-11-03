@@ -230,7 +230,7 @@ function PlayerStatsCard({
   return (
     <div className="carbon-panel grid grid-cols-3 divide-x divide-border rounded-lg py-3 px-1 text-center">
       <div>
-        <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground">
           Wins
         </p>
         <p
@@ -243,7 +243,7 @@ function PlayerStatsCard({
         </p>
       </div>
       <div>
-        <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground">
           Points
         </p>
         <p
@@ -256,7 +256,7 @@ function PlayerStatsCard({
         </p>
       </div>
       <div>
-        <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground">
           Best
         </p>
         <p

@@ -229,9 +229,6 @@ function SprintGridImpl({
                   borderLeft: `5px solid ${color}`,
                   paddingLeft: "0.5rem",
                   touchAction: "pan-y",
-                  boxShadow: d
-                    ? `inset 0 0 24px -8px color-mix(in oklch, ${color} 55%, transparent), 0 0 14px -6px ${color}`
-                    : undefined,
                   borderBottom: "2px solid var(--color-border)",
                 }}
               >
@@ -322,7 +319,6 @@ function SprintGridImpl({
                       className="h-2 w-2 shrink-0 rounded-full transition-transform duration-200"
                       style={{
                         background: color,
-                        boxShadow: on ? `0 0 8px ${color}` : undefined,
                         transform: on ? "scale(1.2)" : undefined,
                       }}
                     />
@@ -348,7 +344,6 @@ function SprintGridImpl({
                     )}
                     style={{
                       borderLeft: `5px solid ${dColor}`,
-                      boxShadow: `inset 0 0 24px -8px color-mix(in oklch, ${dColor} 50%, transparent), 0 0 12px -6px ${dColor}`,
                       borderBottom: "2px solid var(--color-border)",
                     }}
                   >

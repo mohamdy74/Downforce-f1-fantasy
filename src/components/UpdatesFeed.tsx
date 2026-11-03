@@ -91,7 +91,7 @@ export function UpdatesFeed() {
           <Megaphone className="h-4 w-4" />
         </Button>
         {unread > 0 && (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 font-mono text-[9px] font-bold leading-none text-primary-foreground">
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 font-mono text-[10px] font-bold leading-none text-primary-foreground">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -125,18 +125,18 @@ export function UpdatesFeed() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
-                            "rounded-full px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider",
+                            "rounded-full px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider",
                             chip.className,
                           )}
                         >
                           {chip.label}
                         </span>
                         {u.driver_id && (
-                          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-bold text-foreground">
+                          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-bold text-foreground">
                             {driverLabel.get(u.driver_id) ?? u.driver_id}
                           </span>
                         )}
-                        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                           {timeAgo(u.created_at)}
                         </span>
                       </div>
@@ -148,7 +148,7 @@ export function UpdatesFeed() {
                           {u.body}
                         </p>
                       )}
-                      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                      <p className="mt-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
                         {raceLabel.get(u.race_id) ?? "League news"}
                       </p>
                     </li>

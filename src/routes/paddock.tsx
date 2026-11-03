@@ -5,6 +5,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
 import { Skeleton } from "@/components/LoadingSkeleton";
+import { RoundChips } from "@/components/RoundChips";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,23 +26,23 @@ import { getLiveRaceTelemetry, type LiveRaceTelemetryPayload } from "@/lib/weeke
 export const Route = createFileRoute("/paddock")({
   head: () => ({
     meta: [
-      { title: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
+      { title: "Paddock Reveal & Scoring \u2014 DOWNFORCE" },
       {
         name: "description",
         content:
-          "See every player's picks once the grid locks, and a colour-coded debrief of where points were won and lost.",
+          "See every player's picks once the grid locks, and a colour-coded scoring breakdown of where points were won and lost.",
       },
-      { property: "og:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
+      { property: "og:title", content: "Paddock Reveal & Scoring \u2014 DOWNFORCE" },
       {
         property: "og:description",
-        content: "Everyone's picks revealed after lock, with a post-race points debrief.",
+        content: "Everyone's picks revealed after lock, with a post-race points breakdown.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Paddock Reveal & Race Debrief \u2014 DOWNFORCE" },
+      { name: "twitter:title", content: "Paddock Reveal & Scoring \u2014 DOWNFORCE" },
       {
         name: "twitter:description",
-        content: "Everyone's picks revealed after lock, with a post-race points debrief.",
+        content: "Everyone's picks revealed after lock, with a post-race points breakdown.",
       },
     ],
   }),
@@ -281,7 +282,7 @@ function Paddock() {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-10">
       <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
-        {isLiveScoring ? "Live Telemetry Debrief" : hasResults ? "Race debrief" : "Paddock reveal"}
+        {isLiveScoring ? "Live Telemetry Debrief" : hasResults ? "Scoring" : "Paddock reveal"}
       </p>
       <h1 className="mt-1 text-3xl">{race ? race.name : "No locked race yet"}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -293,25 +294,12 @@ function Paddock() {
       </p>
 
       {locked.length > 1 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {locked
-            .slice()
-            .reverse()
-            .map((r) => (
-              <button
-                key={r.id}
-                onClick={() => setRaceId(r.id)}
-                className={cn(
-                  "carbon-panel shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-xs font-semibold transition-colors",
-                  r.id === race?.id
-                    ? "border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(225,6,0,0.25)]"
-                    : "border-border/70 text-muted-foreground hover:text-foreground",
-                )}
-              >
-                R{r.round}
-              </button>
-            ))}
-        </div>
+        <RoundChips
+          rounds={locked.slice().reverse()}
+          activeId={race?.id ?? null}
+          onSelect={setRaceId}
+          className="mt-4"
+        />
       )}
 
       {race && paddockLoading && <PaddockCardsSkeleton className="mt-6" />}
@@ -319,7 +307,7 @@ function Paddock() {
         <p className="mt-8 text-sm text-muted-foreground">No one submitted picks for this race.</p>
       )}
 
-      <div ref={padRef} className="mt-6 space-y-4">
+      <div ref={padRef} className="cv-auto mt-6 space-y-4">
         {sorted.length > 0 &&
           (() => {
             const m = (a: (string | null | undefined)[]) => {
@@ -333,15 +321,15 @@ function Paddock() {
             return (
               <div className="carbon-panel grid grid-cols-3 gap-2 rounded-lg border border-gold/40 p-2.5 text-center font-mono text-xs">
                 <div>
-                  <span className="block text-[10px] text-muted-foreground">CROWD P1</span>
+                  <span className="block text-[11px] text-muted-foreground">CROWD P1</span>
                   <b className="text-gold">{c1 ? (byId.get(c1)?.code ?? c1) : "-"}</b>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-muted-foreground">CROWD POLE</span>
+                  <span className="block text-[11px] text-muted-foreground">CROWD POLE</span>
                   <b className="text-primary">{cp ? (byId.get(cp)?.code ?? cp) : "-"}</b>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-muted-foreground">CROWD DNF</span>
+                  <span className="block text-[11px] text-muted-foreground">CROWD DNF</span>
                   <b>{cd ? (byId.get(cd)?.code ?? cd) : "-"}</b>
                 </div>
               </div>

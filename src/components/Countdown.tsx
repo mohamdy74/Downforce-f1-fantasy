@@ -27,7 +27,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
 
   return (
     <div className="carbon-panel-strong rounded-lg border border-border/80 p-3">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
       {now == null ? (
@@ -35,13 +35,13 @@ export function Countdown({ target, label }: { target: string; label: string }) 
       ) : locked ? (
         <p className="font-display text-lg font-extrabold italic uppercase text-primary">Locked</p>
       ) : (
-        <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">
-          {[
-            { v: d, u: "DAYS" },
-            { v: h, u: "HRS" },
-            { v: m, u: "MIN" },
-            { v: s, u: "SEC" },
-          ].map((x) => (
+        <div
+          className={`mt-2 grid gap-1.5 text-center ${d > 0 ? "grid-cols-4" : "grid-cols-3"}`}
+        >
+          {(d > 0
+            ? [{ v: d, u: "DAYS" }, { v: h, u: "HRS" }, { v: m, u: "MIN" }, { v: s, u: "SEC" }]
+            : [{ v: h, u: "HRS" }, { v: m, u: "MIN" }, { v: s, u: "SEC" }]
+          ).map((x) => (
             <div key={x.u} className="rounded bg-secondary/80 py-1.5 border border-border/50">
               <span
                 className={
@@ -52,7 +52,7 @@ export function Countdown({ target, label }: { target: string; label: string }) 
               >
                 {String(x.v).padStart(2, "0")}
               </span>
-              <span className="mt-1 block font-mono text-[9px] font-bold tracking-widest text-muted-foreground">
+              <span className="mt-1 block font-mono text-[10px] font-bold tracking-widest text-muted-foreground">
                 {x.u}
               </span>
             </div>
