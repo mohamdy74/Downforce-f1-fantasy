@@ -97,12 +97,11 @@ export function SiteHeader() {
               </DialogTitle>
             </div>
           </div>
-
         </div>
 
         <p className="relative mt-3.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-          Are you sure you want to exit the league? You&apos;ll be signed out on this device,
-          and you can sign back in anytime with your Google account.
+          Are you sure you want to exit the league? You&apos;ll be signed out on this device, and
+          you can sign back in anytime with your Google account.
         </p>
 
         <div className="relative mt-5 grid grid-cols-2 gap-2.5">

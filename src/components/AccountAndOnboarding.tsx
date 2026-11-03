@@ -220,7 +220,6 @@ export function AccountAndOnboarding() {
                 : "Account Settings"}
             </DialogTitle>
           </div>
-
         </div>
 
         {mode === "onboarding" ? (
@@ -228,8 +227,7 @@ export function AccountAndOnboarding() {
             {step === 1 && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  This is the name shown on the League Standings, Head-to-Head, and Share
-                  Cards.
+                  This is the name shown on the League Standings, Head-to-Head, and Share Cards.
                 </p>
                 <input
                   type="text"
@@ -239,11 +237,7 @@ export function AccountAndOnboarding() {
                   className="h-11 w-full rounded-lg border border-input bg-background px-3 font-display text-sm font-bold uppercase"
                 />
                 <div className="flex gap-2 pt-1">
-                  <Button
-                    className="flex-1"
-                    disabled={busy}
-                    onClick={() => handleSaveName(true)}
-                  >
+                  <Button className="flex-1" disabled={busy} onClick={() => handleSaveName(true)}>
                     Save &amp; Continue →
                   </Button>
                   <Button variant="ghost" onClick={() => setStep(2)}>
@@ -256,16 +250,12 @@ export function AccountAndOnboarding() {
             {step === 2 && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Enable instant phone notifications so we alert you <strong>2 hours</strong>{" "}
-                  and <strong>30 minutes</strong> before Qualifying and Race lock if you
-                  haven&apos;t submitted yet.
+                  Enable instant phone notifications so we alert you <strong>2 hours</strong> and{" "}
+                  <strong>30 minutes</strong> before Qualifying and Race lock if you haven&apos;t
+                  submitted yet.
                 </p>
                 <div className="flex gap-2 pt-2">
-                  <Button
-                    className="flex-1 gap-2"
-                    disabled={busy}
-                    onClick={handleEnableAlerts}
-                  >
+                  <Button className="flex-1 gap-2" disabled={busy} onClick={handleEnableAlerts}>
                     <Bell className="h-4 w-4 text-gold" />
                     Enable Race Alerts 🔔
                   </Button>

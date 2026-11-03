@@ -22,9 +22,9 @@ export function LegalDialog({
             </p>
             <DialogTitle className="text-2xl text-foreground">Privacy Policy</DialogTitle>
             <p>
-              <strong>1. Data We Collect:</strong> When you sign in with Google OAuth, we store
-              only your account identifier, email address (for authentication), display name, and
-              profile avatar to display your position on the league leaderboard.
+              <strong>1. Data We Collect:</strong> When you sign in with Google OAuth, we store only
+              your account identifier, email address (for authentication), display name, and profile
+              avatar to display your position on the league leaderboard.
             </p>
             <p>
               <strong>2. Push Notifications:</strong> If you opt in to race lock alerts, your
