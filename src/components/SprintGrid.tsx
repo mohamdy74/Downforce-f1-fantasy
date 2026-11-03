@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { toast } from "sonner";
 
@@ -13,7 +13,7 @@ export const EMPTY = "__none__";
 // Re-export DriverPicker as DriverSelect for backward compat with sprint.tsx
 export const DriverSelect = DriverPicker;
 
-export function SprintGrid({
+function SprintGridImpl({
   drivers,
   top10,
   setTop10,
@@ -393,3 +393,5 @@ export function SprintGrid({
     </section>
   );
 }
+
+export const SprintGrid = memo(SprintGridImpl);

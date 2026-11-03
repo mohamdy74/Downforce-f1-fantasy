@@ -59,6 +59,8 @@ function Sprint() {
 
   const race = useMemo(() => (races ? sprintWeekend(races) : null), [races]);
 
+  const byId = useMemo(() => new Map((drivers ?? []).map((d) => [d.id, d])), [drivers]);
+
   const [now, setNow] = useState(() => getTrustedNow());
   useEffect(() => {
     const t = setInterval(() => setNow(getTrustedNow()), 30_000);
@@ -226,7 +228,6 @@ function Sprint() {
 
   const used = top8.filter((d) => d !== EMPTY);
   const duplicates = used.length !== new Set(used).size;
-  const byId = new Map((drivers ?? []).map((d) => [d.id, d]));
   const codeOf = (id: string | null | undefined) =>
     id ? (byId.get(id)?.code ?? byId.get(id)?.full_name ?? id) : "—";
 
