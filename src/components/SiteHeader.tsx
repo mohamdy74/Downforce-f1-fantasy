@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   CalendarDays,
+  ChevronDown,
   Grid3x3,
   Home,
   LogOut,
@@ -10,7 +10,6 @@ import {
   Sun,
   Swords,
   Trophy,
-  Zap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -22,8 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
-import { racesQuery } from "@/lib/queries";
-import { sprintWeekend } from "@/lib/sprint";
 import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 
 const links = [
@@ -36,25 +33,17 @@ const links = [
 ] as const;
 
 const DESKTOP_LINK =
-  "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground hover:underline hover:decoration-border hover:underline-offset-[5px] md:inline [&.active]:text-primary [&.active]:underline [&.active]:decoration-gold [&.active]:decoration-2 [&.active]:underline-offset-[5px]";
-
-function useSprintWeek(): boolean {
-  const { data: races } = useQuery({
-    ...racesQuery,
-    staleTime: 5 * 60_000, // 5 minutes - header doesn't need ultra-fresh data
-  });
-  return !!races && !!sprintWeekend(races);
-}
+  "hidden rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground hover:underline hover:decoration-border hover:underline-offset-[5px] lg:inline [&.active]:text-primary [&.active]:underline [&.active]:decoration-gold [&.active]:decoration-2 [&.active]:underline-offset-[5px]";
 
 export const HelmetLogo = LogoMark;
 
 export function SiteHeader() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
-  const sprintOn = useSprintWeek();
   const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -137,6 +126,55 @@ export function SiteHeader() {
         </Link>
 
         <nav className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+          <div
+            className="relative hidden md:inline-flex lg:hidden"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setExploreOpen(false);
+            }}
+          >
+            <button
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={exploreOpen}
+              onClick={() => setExploreOpen((o) => !o)}
+              className="hit-slop flex items-center gap-1.5 rounded-sm px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Explore
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {exploreOpen && (
+              <>
+                <button
+                  aria-hidden
+                  tabIndex={-1}
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setExploreOpen(false)}
+                />
+                <div className="carbon-panel absolute right-0 top-full z-50 mt-2 w-44 rounded-xl p-1.5">
+                  {links.map((l) => (
+                    <Link
+                      key={l.to}
+                      to={l.to}
+                      activeOptions={{ exact: l.to === "/" }}
+                      onClick={() => setExploreOpen(false)}
+                      className="block rounded-md px-3 py-2 font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground [&.active]:text-primary"
+                    >
+                      {l.label}
+                    </Link>
+                  ))}
+                  {isSteward && (
+                    <Link
+                      to="/stewards"
+                      onClick={() => setExploreOpen(false)}
+                      className="block rounded-md px-3 py-2 font-mono text-xs font-semibold uppercase tracking-wider text-gold transition-colors hover:bg-secondary/60"
+                    >
+                      Stewards
+                    </Link>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           {links
             .filter((l) => l.to !== "/rules")
             .map((l) => (
@@ -149,11 +187,6 @@ export function SiteHeader() {
                 {l.label}
               </Link>
             ))}
-          {sprintOn && (
-            <Link to="/sprint" className={DESKTOP_LINK}>
-              Sprint
-            </Link>
-          )}
           {isSteward && (
             <Link to="/stewards" className={DESKTOP_LINK} style={{ color: "var(--gold)" }}>
               Stewards
@@ -222,8 +255,7 @@ export function SiteHeader() {
 }
 
 export function BottomNav() {
-  const sprintOn = useSprintWeek();
-  const count = links.filter((l) => l.icon).length + (sprintOn ? 1 : 0);
+  const count = links.filter((l) => l.icon).length;
   return (
     <>
       <div className="h-[calc(4rem+env(safe-area-inset-bottom))] md:hidden" />
@@ -251,15 +283,6 @@ export function BottomNav() {
               </Link>
             );
           })}
-        {sprintOn && (
-          <Link
-            to="/sprint"
-            className="flex h-16 touch-manipulation select-none flex-col items-center justify-center gap-1 font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground active:bg-secondary/60 [&.active]:text-primary"
-          >
-            <Zap className="h-5 w-5" />
-            Sprint
-          </Link>
-        )}
       </nav>
     </>
   );
