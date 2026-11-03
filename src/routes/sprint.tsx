@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SprintContent } from "@/components/SprintPredict";
 
 export const Route = createFileRoute("/sprint")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Sprint picks — DOWNFORCE" },

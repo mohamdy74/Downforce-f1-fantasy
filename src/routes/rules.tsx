@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/rules")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Scoring rules — DOWNFORCE" },

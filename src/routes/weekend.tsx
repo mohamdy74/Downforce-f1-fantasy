@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/weekend")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Race weekend \u2014 DOWNFORCE" },

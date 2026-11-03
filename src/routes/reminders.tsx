@@ -7,6 +7,7 @@ import { racesQuery, nextRace } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/reminders")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Reminders — DOWNFORCE" },
@@ -57,7 +58,7 @@ function Reminders() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-3xl">Reminders</h1>
+      <h1 className="text-3xl">Race prediction submission reminders</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Track who has submitted picks for the next race. No individual predictions shown.
       </p>

@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { getLiveRaceTelemetry, type LiveRaceTelemetryPayload } from "@/lib/weekend.functions";
 
 export const Route = createFileRoute("/paddock")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Paddock Reveal & Scoring \u2014 DOWNFORCE" },

@@ -56,6 +56,7 @@ import { sortByTeam, teamColor } from "@/lib/teams";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/stewards")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "FIA Stewards & Race Control — DOWNFORCE" }],
   }),

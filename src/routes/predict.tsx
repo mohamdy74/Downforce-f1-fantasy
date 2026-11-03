@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { sortByTeam, teamColor, teamLabel, teamsOf } from "@/lib/teams";
 
 export const Route = createFileRoute("/predict")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Make your picks — DOWNFORCE" },

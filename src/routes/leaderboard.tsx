@@ -14,6 +14,7 @@ import { teamColor, teamLabel, teamRank } from "@/lib/teams";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboard")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Standings — DOWNFORCE" },
