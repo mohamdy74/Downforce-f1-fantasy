@@ -372,24 +372,9 @@ html {
   overscroll-behavior-y: contain;
 }
 
-@utility carbon-panel {
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-}
-
-/* Light mode: slightly stronger blur */
-:root.light .carbon-panel {
-  backdrop-filter: blur(20px) saturate(130%);
-  -webkit-backdrop-filter: blur(20px) saturate(130%);
-}
-
-/* Mobile performance: disable backdrop-filter blur on small screens */
-@media (max-width: 767px) {
-  :root.light .carbon-panel {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
+/* Glass blur removed: backdrop-filter on every panel was the biggest scroll
+   paint cost. Panels keep their translucent tone-step over the fixed prism
+   backdrop (its gradients are pre-diffused, so nothing needs softening). */
 
 @utility kerb-strip {
   height: 2px;
@@ -409,12 +394,14 @@ html {
   border-left: 4px solid var(--color-border);
 }
 
-.start-light { background: var(--color-secondary); animation: 5s infinite; }
-@keyframes sl0 { 0%,0% { background: var(--color-secondary); box-shadow: none; } 1%,70% { background: var(--color-primary); box-shadow: 0 0 16px var(--color-primary); } 71%,100% { background: var(--color-secondary); box-shadow: none; } }
-@keyframes sl1 { 0%,12% { background: var(--color-secondary); box-shadow: none; } 13%,70% { background: var(--color-primary); box-shadow: 0 0 16px var(--color-primary); } 71%,100% { background: var(--color-secondary); box-shadow: none; } }
-@keyframes sl2 { 0%,24% { background: var(--color-secondary); box-shadow: none; } 25%,70% { background: var(--color-primary); box-shadow: 0 0 16px var(--color-primary); } 71%,100% { background: var(--color-secondary); box-shadow: none; } }
-@keyframes sl3 { 0%,36% { background: var(--color-secondary); box-shadow: none; } 37%,70% { background: var(--color-primary); box-shadow: 0 0 16px var(--color-primary); } 71%,100% { background: var(--color-secondary); box-shadow: none; } }
-@keyframes sl4 { 0%,48% { background: var(--color-secondary); box-shadow: none; } 49%,70% { background: var(--color-primary); box-shadow: 0 0 16px var(--color-primary); } 71%,100% { background: var(--color-secondary); box-shadow: none; } }
+/* Start lights — compositor-only animation: opacity + transform, never
+   per-frame background/box-shadow paints. Dim lamp -> lit red -> lights out. */
+.start-light { background: var(--color-primary); animation: 5s infinite; }
+@keyframes sl0 { 0% { opacity: 0.22; transform: scale(0.85); } 1%,70% { opacity: 1; transform: scale(1); } 71%,100% { opacity: 0.22; transform: scale(0.85); } }
+@keyframes sl1 { 0%,12% { opacity: 0.22; transform: scale(0.85); } 13%,70% { opacity: 1; transform: scale(1); } 71%,100% { opacity: 0.22; transform: scale(0.85); } }
+@keyframes sl2 { 0%,24% { opacity: 0.22; transform: scale(0.85); } 25%,70% { opacity: 1; transform: scale(1); } 71%,100% { opacity: 0.22; transform: scale(0.85); } }
+@keyframes sl3 { 0%,36% { opacity: 0.22; transform: scale(0.85); } 37%,70% { opacity: 1; transform: scale(1); } 71%,100% { opacity: 0.22; transform: scale(0.85); } }
+@keyframes sl4 { 0%,48% { opacity: 0.22; transform: scale(0.85); } 49%,70% { opacity: 1; transform: scale(1); } 71%,100% { opacity: 0.22; transform: scale(0.85); } }
 
 .fahl-badge {
   background-image: linear-gradient(135deg, oklch(0.93 0.14 95), var(--gold) 45%, oklch(0.7 0.14 70));
@@ -440,11 +427,6 @@ a, button, summary, select, [role="button"], [role="tab"] {
 }
 
 @media (max-width: 767px) {
-  /* Blurred glass panels are expensive on mid-range GPUs. */
-  .carbon-panel {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
   /* iOS zooms the whole page when a field smaller than 16px gets focus. */
   input, select, textarea {
     font-size: 16px;
@@ -452,7 +434,7 @@ a, button, summary, select, [role="button"], [role="tab"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .start-light { animation: none !important; }
+  .start-light { animation: none !important; opacity: 0.25; }
   .animate-pulse { animation: none !important; }
   .skeleton-shimmer { animation: none !important; }
   *, *::before, *::after {
@@ -783,4 +765,36 @@ a[href*="lovable.dev"] {
 .cv-auto {
   content-visibility: auto;
   contain-intrinsic-size: auto 480px;
+}
+
+/* Mobile: solid panel surfaces. Translucent panels over the prism backdrop
+   read washed-out on small screens, and with the blur gone there is nothing
+   to soften the background bleed. Solid colours match the composite the
+   blur used to show and restore WCAG-AA text contrast. Placed last so the
+   plain !important backgrounds above cannot beat it by source order. */
+@media (max-width: 767px) {
+  .carbon-panel {
+    background: linear-gradient(145deg, #1f2231 0%, #191b27 100%) !important;
+  }
+  .carbon-panel-strong {
+    background: linear-gradient(145deg, #252939 0%, #1d2030 100%) !important;
+  }
+  .tower-row {
+    background: linear-gradient(90deg, #212430 0%, #191b26 100%) !important;
+  }
+  select {
+    background-color: #1c1f2e !important;
+  }
+  .light .carbon-panel {
+    background: linear-gradient(145deg, #ffffff 0%, #f4f7fd 100%) !important;
+  }
+  .light .carbon-panel-strong {
+    background: linear-gradient(145deg, #ffffff 0%, #f0f4fb 100%) !important;
+  }
+  .light .tower-row {
+    background: linear-gradient(90deg, #ffffff 0%, #f2f5fb 100%) !important;
+  }
+  .light select {
+    background-color: #ffffff !important;
+  }
 }

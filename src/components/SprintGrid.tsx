@@ -291,7 +291,7 @@ function SprintGridImpl({
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}
-                className="shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
+                className="hit-slop shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
                 style={{
                   background: allOn
                     ? `color-mix(in oklch, ${primaryColor} 22%, rgba(255, 255, 255, 0.05))`
@@ -317,7 +317,7 @@ function SprintGridImpl({
                     key={t}
                     type="button"
                     onClick={() => setTeamFilter(on ? null : t)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
+                    className="hit-slop flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
                     style={{
                       background: on
                         ? `color-mix(in oklch, ${color} 22%, rgba(255, 255, 255, 0.05))`

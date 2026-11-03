@@ -11,6 +11,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+// Hashed-at-build-time font URLs — the href always matches what Vite emits.
+import archivoRomanWoff2 from "../assets/fonts/archivo-roman-var.woff2?url";
+import barlow400Woff2 from "../assets/fonts/barlow-400.woff2?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BackgroundSync } from "@/components/BackgroundSync";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -137,10 +140,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
-      // NOTE: manual font preloads removed — Vite emits fonts content-hashed,
-      // so the old /assets/fonts/* hrefs 404'd on every page load (and fed the
-      // broken paths that aborted the service-worker precache install).
-      // Fonts load through styles.css with font-display: swap.
+      // Font preloads (LCP): ?url imports resolve to the content-hashed href
+      // Vite emits, so unlike the old hardcoded /assets/fonts/* links these
+      // never 404 and cannot break the service-worker precache.
+      {
+        rel: "preload",
+        href: archivoRomanWoff2,
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: barlow400Woff2,
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
     ],
   }),
   shellComponent: RootShell,
