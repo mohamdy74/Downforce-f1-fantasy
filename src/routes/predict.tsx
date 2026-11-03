@@ -468,7 +468,11 @@ function Predict() {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
       {sprintRace && (
-        <div role="group" aria-label="Prediction sections" className="mb-4 grid grid-cols-2 gap-1.5">
+        <div
+          role="group"
+          aria-label="Prediction sections"
+          className="mb-4 grid grid-cols-2 gap-1.5"
+        >
           <button
             type="button"
             aria-pressed={sprintTab === "race"}
@@ -740,7 +744,12 @@ function Predict() {
                     Cancel
                   </Button>
                 )}
-                <Button size="lg" className="h-12 flex-1 text-base" disabled={saving} onClick={save}>
+                <Button
+                  size="lg"
+                  className="h-12 flex-1 text-base"
+                  disabled={saving}
+                  onClick={save}
+                >
                   {saving ? "Saving…" : "Lock in picks"}
                 </Button>
               </div>
