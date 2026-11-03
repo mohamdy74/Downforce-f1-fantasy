@@ -104,7 +104,7 @@ function H2H() {
       aria-label={label}
       value={v}
       onChange={(e) => set(e.target.value)}
-      className="carbon-panel h-11 sm:h-12 w-full min-w-0 rounded-lg px-2.5 font-display text-xs sm:text-sm font-extrabold italic uppercase text-foreground backdrop-blur-md focus:outline-none focus:ring-1 focus:ring-primary/50"
+      className="carbon-panel h-11 sm:h-12 w-full min-w-0 rounded-lg px-2.5 font-display text-xs sm:text-sm font-extrabold italic uppercase text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
     >
       {board.map((e) => (
         <option key={e.userId} value={e.userId} disabled={e.userId === taken}>
@@ -140,7 +140,7 @@ function H2H() {
         </p>
       ) : (
         <>
-          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 mt-4 py-1.5 backdrop-blur-md">
+          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 mt-4 py-1.5 bg-background/95">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <Pick v={a} set={pickA} taken={b} label="Select first player" />
               <span className="font-display text-base sm:text-xl font-black italic text-primary shrink-0">
@@ -228,7 +228,7 @@ function PlayerStatsCard({
   oppBest: number;
 }) {
   return (
-    <div className="carbon-panel grid grid-cols-3 divide-x divide-white/10 rounded-lg py-3 px-1 text-center">
+    <div className="carbon-panel grid grid-cols-3 divide-x divide-border rounded-lg py-3 px-1 text-center">
       <div>
         <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground">
           Wins

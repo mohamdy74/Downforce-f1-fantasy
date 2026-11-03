@@ -112,7 +112,6 @@ function SprintGridImpl({
   }
 
   const allOn = teamFilter === null;
-  const primaryColor = "var(--color-primary)";
 
   return (
     <section className="carbon-panel mt-8 rounded-lg">
@@ -233,7 +232,7 @@ function SprintGridImpl({
                   boxShadow: d
                     ? `inset 0 0 24px -8px color-mix(in oklch, ${color} 55%, transparent), 0 0 14px -6px ${color}`
                     : undefined,
-                  borderBottom: "2px solid oklch(1 0 0 / 0.35)",
+                  borderBottom: "2px solid var(--color-border)",
                 }}
               >
                 <span
@@ -291,21 +290,12 @@ function SprintGridImpl({
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}
-                className="hit-slop shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
-                style={{
-                  background: allOn
-                    ? `color-mix(in oklch, ${primaryColor} 22%, rgba(255, 255, 255, 0.05))`
-                    : "rgba(255, 255, 255, 0.03)",
-                  borderColor: allOn ? primaryColor : "rgba(255, 255, 255, 0.16)",
-                  borderBottom: allOn
-                    ? "2px solid oklch(1 0 0 / 0.45)"
-                    : "1.5px solid oklch(1 0 0 / 0.26)",
-                  color: allOn ? "#ffffff" : "var(--color-muted-foreground)",
-                  textShadow: allOn ? `0 0 10px ${primaryColor}` : undefined,
-                  boxShadow: allOn
-                    ? `inset 0 0 22px -6px color-mix(in oklch, ${primaryColor} 70%, transparent), 0 0 16px -3px ${primaryColor}, inset 0 1px 0 rgba(255, 255, 255, 0.32)`
-                    : "inset 0 1px 0 rgba(255, 255, 255, 0.14)",
-                }}
+                className={cn(
+                  "hit-slop shrink-0 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95",
+                  allOn
+                    ? "border-primary bg-primary/20 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
               >
                 All
               </button>
@@ -317,31 +307,24 @@ function SprintGridImpl({
                     key={t}
                     type="button"
                     onClick={() => setTeamFilter(on ? null : t)}
-                    className="hit-slop flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95"
+                    className={cn(
+                      "hit-slop flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-95",
+                      on ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
                     style={{
-                      background: on
-                        ? `color-mix(in oklch, ${color} 22%, rgba(255, 255, 255, 0.05))`
-                        : `color-mix(in oklch, ${color} 6%, rgba(255, 255, 255, 0.02))`,
                       borderColor: on
                         ? color
-                        : `color-mix(in oklch, ${color} 35%, rgba(255, 255, 255, 0.16))`,
-                      borderBottom: on
-                        ? "2px solid oklch(1 0 0 / 0.45)"
-                        : "1.5px solid oklch(1 0 0 / 0.28)",
-                      color: on ? "#ffffff" : "var(--color-foreground)",
-                      textShadow: on
-                        ? `0 0 10px color-mix(in oklch, ${color} 85%, transparent)`
+                        : `color-mix(in oklch, ${color} 35%, var(--color-border))`,
+                      background: on
+                        ? `color-mix(in oklch, ${color} 18%, transparent)`
                         : undefined,
-                      boxShadow: on
-                        ? `inset 0 0 22px -6px color-mix(in oklch, ${color} 72%, transparent), 0 0 16px -3px ${color}, inset 0 1px 0 rgba(255, 255, 255, 0.34)`
-                        : `inset 0 0 16px -9px color-mix(in oklch, ${color} 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.15)`,
                     }}
                   >
                     <span
                       className="h-2 w-2 shrink-0 rounded-full transition-transform duration-200"
                       style={{
                         background: color,
-                        boxShadow: on ? `0 0 10px ${color}, 0 0 4px #ffffff` : `0 0 6px ${color}`,
+                        boxShadow: on ? `0 0 8px ${color}` : undefined,
                         transform: on ? "scale(1.2)" : undefined,
                       }}
                     />
@@ -368,7 +351,7 @@ function SprintGridImpl({
                     style={{
                       borderLeft: `5px solid ${dColor}`,
                       boxShadow: `inset 0 0 24px -8px color-mix(in oklch, ${dColor} 50%, transparent), 0 0 12px -6px ${dColor}`,
-                      borderBottom: "2px solid oklch(1 0 0 / 0.32)",
+                      borderBottom: "2px solid var(--color-border)",
                     }}
                   >
                     <span

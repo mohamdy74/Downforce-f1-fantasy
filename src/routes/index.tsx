@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Flag, Timer, Trophy } from "lucide-react";
+import { Flag, Timer, Trophy, Users } from "lucide-react";
 
 import { Countdown } from "@/components/Countdown";
 import { MissingPlayers } from "@/components/MissingPlayers";
@@ -106,7 +106,7 @@ function Home() {
           to="/paddock"
           className="carbon-panel mt-3 flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold"
         >
-          <span>🔓 Group picks reveal and race debrief</span>
+          <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-primary" />Group picks reveal and race debrief</span>
           <span className="text-primary">→</span>
         </Link>
         {upcoming ? (
