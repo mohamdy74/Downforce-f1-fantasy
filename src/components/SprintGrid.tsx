@@ -315,9 +315,7 @@ function SprintGridImpl({
                       borderColor: on
                         ? color
                         : `color-mix(in oklch, ${color} 35%, var(--color-border))`,
-                      background: on
-                        ? `color-mix(in oklch, ${color} 18%, transparent)`
-                        : undefined,
+                      background: on ? `color-mix(in oklch, ${color} 18%, transparent)` : undefined,
                     }}
                   >
                     <span
