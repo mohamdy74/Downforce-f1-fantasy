@@ -7,6 +7,7 @@ import { racesQuery, nextRace } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/reminders")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Reminders — DOWNFORCE" },

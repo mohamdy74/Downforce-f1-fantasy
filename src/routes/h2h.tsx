@@ -9,6 +9,7 @@ import { LEAGUE_START_ROUND, leaderboardQuery, racesQuery } from "@/lib/queries"
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/h2h")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Head-to-head battles — DOWNFORCE" },

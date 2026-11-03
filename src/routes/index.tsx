@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { lastRace, leaderboardQuery, nextRace, racesQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "DOWNFORCE — Fantasy Racing League" },
