@@ -28,7 +28,7 @@ import { startRum } from "@/lib/rum";
 function NotFoundComponent() {
   return (
     <div className="flex min-h-[75vh] flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="carbon-panel max-w-md rounded-2xl border border-border p-8 shadow-2xl">
+      <div className="carbon-panel max-w-md rounded-xl border border-border p-8 shadow-2xl">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold/15 text-gold border border-gold/40">
           <span className="font-mono text-2xl font-black">404</span>
         </div>

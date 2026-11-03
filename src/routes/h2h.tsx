@@ -140,7 +140,7 @@ function H2H() {
         </p>
       ) : (
         <>
-          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[60px] z-30 mt-4 py-1.5 backdrop-blur-md">
+          <div className="sticky top-[calc(var(--header-h)+env(safe-area-inset-top))] z-30 mt-4 py-1.5 backdrop-blur-md">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <Pick v={a} set={pickA} taken={b} label="Select first player" />
               <span className="font-display text-base sm:text-xl font-black italic text-primary shrink-0">

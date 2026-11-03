@@ -538,7 +538,7 @@ function Predict() {
 
       <section
         id="pole-section"
-        className="carbon-panel mt-6 scroll-mt-16 rounded-lg border-l-4 p-4 sm:p-5"
+        className="carbon-panel mt-6 scroll-mt-[calc(var(--header-h)+12px)] rounded-lg border-l-4 p-4 sm:p-5"
         style={{ borderLeftColor: "var(--gold)" }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -609,7 +609,7 @@ function Predict() {
         </p>
       </section>
 
-      <div id="grid-section" className="scroll-mt-16">
+      <div id="grid-section" className="scroll-mt-[calc(var(--header-h)+12px)]">
         <SprintGrid
           size={10}
           drivers={drivers ?? []}

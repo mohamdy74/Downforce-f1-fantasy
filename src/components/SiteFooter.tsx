@@ -1,7 +1,8 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { X, ShieldCheck, FileText } from "lucide-react";
+import { ShieldCheck, FileText } from "lucide-react";
 import { useState } from "react";
 
+import { LegalDialog } from "@/components/LegalModal";
 import { LogoHorizontal } from "@/components/Logo";
 
 const FOOTER_LINKS = [
@@ -85,77 +86,7 @@ export function SiteFooter() {
         </div>
       </div>
 
-      {legalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="carbon-panel relative max-h-[82vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border p-6 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setLegalModal(null)}
-              className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            {legalModal === "privacy" ? (
-              <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
-                <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
-                  Legal &amp; Privacy
-                </p>
-                <h2 className="text-2xl text-foreground">Privacy Policy</h2>
-                <p>
-                  <strong>1. Data We Collect:</strong> When you sign in with Google OAuth, we store
-                  only your account identifier, email address (for authentication), display name,
-                  and profile avatar to display your position on the league leaderboard.
-                </p>
-                <p>
-                  <strong>2. Push Notifications:</strong> If you opt in to race lock alerts, your
-                  browser&apos;s encrypted Web Push endpoint is stored solely to send automated 2h
-                  and 30m race deadline reminders.
-                </p>
-                <p>
-                  <strong>3. No Third-Party Selling or Tracking:</strong> DOWNFORCE is a private,
-                  non-profit fan project. We never sell, rent, or share your personal data with
-                  advertisers or third parties.
-                </p>
-                <p>
-                  <strong>4. Account &amp; Data Deletion:</strong> You can permanently delete your
-                  account, predictions, and scores at any time using the <em>Account Settings</em>{" "}
-                  button in the top navigation bar.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
-                <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-gold">
-                  League Regulations
-                </p>
-                <h2 className="text-2xl text-foreground">Terms of Use</h2>
-                <p>
-                  <strong>1. Non-Profit Fan Game:</strong> DOWNFORCE is a free-to-play,
-                  non-commercial fantasy prediction league created for entertainment among friends.
-                  No real money, gambling, or wagering is involved.
-                </p>
-                <p>
-                  <strong>2. Deadlines &amp; Fair Play:</strong> Pole position picks lock
-                  automatically at the start of Qualifying, and Race Top 10 / Fastest Lap / DNF
-                  picks lock at the official Race start time. Registered players who fail to submit
-                  a complete Top 10 receive a −25 point penalty for that round.
-                </p>
-                <p>
-                  <strong>3. FIA Stewards Decisions:</strong> League Stewards may adjust lock times
-                  in the event of real-world session delays (such as red flags or weather) or waive
-                  penalties in documented technical emergencies.
-                </p>
-                <p>
-                  <strong>4. Intellectual Property Disclaimer:</strong> This project is unofficial
-                  and is not associated in any way with the Formula 1 companies, the FIA, or any F1
-                  team.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <LegalDialog kind={legalModal} onOpenChange={setLegalModal} />
     </footer>
   );
 }

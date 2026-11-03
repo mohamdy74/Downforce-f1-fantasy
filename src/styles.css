@@ -131,6 +131,8 @@
   --radius-2xl: calc(var(--radius) + 10px);
   --radius-3xl: calc(var(--radius) + 14px);
   --radius-4xl: calc(var(--radius) + 18px);
+  /* Radius rule: cards/buttons rounded-md, panels rounded-lg, modals/drawers
+     rounded-xl, chips/pills rounded-full. Nothing above xl. */
 
   --font-display: "Archivo", "Archivo Fallback", system-ui, sans-serif;
   --font-sans: "Barlow", "Barlow Fallback", system-ui, sans-serif;
@@ -177,20 +179,21 @@
 :root {
   --radius: 0.25rem;
 
-  --background: oklch(0.19 0.017 280);
+  /* Prism-era smoked-slate surface values — single source of truth for dark. */
+  --background: #10121a;
   --foreground: oklch(0.98 0 0);
-  --card: oklch(0.235 0.015 281);
+  --card: rgba(30, 33, 46, 0.65);
   --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.235 0.015 281);
+  --popover: #1a1d28;
   --popover-foreground: oklch(0.98 0 0);
 
   --primary: oklch(0.573 0.239 28.5);
   --primary-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.34 0.012 285);
+  --secondary: rgba(40, 44, 60, 0.58);
   --secondary-foreground: oklch(0.98 0 0);
 
-  --muted: oklch(0.29 0.013 283);
+  --muted: rgba(36, 40, 56, 0.52);
   --muted-foreground: oklch(0.72 0.01 285);
 
   --accent: oklch(0.34 0.012 285);
@@ -203,8 +206,8 @@
   --destructive: oklch(0.6 0.22 20);
   --destructive-foreground: oklch(1 0 0);
 
-  --border: oklch(0.33 0.013 285);
-  --input: oklch(0.33 0.013 285);
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.11);
   --ring: oklch(0.573 0.239 28.5);
 
   --chart-1: oklch(0.573 0.239 28.5);
@@ -249,6 +252,9 @@
   --team-rb: oklch(0.6 0.15 270);
   --team-audi: oklch(0.68 0.005 265);
   --team-cadillac: oklch(0.32 0.004 280);
+
+  --purple: oklch(0.6 0.2 300);
+  --track-green: oklch(0.72 0.19 150);
 }
 
 /* Light theme variant — activated by .light class on <html> */
@@ -336,6 +342,17 @@
   --track-green: oklch(0.40 0.18 138);
 }
 
+/* Single source of truth for sticky/scroll offsets: the real rendered header
+   height (logo + py-2 + 1px border-b + 2px kerb strip) per breakpoint. */
+:root {
+  --header-h: 47px;
+}
+@media (min-width: 640px) {
+  :root {
+    --header-h: 59px;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -382,10 +399,6 @@ html {
   box-shadow: 0 0 12px var(--color-primary);
 }
 
-:root {
-  --purple: oklch(0.6 0.2 300);
-  --track-green: oklch(0.72 0.19 150);
-}
 .text-purple { color: var(--purple); }
 .drag-ghost { opacity: 0.4; }
 .drop-target { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -457,28 +470,10 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focu
 html, body { overflow-x: clip; max-width: 100vw; }
 
 /* === DOWNFORCE SMOOTH PRISM & HARMONIOUS CARDS === */
-/* 1. Soften Dark Mode theme variables so menus, selects, and inner boxes
-      are a comfortable smoked-slate instead of harsh pitch-black */
-:root,
-.dark {
-  --background: #10121a;
-  --card: rgba(30, 33, 46, 0.65);
-  --popover: #1a1d28;
-  --secondary: rgba(40, 44, 60, 0.58);
-  --muted: rgba(36, 40, 56, 0.52);
-  --border: rgba(255, 255, 255, 0.09);
-  --input: rgba(255, 255, 255, 0.11);
-}
-
-.light {
-  --background: #f5f6fa;
-  --card: rgba(255, 255, 255, 0.78);
-  --popover: #ffffff;
-  --secondary: rgba(236, 239, 248, 0.75);
-  --muted: rgba(232, 236, 246, 0.70);
-  --border: rgba(15, 23, 42, 0.09);
-  --input: rgba(15, 23, 42, 0.12);
-}
+/* The old prism token re-declarations (hex/rgba overrides of the tokens
+   above, plus a fully dead .light duplicate) were consolidated into the
+   single :root / :root.light token blocks. Each theme value now has
+   exactly one source of truth. */
 
 /* 2. 120fps GPU-Locked Global Prism Window Backdrop
       Rendered on a single fixed layer with pre-diffused gradients (no runtime
@@ -581,11 +576,11 @@ body::before {
     145deg,
     rgba(32, 35, 49, 0.62) 0%,
     rgba(24, 26, 38, 0.54) 100%
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.085) !important;
+  );
+  border: 1px solid rgba(255, 255, 255, 0.085);
   box-shadow:
     0 10px 30px -10px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .carbon-panel-strong {
@@ -593,11 +588,11 @@ body::before {
     145deg,
     rgba(38, 42, 58, 0.66) 0%,
     rgba(28, 31, 45, 0.58) 100%
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.095) !important;
+  );
+  border: 1px solid rgba(255, 255, 255, 0.095);
   box-shadow:
     0 8px 24px -8px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .tower-row {
@@ -605,7 +600,7 @@ body::before {
     90deg,
     rgba(34, 37, 52, 0.62) 0%,
     rgba(26, 28, 41, 0.52) 100%
-  ) !important;
+  );
   border-top: 1px solid rgba(255, 255, 255, 0.075);
   border-right: 1px solid rgba(255, 255, 255, 0.075);
   border-bottom: 1px solid rgba(255, 255, 255, 0.075);
@@ -615,7 +610,7 @@ body::before {
 /* Native <select> options (like 1v1 player selector) so dropdown list is readable & soft */
 select {
   background-color: rgba(30, 33, 46, 0.58);
-  border-color: rgba(255, 255, 255, 0.11) !important;
+  border-color: rgba(255, 255, 255, 0.11);
 }
 
 select option {
@@ -629,11 +624,11 @@ select option {
     145deg,
     rgba(255, 255, 255, 0.84) 0%,
     rgba(246, 248, 253, 0.76) 100%
-  ) !important;
-  border: 1px solid rgba(15, 23, 42, 0.085) !important;
+  );
+  border: 1px solid rgba(15, 23, 42, 0.085);
   box-shadow:
     0 10px 28px -10px rgba(15, 23, 42, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .light .carbon-panel-strong {
@@ -641,11 +636,11 @@ select option {
     145deg,
     rgba(255, 255, 255, 0.90) 0%,
     rgba(242, 245, 252, 0.82) 100%
-  ) !important;
-  border: 1px solid rgba(15, 23, 42, 0.095) !important;
+  );
+  border: 1px solid rgba(15, 23, 42, 0.095);
   box-shadow:
     0 8px 22px -8px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .light .tower-row {
@@ -653,7 +648,7 @@ select option {
     90deg,
     rgba(255, 255, 255, 0.86) 0%,
     rgba(246, 248, 253, 0.78) 100%
-  ) !important;
+  );
   border-top: 1px solid rgba(15, 23, 42, 0.075);
   border-right: 1px solid rgba(15, 23, 42, 0.075);
   border-bottom: 1px solid rgba(15, 23, 42, 0.075);
@@ -661,8 +656,8 @@ select option {
 }
 
 .light select {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.12);
 }
 
 .light select option {
@@ -770,31 +765,32 @@ a[href*="lovable.dev"] {
 /* Mobile: solid panel surfaces. Translucent panels over the prism backdrop
    read washed-out on small screens, and with the blur gone there is nothing
    to soften the background bleed. Solid colours match the composite the
-   blur used to show and restore WCAG-AA text contrast. Placed last so the
-   plain !important backgrounds above cannot beat it by source order. */
+   blur used to show and restore WCAG-AA text contrast. Placed last so it
+   wins over the desktop panel rules by source order (media queries add no
+   specificity; all panel rules are normal declarations now). */
 @media (max-width: 767px) {
   .carbon-panel {
-    background: linear-gradient(145deg, #1f2231 0%, #191b27 100%) !important;
+    background: linear-gradient(145deg, #1f2231 0%, #191b27 100%);
   }
   .carbon-panel-strong {
-    background: linear-gradient(145deg, #252939 0%, #1d2030 100%) !important;
+    background: linear-gradient(145deg, #252939 0%, #1d2030 100%);
   }
   .tower-row {
-    background: linear-gradient(90deg, #212430 0%, #191b26 100%) !important;
+    background: linear-gradient(90deg, #212430 0%, #191b26 100%);
   }
   select {
-    background-color: #1c1f2e !important;
+    background-color: #1c1f2e;
   }
   .light .carbon-panel {
-    background: linear-gradient(145deg, #ffffff 0%, #f4f7fd 100%) !important;
+    background: linear-gradient(145deg, #ffffff 0%, #f4f7fd 100%);
   }
   .light .carbon-panel-strong {
-    background: linear-gradient(145deg, #ffffff 0%, #f0f4fb 100%) !important;
+    background: linear-gradient(145deg, #ffffff 0%, #f0f4fb 100%);
   }
   .light .tower-row {
-    background: linear-gradient(90deg, #ffffff 0%, #f2f5fb 100%) !important;
+    background: linear-gradient(90deg, #ffffff 0%, #f2f5fb 100%);
   }
   .light select {
-    background-color: #ffffff !important;
+    background-color: #ffffff;
   }
 }

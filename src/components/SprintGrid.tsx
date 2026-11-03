@@ -286,7 +286,7 @@ function SprintGridImpl({
               </button>
             </p>
 
-            <div className="sticky top-[52px] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-transparent px-3 py-2.5 sm:mx-0">
+            <div className="sticky top-[calc(var(--header-h)+5px)] z-20 -mx-3 mt-2.5 flex gap-2 overflow-x-auto bg-transparent px-3 py-2.5 sm:mx-0">
               <button
                 type="button"
                 onClick={() => setTeamFilter(null)}
