@@ -28,7 +28,7 @@ import { sprintWeekend } from "@/lib/sprint";
 import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 
 const links = [
-  { to: "/", label: "Home", icon: Home },
+  { to: "/", label: "Paddock", icon: Home },
   { to: "/predict", label: "Predict", icon: Grid3x3 },
   { to: "/leaderboard", label: "Standings", icon: Trophy },
   { to: "/h2h", label: "1v1", icon: Swords },
