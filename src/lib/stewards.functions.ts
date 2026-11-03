@@ -23,6 +23,17 @@ export async function requireSteward(context: {
   return supabaseAdmin;
 }
 
+export const getIsSteward = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ isSteward: boolean }> => {
+    try {
+      await requireSteward(context);
+      return { isSteward: true };
+    } catch {
+      return { isSteward: false };
+    }
+  });
+
 export const savePushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { endpoint: string; p256dh: string; auth: string }) => d)

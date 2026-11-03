@@ -204,8 +204,14 @@ function RootComponent() {
       <PullToRefresh />
       <OfflineIndicator />
       <div className="relative z-10 flex min-h-svh flex-col">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-2 focus:z-[70] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:font-mono focus:text-xs focus:font-bold focus:uppercase focus:tracking-wider focus:text-primary-foreground focus:shadow-lg"
+        >
+          Skip to content
+        </a>
         <SiteHeader />
-        <div className="flex-1">
+        <div id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

@@ -20,8 +20,8 @@ import { UpdatesFeed } from "@/components/UpdatesFeed";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsSteward } from "@/hooks/useIsSteward";
 import { useTheme } from "@/hooks/useTheme";
-import { STEWARD_EMAIL } from "@/lib/stewards.functions";
 
 const links = [
   { to: "/", label: "Paddock", icon: Home },
@@ -40,7 +40,7 @@ export const HelmetLogo = LogoMark;
 export function SiteHeader() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
-  const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
+  const isSteward = useIsSteward();
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
@@ -192,9 +192,6 @@ export function SiteHeader() {
               Stewards
             </Link>
           )}
-          <Link to="/rules" className={DESKTOP_LINK}>
-            Rules
-          </Link>
           {isSteward && (
             <Button
               variant="ghost"
@@ -210,7 +207,7 @@ export function SiteHeader() {
           )}
           <Link
             to="/rules"
-            className="hit-slop rounded-sm px-1.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:hidden [&.active]:text-primary"
+            className="hit-slop rounded-sm px-1.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors md:hidden lg:inline lg:px-2 lg:py-1.5 lg:text-xs lg:tracking-widest lg:hover:text-foreground lg:hover:underline lg:hover:decoration-border lg:hover:underline-offset-[5px] [&.active]:text-primary lg:[&.active]:underline lg:[&.active]:decoration-gold lg:[&.active]:decoration-2 lg:[&.active]:underline-offset-[5px]"
           >
             Rules
           </Link>

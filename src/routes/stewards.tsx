@@ -30,6 +30,7 @@ import {
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
+import { useIsSteward } from "@/hooks/useIsSteward";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { getSyncJobStatus } from "@/lib/jobs.functions";
 import {
@@ -43,7 +44,6 @@ import {
   executeStewardAction,
   exportLeagueBackup,
   getStewardsDashboard,
-  STEWARD_EMAIL,
 } from "@/lib/stewards.functions";
 import {
   deleteRaceUpdate,
@@ -143,7 +143,7 @@ function StewardsPage() {
   const { data: races = [] } = useQuery(racesQuery);
   const { data: drivers = [] } = useQuery(driversQuery);
 
-  const isSteward = user?.email?.toLowerCase() === STEWARD_EMAIL;
+  const isSteward = useIsSteward();
   const upcoming = nextRace(races) ?? races[races.length - 1];
   const [selectedRaceId, setSelectedRaceId] = useState<string>("");
   const { debouncedValue: debouncedRaceId, loading: raceIdLoading } = useDebouncedValue(
@@ -217,7 +217,7 @@ function StewardsPage() {
   const [updBusy, setUpdBusy] = useState(false);
   const [updEditId, setUpdEditId] = useState<string | null>(null);
 
-  if (loading)
+  if (loading || isSteward === undefined)
     return (
       <main
         className="mx-auto max-w-3xl px-4 py-16"
@@ -244,7 +244,7 @@ function StewardsPage() {
         <Shield className="mx-auto h-12 w-12 text-primary" />
         <h1 className="mt-4 text-3xl">FIA Stewards Only</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Access to Race Control is strictly restricted to the Race Director ({STEWARD_EMAIL}).
+          Access to Race Control is strictly restricted to the Race Director.
         </p>
       </main>
     );
