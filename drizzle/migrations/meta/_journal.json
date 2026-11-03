@@ -155,6 +155,13 @@
       "when": 1794076800000,
       "tag": "0021_web_vitals_rum",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794076800001,
+      "tag": "0022_constrain_web_vitals_insert",
+      "breakpoints": true
     }
   ]
 }
