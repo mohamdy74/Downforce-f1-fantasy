@@ -17,6 +17,7 @@ import { Route as PaddockRouteImport } from './routes/paddock'
 import { Route as PredictRouteImport } from './routes/predict'
 import { Route as RemindersRouteImport } from './routes/reminders'
 import { Route as RulesRouteImport } from './routes/rules'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SprintRouteImport } from './routes/sprint'
 import { Route as StewardsRouteImport } from './routes/stewards'
 import { Route as WeekendRouteImport } from './routes/weekend'
@@ -61,6 +62,11 @@ const RulesRoute = RulesRouteImport.update({
   path: '/rules',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SprintRoute = SprintRouteImport.update({
   id: '/sprint',
   path: '/sprint',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/predict': typeof PredictRoute
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/predict': typeof PredictRoute
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/predict': typeof PredictRoute
   '/reminders': typeof RemindersRoute
   '/rules': typeof RulesRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/predict'
     | '/reminders'
     | '/rules'
+    | '/sitemap.xml'
     | '/sprint'
     | '/stewards'
     | '/weekend'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/predict'
     | '/reminders'
     | '/rules'
+    | '/sitemap.xml'
     | '/sprint'
     | '/stewards'
     | '/weekend'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/predict'
     | '/reminders'
     | '/rules'
+    | '/sitemap.xml'
     | '/sprint'
     | '/stewards'
     | '/weekend'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   PredictRoute: typeof PredictRoute
   RemindersRoute: typeof RemindersRoute
   RulesRoute: typeof RulesRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SprintRoute: typeof SprintRoute
   StewardsRoute: typeof StewardsRoute
   WeekendRoute: typeof WeekendRoute
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RulesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sprint': {
       id: '/sprint'
       path: '/sprint'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   PredictRoute: PredictRoute,
   RemindersRoute: RemindersRoute,
   RulesRoute: RulesRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   SprintRoute: SprintRoute,
   StewardsRoute: StewardsRoute,
   WeekendRoute: WeekendRoute,

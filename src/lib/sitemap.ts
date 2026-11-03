@@ -20,7 +20,7 @@ type RouteMatch =
 
 export function isSitemapRouteIncluded(route: AnyRoute | undefined): boolean {
   if (!route || route.isRoot || route.options.staticData?.sitemap !== true) return false;
-  for (let ancestor = route.parentRoute; ancestor; ancestor = route.parentRoute) {
+  for (let ancestor = route.parentRoute; ancestor; ancestor = ancestor.parentRoute) {
     if (ancestor.options.staticData?.sitemap === "exclude-subtree") return false;
   }
   return true;
