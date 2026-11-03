@@ -78,6 +78,9 @@ function Home() {
 
       <section className="mx-auto max-w-5xl px-4 pb-16">
         <div className="mb-6">
+          <h2 className="font-display text-xl font-extrabold uppercase italic tracking-wide sm:text-2xl">
+            Race weekend
+          </h2>
           <div className="flex items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             <span>Season progress</span>
             <span>
