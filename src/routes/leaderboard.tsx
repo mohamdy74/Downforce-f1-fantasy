@@ -78,445 +78,17 @@ type F1StandingsPayload = {
   constructors: ConstructorStandingItem[];
 };
 
-// Official 2026 F1 Championship standings snapshot after Round 18 (Austin GP)
-// SOURCE: https://www.formula1.com/en/results/2026/drivers
-// ATOMIC VALIDATION: Never overwrite verified Austin data with stale cache
-// NOTE: Yuki Tsunoda is included (was excluded in previous version)
-const OFFICIAL_2026_DRIVERS_SNAPSHOT: Record<
-  string,
-  {
-    code: string;
-    fullName: string;
-    team: string;
-    number: number;
-    points: number;
-    wins: number;
-    podiums: number;
-    poles: number;
-    fastestLaps: number;
-    top10: number;
-    dnfs: number;
-    bestFinish: number;
-  }
-> = {
-  // TOP 3 - Championship contenders
-  ANT: {
-    code: "ANT",
-    fullName: "Andrea Kimi Antonelli",
-    team: "Mercedes",
-    number: 12,
-    points: 365,
-    wins: 9,
-    podiums: 15,
-    poles: 7,
-    fastestLaps: 7,
-    top10: 16,
-    dnfs: 1,
-    bestFinish: 1,
-  },
-  RUS: {
-    code: "RUS",
-    fullName: "George Russell",
-    team: "Mercedes",
-    number: 63,
-    points: 242,
-    wins: 3,
-    podiums: 8,
-    poles: 5,
-    fastestLaps: 2,
-    top10: 14,
-    dnfs: 3,
-    bestFinish: 1,
-  },
-  HAM: {
-    code: "HAM",
-    fullName: "Lewis Hamilton",
-    team: "Ferrari",
-    number: 44,
-    points: 241,
-    wins: 1,
-    podiums: 6,
-    poles: 0,
-    fastestLaps: 1,
-    top10: 17,
-    dnfs: 1,
-    bestFinish: 1,
-  },
-
-  // 4-6 - Midfield leaders
-  VER: {
-    code: "VER",
-    fullName: "Max Verstappen",
-    team: "Red Bull Racing",
-    number: 3,
-    points: 236,
-    wins: 2,
-    podiums: 10,
-    poles: 2,
-    fastestLaps: 2,
-    top10: 14,
-    dnfs: 4,
-    bestFinish: 1,
-  },
-  LEC: {
-    code: "LEC",
-    fullName: "Charles Leclerc",
-    team: "Ferrari",
-    number: 16,
-    points: 233,
-    wins: 1,
-    podiums: 6,
-    poles: 0,
-    fastestLaps: 4,
-    top10: 15,
-    dnfs: 3,
-    bestFinish: 1,
-  },
-  NOR: {
-    code: "NOR",
-    fullName: "Lando Norris",
-    team: "McLaren",
-    number: 1,
-    points: 211,
-    wins: 2,
-    podiums: 5,
-    poles: 3,
-    fastestLaps: 2,
-    top10: 14,
-    dnfs: 3,
-    bestFinish: 1,
-  },
-
-  // 7-10 - Rising stars
-  PIA: {
-    code: "PIA",
-    fullName: "Oscar Piastri",
-    team: "McLaren",
-    number: 81,
-    points: 144,
-    wins: 0,
-    podiums: 2,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 12,
-    dnfs: 1,
-    bestFinish: 2,
-  },
-  HAD: {
-    code: "HAD",
-    fullName: "Isack Hadjar",
-    team: "Red Bull Racing",
-    number: 6,
-    points: 105,
-    wins: 0,
-    podiums: 2,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 12,
-    dnfs: 2,
-    bestFinish: 2,
-  },
-  LAW: {
-    code: "LAW",
-    fullName: "Liam Lawson",
-    team: "Racing Bulls",
-    number: 30,
-    points: 77,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 13,
-    dnfs: 1,
-    bestFinish: 3,
-  },
-
-  // 11-20 - Midfield
-  GAS: {
-    code: "GAS",
-    fullName: "Pierre Gasly",
-    team: "Alpine",
-    number: 10,
-    points: 42,
-    wins: 0,
-    podiums: 0,
-    poles: 1,
-    fastestLaps: 0,
-    top10: 10,
-    dnfs: 2,
-    bestFinish: 6,
-  },
-  LIN: {
-    code: "LIN",
-    fullName: "Arvid Lindblad",
-    team: "Racing Bulls",
-    number: 41,
-    points: 38,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 11,
-    dnfs: 0,
-    bestFinish: 4,
-  },
-  COL: {
-    code: "COL",
-    fullName: "Franco Colapinto",
-    team: "Alpine",
-    number: 43,
-    points: 27,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 8,
-    dnfs: 3,
-    bestFinish: 7,
-  },
-  BEA: {
-    code: "BEA",
-    fullName: "Oliver Bearman",
-    team: "Haas F1 Team",
-    number: 87,
-    points: 23,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 4,
-    dnfs: 5,
-    bestFinish: 7,
-  },
-  HUL: {
-    code: "HUL",
-    fullName: "Nico Hülkenberg",
-    team: "Audi",
-    number: 27,
-    points: 13,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 4,
-    dnfs: 3,
-    bestFinish: 9,
-  },
-  BOR: {
-    code: "BOR",
-    fullName: "Gabriel Bortoleto",
-    team: "Audi",
-    number: 5,
-    points: 10,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 3,
-    dnfs: 1,
-    bestFinish: 10,
-  },
-  OCO: {
-    code: "OCO",
-    fullName: "Esteban Ocon",
-    team: "Haas F1 Team",
-    number: 31,
-    points: 7,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 3,
-    dnfs: 1,
-    bestFinish: 7,
-  },
-  ALO: {
-    code: "ALO",
-    fullName: "Fernando Alonso",
-    team: "Aston Martin",
-    number: 14,
-    points: 7,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 3,
-    dnfs: 6,
-    bestFinish: 7,
-  },
-  SAI: {
-    code: "SAI",
-    fullName: "Carlos Sainz",
-    team: "Williams",
-    number: 55,
-    points: 7,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 4,
-    dnfs: 3,
-    bestFinish: 7,
-  },
-  ALB: {
-    code: "ALB",
-    fullName: "Alexander Albon",
-    team: "Williams",
-    number: 23,
-    points: 5,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 2,
-    dnfs: 6,
-    bestFinish: 9,
-  },
-
-  // 21-23 - Backmarkers
-  TSU: {
-    code: "TSU",
-    fullName: "Yuki Tsunoda",
-    team: "Racing Bulls",
-    number: 22,
-    points: 1,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 1,
-    dnfs: 0,
-    bestFinish: 10,
-  },
-  STR: {
-    code: "STR",
-    fullName: "Lance Stroll",
-    team: "Aston Martin",
-    number: 18,
-    points: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 0,
-    dnfs: 11,
-    bestFinish: 18,
-  },
-  BOT: {
-    code: "BOT",
-    fullName: "Valtteri Bottas",
-    team: "Cadillac",
-    number: 77,
-    points: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 0,
-    dnfs: 9,
-    bestFinish: 18,
-  },
-  PER: {
-    code: "PER",
-    fullName: "Sergio Perez",
-    team: "Cadillac",
-    number: 11,
-    points: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    top10: 0,
-    dnfs: 5,
-    bestFinish: 18,
-  },
-};
-// Official 2026 Constructor Standings snapshot after Round 18 (Austin GP)
-// SOURCE: https://www.formula1.com/en/results/2026/team
-// ATOMIC VALIDATION: Prevents stale cache from overwriting verified standings
-const OFFICIAL_2026_CONSTRUCTORS_SNAPSHOT: Record<
-  string,
-  Omit<ConstructorStandingItem, "drivers">
-> = {
-  Mercedes: {
-    team: "Mercedes",
-    points: 607,
-    wins: 12,
-    podiums: 23,
-    poles: 12,
-    fastestLaps: 9,
-    dnfs: 2,
-  },
-  Ferrari: {
-    team: "Ferrari",
-    points: 474,
-    wins: 2,
-    podiums: 12,
-    poles: 0,
-    fastestLaps: 5,
-    dnfs: 4,
-  },
-  "Red Bull Racing": {
-    team: "Red Bull Racing",
-    points: 355,
-    wins: 2,
-    podiums: 12,
-    poles: 2,
-    fastestLaps: 2,
-    dnfs: 6,
-  },
-  McLaren: { team: "McLaren", points: 355, wins: 2, podiums: 7, poles: 3, fastestLaps: 2, dnfs: 2 },
-  "Racing Bulls": {
-    team: "Racing Bulls",
-    points: 102,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    dnfs: 5,
-  },
-  Alpine: { team: "Alpine", points: 69, wins: 0, podiums: 0, poles: 1, fastestLaps: 0, dnfs: 4 },
-  "Haas F1 Team": {
-    team: "Haas F1 Team",
-    points: 30,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    dnfs: 6,
-  },
-  Audi: { team: "Audi", points: 23, wins: 0, podiums: 0, poles: 0, fastestLaps: 0, dnfs: 4 },
-  Williams: {
-    team: "Williams",
-    points: 12,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    dnfs: 9,
-  },
-  "Aston Martin": {
-    team: "Aston Martin",
-    points: 7,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    dnfs: 17,
-  },
-  Cadillac: {
-    team: "Cadillac",
-    points: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    dnfs: 14,
-  },
+type RaceResultRow = {
+  race_id: string;
+  driver_id: string;
+  position: number | null;
+  finished: boolean | null;
+  fastest_lap: boolean | null;
+  pole: boolean | null;
 };
 
-// Bounded Jolpica fetch: on timeout or network error we fall back to the verified
-// snapshot + DB merge below, so a slow upstream never blocks the tab.
+// Bounded Jolpica fetch: on timeout or network error we still render DB-computed
+// season stats plus the last cached points, so a slow upstream never blocks the tab.
 function jolpicaFetch(url: string, timeoutMs = 4_000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -531,65 +103,72 @@ const f1StandingsQuery = queryOptions({
   staleTime: 5 * 60_000,
   gcTime: 30 * 60_000,
   queryFn: async (): Promise<F1StandingsPayload> => {
-    const [driversRes, jolpicaDriversRes, jolpicaTeamsRes] = await Promise.all([
+    const [driversRes, racesRes, jolpicaDriversRes, jolpicaTeamsRes] = await Promise.all([
       supabase.from("drivers").select("id, code, full_name, team, number").eq("active", true),
+      supabase.from("races").select("id").eq("season", SEASON),
       jolpicaFetch(`https://api.jolpi.ca/ergast/f1/${SEASON}/driverstandings/?format=json`),
       jolpicaFetch(`https://api.jolpi.ca/ergast/f1/${SEASON}/constructorstandings/?format=json`),
     ]);
 
-    const dbDrivers = (driversRes.data ?? []) as Driver[];
-    const byDriver = new Map<string, DriverStandingItem>();
-
-    // 1. Initialize from verified official 2026 Round 18 baseline snapshot (Austin GP)
-    for (const [codeKey, snap] of Object.entries(OFFICIAL_2026_DRIVERS_SNAPSHOT)) {
-      byDriver.set(codeKey, {
-        driverId: codeKey.toLowerCase(),
-        code: snap.code,
-        number: snap.number,
-        fullName: snap.fullName,
-        team: teamLabel(snap.team),
-        points: snap.points,
-        wins: snap.wins,
-        podiums: snap.podiums,
-        poles: snap.poles,
-        fastestLaps: snap.fastestLaps,
-        top10: snap.top10,
-        dnfs: snap.dnfs,
-        racesEntered: 19,
-        bestFinish: snap.bestFinish,
-      });
+    const raceIds = ((racesRes.data ?? []) as { id: string }[]).map((r) => r.id);
+    let resultRows: RaceResultRow[] = [];
+    if (raceIds.length) {
+      const { data, error } = await supabase
+        .from("race_results")
+        .select("race_id, driver_id, position, finished, fastest_lap, pole")
+        .in("race_id", raceIds);
+      if (!error) resultRows = (data ?? []) as RaceResultRow[];
     }
 
-    // 2. Synchronize database drivers for UUID and team formatting
+    const dbDrivers = (driversRes.data ?? []) as Driver[];
+    const byDriver = new Map<string, DriverStandingItem>();
+    const byDriverId = new Map<string, DriverStandingItem>();
+
+    // 1. Initialize every driver from the drivers table (synced from Ergast)
     for (const d of dbDrivers) {
       const code = (d.code ?? d.full_name.slice(0, 3)).toUpperCase();
-      const existing = byDriver.get(code);
-      if (existing) {
-        existing.driverId = d.id;
-        if (d.number != null) existing.number = d.number;
-        if (d.full_name) existing.fullName = d.full_name;
-        if (d.team) existing.team = teamLabel(d.team);
-      } else {
-        byDriver.set(code, {
-          driverId: d.id,
-          code,
-          number: d.number,
-          fullName: d.full_name,
-          team: teamLabel(d.team),
-          points: 0,
-          wins: 0,
-          podiums: 0,
-          poles: 0,
-          fastestLaps: 0,
-          top10: 0,
-          dnfs: 0,
-          racesEntered: 19,
-          bestFinish: null,
-        });
+      const item: DriverStandingItem = {
+        driverId: d.id,
+        code,
+        number: d.number,
+        fullName: d.full_name,
+        team: teamLabel(d.team),
+        points: 0,
+        wins: 0,
+        podiums: 0,
+        poles: 0,
+        fastestLaps: 0,
+        top10: 0,
+        dnfs: 0,
+        racesEntered: 0,
+        bestFinish: null,
+      };
+      byDriver.set(code, item);
+      byDriverId.set(d.id, item);
+    }
+
+    // 2. Season stats computed live from race_results — the same rows league
+    //    scoring reads — so wins/podiums/poles/fastest laps/Top 10/DNFs stay
+    //    accurate after every results sync instead of a frozen typed snapshot.
+    const racesWithResults = new Set<string>();
+    for (const row of resultRows) {
+      racesWithResults.add(row.race_id);
+      const entry = byDriverId.get(row.driver_id);
+      if (!entry) continue;
+      entry.racesEntered += 1;
+      if (row.finished === false) entry.dnfs += 1;
+      if (row.pole) entry.poles += 1;
+      if (row.fastest_lap) entry.fastestLaps += 1;
+      const pos = row.position;
+      if (pos != null) {
+        if (pos === 1) entry.wins += 1;
+        if (pos <= 3) entry.podiums += 1;
+        if (pos <= 10) entry.top10 += 1;
+        entry.bestFinish = entry.bestFinish == null ? pos : Math.min(entry.bestFinish, pos);
       }
     }
 
-    // 3. Live Jolpica Ergast update: if points advanced beyond snapshot (e.g. Round 20+), smoothly adopt
+    // 3. Live Jolpica Ergast update: official championship points and wins win
     const jolpicaDriverLists =
       jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
     for (const jd of jolpicaDriverLists) {
@@ -677,13 +256,13 @@ const f1StandingsQuery = queryOptions({
         teamRank(a.team) - teamRank(b.team),
     );
 
-    // Prefer the live championship round reported by Jolpica; the verified
-    // Round-18 snapshot number is only the fallback when upstream is unreachable.
+    // Prefer the live championship round reported by Jolpica; fall back to the
+    // number of rounds actually present in race_results.
     const jolpicaRound = Number(
       jolpicaDriversRes?.MRData?.StandingsTable?.StandingsLists?.[0]?.round ?? 0,
     );
     return writeQueryCache(`f1-standings:${SEASON}`, {
-      roundsCompleted: jolpicaRound || 18,
+      roundsCompleted: jolpicaRound || racesWithResults.size,
       drivers: sortedDrivers,
       constructors: sortedConstructors,
     });
