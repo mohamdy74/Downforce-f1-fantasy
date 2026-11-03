@@ -35,12 +35,19 @@ export function Countdown({ target, label }: { target: string; label: string }) 
       ) : locked ? (
         <p className="font-display text-lg font-extrabold italic uppercase text-primary">Locked</p>
       ) : (
-        <div
-          className={`mt-2 grid gap-1.5 text-center ${d > 0 ? "grid-cols-4" : "grid-cols-3"}`}
-        >
+        <div className={`mt-2 grid gap-1.5 text-center ${d > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
           {(d > 0
-            ? [{ v: d, u: "DAYS" }, { v: h, u: "HRS" }, { v: m, u: "MIN" }, { v: s, u: "SEC" }]
-            : [{ v: h, u: "HRS" }, { v: m, u: "MIN" }, { v: s, u: "SEC" }]
+            ? [
+                { v: d, u: "DAYS" },
+                { v: h, u: "HRS" },
+                { v: m, u: "MIN" },
+                { v: s, u: "SEC" },
+              ]
+            : [
+                { v: h, u: "HRS" },
+                { v: m, u: "MIN" },
+                { v: s, u: "SEC" },
+              ]
           ).map((x) => (
             <div key={x.u} className="rounded bg-secondary/80 py-1.5 border border-border/50">
               <span
