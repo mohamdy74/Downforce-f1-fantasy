@@ -246,9 +246,7 @@ test("reminder-windows.ts: buildReminderPayload keeps the exact tone, tags and u
 // old paths are not mistaken for markup.
 
 function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "");
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
 function repoFile(rel) {
