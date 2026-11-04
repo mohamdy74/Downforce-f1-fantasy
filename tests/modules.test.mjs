@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // Regression tests import the REAL production modules (the characterization
 // copies in characterization.test.mjs pin the intended contract; these fail in
@@ -232,4 +233,80 @@ test("reminder-windows.ts: buildReminderPayload keeps the exact tone, tags and u
   assert.equal(pole.title, "\u23F0 Mexico City Grand Prix \u2014 Lock Alert!");
   assert.equal(pole.body, "Qualifying starts in ~2 hours! Lock in your Pole Position pick now.");
   assert.equal(pole.tag, "downforce-r19-pole-2h");
+});
+
+// ---- pwa: manifest, service worker and root preloads (regression) ----
+// Rebuilt on main from Mohamed's local b75ea35 (Oct 31): the manifest once
+// declared favicon.png (64x64) as 192x192 and apple-touch-icon.png (180x180)
+// as 512x512, sw v1 precached nonexistent /assets/fonts/* paths with an
+// all-or-nothing addAll() (one 404 aborted the install and silently broke
+// PWA install and push subscriptions), and __root.tsx once hardcoded font
+// preload hrefs under /assets/fonts/* that never matched Vite's output.
+// Comments are stripped before assertions so explanatory notes about the
+// old paths are not mistaken for markup.
+
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
+function repoFile(rel) {
+  return readFileSync(new URL(rel, import.meta.url), "utf8");
+}
+
+test("pwa manifest: every icon entry declares the size its filename promises", () => {
+  const manifest = JSON.parse(repoFile("../public/manifest.webmanifest"));
+  const icons = manifest.icons;
+
+  assert.equal(icons.length, 3);
+  for (const icon of icons) {
+    const basename = icon.src.replace(/^\/icon-/, "").replace(".png", "");
+    const declared = /\d{2,4}/.exec(basename);
+    assert.ok(declared, `unparseable icon src: ${icon.src}`);
+    assert.equal(icon.sizes, `${declared[1]}x${declared[1]}`);
+    assert.equal(icon.type, "image/png");
+  }
+  assert.deepEqual(
+    icons.map((i) => i.purpose),
+    ["any", "any", "maskable"],
+  );
+  // The old bug: favicon.png masquerading as 192x192, apple-touch-icon as 512x512.
+  assert.ok(!icons.some((i) => i.src.includes("favicon")));
+  assert.ok(!icons.some((i) => i.src.includes("apple-touch")));
+});
+
+test("pwa sw: versioned cache, real precache targets, no phantom font paths", () => {
+  const sw = stripComments(repoFile("../public/sw.js"));
+
+  assert.match(sw, /const CACHE_NAME = "dfr:v\d+";/);
+  assert.ok(sw.includes('"/"'));
+  assert.ok(sw.includes('"/manifest.webmanifest"'));
+  assert.ok(sw.includes('"/favicon.svg"'));
+  // The v1 incident: hardcoded /assets/fonts/* never existed, every URL 404'd.
+  assert.ok(!sw.includes("/assets/fonts/"));
+  // Fonts are deliberately NOT precached; the browser fetches install icons
+  // in its own context, which never consults this worker's cache.
+  assert.ok(!sw.includes("woff"));
+  assert.ok(!sw.includes("icon-192"));
+});
+
+test("pwa sw: install caches per-URL, never an all-or-nothing addAll()", () => {
+  const sw = stripComments(repoFile("../public/sw.js"));
+
+  assert.ok(!sw.includes("addAll"));
+  assert.match(
+    sw,
+    /PRECACHE_ASSETS\.map\(\(url\) => cache\.add\(url\)\.catch\(\(\) => undefined\)\)/,
+  );
+});
+
+test("pwa root: font preloads go through hashed ?url imports, not hardcoded paths", () => {
+  const root = stripComments(repoFile("../src/routes/__root.tsx"));
+
+  assert.match(root, /archivo-roman-var\.woff2\?url/);
+  assert.match(root, /barlow-400\.woff2\?url/);
+  assert.match(root, /rel: "preload"/);
+  // __root.tsx once hardcoded /assets/fonts/<name>.woff2 preload hrefs.
+  assert.ok(!root.includes('"/assets/fonts/'));
 });
