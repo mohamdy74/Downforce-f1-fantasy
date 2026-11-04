@@ -260,7 +260,7 @@ test("pwa manifest: every icon entry declares the size its filename promises", (
   assert.equal(icons.length, 3);
   for (const icon of icons) {
     const basename = icon.src.replace(/^\/icon-/, "").replace(".png", "");
-    const declared = /\d{2,4}/.exec(basename);
+    const declared = /(\d{2,4})/.exec(basename);
     assert.ok(declared, `unparseable icon src: ${icon.src}`);
     assert.equal(icon.sizes, `${declared[1]}x${declared[1]}`);
     assert.equal(icon.type, "image/png");
