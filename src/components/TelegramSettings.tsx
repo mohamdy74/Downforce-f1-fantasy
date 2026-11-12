@@ -57,10 +57,10 @@ async function authedFetch(path: string, method: "POST" | "DELETE"): Promise<Res
 type Phase = "idle" | "linking" | "linked";
 
 function errorMessage(status: number, body: { error?: string } | null): string {
-  if (body?.error === "telegram_not_configured") return "التذكيرات غير مفعّلة على الخادم بعد.";
-  if (status === 401) return "انتهت الجلسة، سجّل الدخول من جديد.";
-  if (status === 400 || body?.error === "not_linked") return "هذا الحساب غير مربوط بتيليجرام.";
-  return "تعذّر الاتصال بالخادم. حاول مرة أخرى.";
+  if (body?.error === "telegram_not_configured") return "Reminders aren't enabled on the server yet.";
+  if (status === 401) return "Your session expired. Please sign in again.";
+  if (status === 400 || body?.error === "not_linked") return "This account isn't linked to Telegram.";
+  return "Couldn't reach the server. Please try again.";
 }
 
 function CalendarBlock({ host }: { host: string }) {
@@ -83,9 +83,9 @@ function CalendarBlock({ host }: { host: string }) {
 
   return (
     <div className="mt-4 border-t border-border/60 pt-4">
-      <p className="text-sm font-medium">اشتراك في تقويم الموسم</p>
+      <p className="text-sm font-medium">Subscribe to season calendar</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        مواعيد إغلاق الجراند بري والسبرنت على تقويمك، تُحدَّث تلقائياً.
+        Grand Prix and Sprint lock times on your calendar, updated automatically.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -96,14 +96,14 @@ function CalendarBlock({ host }: { host: string }) {
           rel="noreferrer noopener"
         >
           <CalendarPlus className="size-4" aria-hidden />
-          تقويم Google
+          Google Calendar
         </a>
         <a
           className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-secondary px-4 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           href={`webcal://${host}/api/calendar.ics`}
         >
           <CalendarPlus className="size-4" aria-hidden />
-          تقويم Apple / النظام
+          Apple / System calendar
         </a>
       </div>
 
@@ -112,7 +112,7 @@ function CalendarBlock({ host }: { host: string }) {
           ref={inputRef}
           dir="ltr"
           readOnly
-          aria-label="رابط تقويم الموسم"
+          aria-label="Season calendar link"
           className="min-h-[44px] min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-start focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           value={httpsUrl}
           onFocus={(e) => e.currentTarget.select()}
@@ -129,7 +129,7 @@ function CalendarBlock({ host }: { host: string }) {
           ) : (
             <Copy className="size-4" aria-hidden />
           )}
-          {copied ? "تم النسخ" : "نسخ الرابط"}
+          {copied ? "Copied" : "Copy link"}
         </Button>
       </div>
     </div>
@@ -163,7 +163,7 @@ export function TelegramSettings() {
   useEffect(() => {
     if (phase === "linking" && Date.now() > deadline.current) {
       setPhase("idle");
-      setError("لم يصل التأكيد خلال دقيقتين. افتح الرابط من جديد وأكمل /start في تيليجرام.");
+      setError("No confirmation within two minutes. Reopen the link and finish /start in Telegram.");
     }
   }, [phase, status.dataUpdatedAt]);
 
@@ -185,7 +185,7 @@ export function TelegramSettings() {
       window.open(body.url, "_blank", "noopener,noreferrer");
       await queryClient.invalidateQueries({ queryKey: [STATUS_KEY, userId] });
     } catch {
-      setError("تعذّر الاتصال بالخادم. حاول مرة أخرى.");
+      setError("Couldn't reach the server. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -204,9 +204,9 @@ export function TelegramSettings() {
       setConfirmUnlink(false);
       setPhase("idle");
       await queryClient.invalidateQueries({ queryKey: [STATUS_KEY, userId] });
-      toast.success("تم فصل حساب تيليجرام.");
+      toast.success("Telegram disconnected.");
     } catch {
-      setError("تعذّر الاتصال بالخادم. حاول مرة أخرى.");
+      setError("Couldn't reach the server. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -221,9 +221,9 @@ export function TelegramSettings() {
         toast.error(errorMessage(res.status, body));
         return;
       }
-      toast.success("أُرسلت رسالة تجريبية إلى تيليجرام.");
+      toast.success("Test message sent to Telegram.");
     } catch {
-      toast.error("تعذّر الاتصال بالخادم.");
+      toast.error("Couldn't reach the server.");
     } finally {
       setBusy(false);
     }
@@ -236,7 +236,7 @@ export function TelegramSettings() {
       .update({ notify_telegram: next })
       .eq("id", userId);
     if (updateError) {
-      setError("تعذّر تحديث الإعداد. حاول مرة أخرى.");
+      setError("Couldn't update the setting. Please try again.");
       return;
     }
     await queryClient.invalidateQueries({ queryKey: [STATUS_KEY, userId] });
@@ -251,7 +251,7 @@ export function TelegramSettings() {
     >
       <div className="flex items-center gap-2">
         <Send className="size-4 shrink-0 text-gold" aria-hidden />
-        <h3 className="text-sm font-semibold">تنبيهات تيليجرام</h3>
+        <h3 className="text-sm font-semibold">Telegram alerts</h3>
       </div>
 
       {error && (
@@ -270,7 +270,7 @@ export function TelegramSettings() {
               setPhase("idle");
             }}
           >
-            إعادة المحاولة
+            Try again
           </Button>
         </div>
       )}
@@ -278,7 +278,7 @@ export function TelegramSettings() {
       {!isLinked && phase !== "linking" && (
         <>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            يصلك تنبيه قبل إغلاق توقعات الجراند بري والسبرنت على تيليجرام، حتى لا تخسر 25 نقطة.
+            Get a Telegram alert before Grand Prix and Sprint picks lock, so you never lose 25 points.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
@@ -289,7 +289,7 @@ export function TelegramSettings() {
               aria-busy={busy}
             >
               <Link2 className="size-4" aria-hidden />
-              ربط تيليجرام
+              Connect Telegram
             </Button>
             <Button
               type="button"
@@ -299,7 +299,7 @@ export function TelegramSettings() {
               aria-expanded={showCalendar}
             >
               <CalendarPlus className="size-4" aria-hidden />
-              اشتراك في تقويم الموسم
+              Subscribe to season calendar
             </Button>
           </div>
         </>
@@ -308,7 +308,7 @@ export function TelegramSettings() {
       {phase === "linking" && (
         <div className="mt-3">
           <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
-            بانتظار التأكيد من تيليجرام… افتح المحادثة واضغط Start.
+            Waiting for Telegram… open the chat and tap Start.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
@@ -318,7 +318,7 @@ export function TelegramSettings() {
               onClick={startLink}
               disabled={busy}
             >
-              إعادة فتح الرابط
+              Reopen link
             </Button>
             <Button
               type="button"
@@ -326,7 +326,7 @@ export function TelegramSettings() {
               className="min-h-[44px]"
               onClick={() => setPhase("idle")}
             >
-              إلغاء
+              Cancel
             </Button>
           </div>
         </div>
@@ -340,12 +340,12 @@ export function TelegramSettings() {
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
               <span className="size-1.5 rounded-full bg-success" aria-hidden />
-              متصل
+              Connected
             </span>
           </div>
 
           <label className="mt-4 flex min-h-[44px] cursor-pointer items-center justify-between gap-3 text-sm">
-            <span>تذكير عبر تيليجرام</span>
+            <span>Telegram reminders</span>
             <input
               type="checkbox"
               className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -363,7 +363,7 @@ export function TelegramSettings() {
               disabled={busy}
             >
               <Send className="size-4" aria-hidden />
-              إرسال رسالة تجريبية
+              Send test message
             </Button>
 
             {!confirmUnlink ? (
@@ -375,11 +375,11 @@ export function TelegramSettings() {
                 disabled={busy}
               >
                 <Unplug className="size-4" aria-hidden />
-                فصل الحساب
+                Disconnect
               </Button>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">تأكيد الفصل؟</span>
+                <span className="text-xs text-muted-foreground">Disconnect?</span>
                 <Button
                   type="button"
                   variant="destructive"
@@ -388,7 +388,7 @@ export function TelegramSettings() {
                   disabled={busy}
                 >
                   <Trash2 className="size-4" aria-hidden />
-                  تأكيد
+                  Confirm
                 </Button>
                 <Button
                   type="button"
@@ -396,7 +396,7 @@ export function TelegramSettings() {
                   className="min-h-[44px]"
                   onClick={() => setConfirmUnlink(false)}
                 >
-                  إلغاء
+                  Cancel
                 </Button>
               </div>
             )}
@@ -428,11 +428,11 @@ export function TelegramCallout({ onOpen }: { onOpen: () => void }) {
       style={{ borderLeftColor: "var(--gold)" }}
     >
       <span className="text-xs font-medium">
-        فعّل تذكيرات تيليجرام قبل إغلاق التوقعات ولا تخسر 25 نقطة.
+        Turn on Telegram reminders before picks lock and never lose 25 points.
       </span>
       <div className="flex items-center gap-2">
         <Button type="button" size="sm" className="min-h-[44px] text-xs font-bold" onClick={onOpen}>
-          ربط
+          Connect
         </Button>
         <Button
           type="button"
@@ -444,7 +444,7 @@ export function TelegramCallout({ onOpen }: { onOpen: () => void }) {
             setDismissed(true);
           }}
         >
-          إخفاء
+          Dismiss
         </Button>
       </div>
     </div>
