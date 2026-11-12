@@ -57,9 +57,11 @@ async function authedFetch(path: string, method: "POST" | "DELETE"): Promise<Res
 type Phase = "idle" | "linking" | "linked";
 
 function errorMessage(status: number, body: { error?: string } | null): string {
-  if (body?.error === "telegram_not_configured") return "Reminders aren't enabled on the server yet.";
+  if (body?.error === "telegram_not_configured")
+    return "Reminders aren't enabled on the server yet.";
   if (status === 401) return "Your session expired. Please sign in again.";
-  if (status === 400 || body?.error === "not_linked") return "This account isn't linked to Telegram.";
+  if (status === 400 || body?.error === "not_linked")
+    return "This account isn't linked to Telegram.";
   return "Couldn't reach the server. Please try again.";
 }
 
@@ -163,7 +165,9 @@ export function TelegramSettings() {
   useEffect(() => {
     if (phase === "linking" && Date.now() > deadline.current) {
       setPhase("idle");
-      setError("No confirmation within two minutes. Reopen the link and finish /start in Telegram.");
+      setError(
+        "No confirmation within two minutes. Reopen the link and finish /start in Telegram.",
+      );
     }
   }, [phase, status.dataUpdatedAt]);
 
@@ -278,7 +282,8 @@ export function TelegramSettings() {
       {!isLinked && phase !== "linking" && (
         <>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Get a Telegram alert before Grand Prix and Sprint picks lock, so you never lose 25 points.
+            Get a Telegram alert before Grand Prix and Sprint picks lock, so you never lose 25
+            points.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
