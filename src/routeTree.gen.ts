@@ -21,6 +21,11 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SprintRouteImport } from './routes/sprint'
 import { Route as StewardsRouteImport } from './routes/stewards'
 import { Route as WeekendRouteImport } from './routes/weekend'
+import { Route as ApiCalendarDoticsRouteImport } from './routes/api/calendar[.]ics'
+import { Route as ApiCronRemindersRouteImport } from './routes/api/cron/reminders'
+import { Route as ApiTelegramLinkRouteImport } from './routes/api/telegram/link'
+import { Route as ApiTelegramTestRouteImport } from './routes/api/telegram/test'
+import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +87,31 @@ const WeekendRoute = WeekendRouteImport.update({
   path: '/weekend',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCalendarDoticsRoute = ApiCalendarDoticsRouteImport.update({
+  id: '/api/calendar.ics',
+  path: '/api/calendar.ics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronRemindersRoute = ApiCronRemindersRouteImport.update({
+  id: '/api/cron/reminders',
+  path: '/api/cron/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramLinkRoute = ApiTelegramLinkRouteImport.update({
+  id: '/api/telegram/link',
+  path: '/api/telegram/link',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramTestRoute = ApiTelegramTestRouteImport.update({
+  id: '/api/telegram/test',
+  path: '/api/telegram/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramWebhookRoute = ApiTelegramWebhookRouteImport.update({
+  id: '/api/telegram/webhook',
+  path: '/api/telegram/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +126,11 @@ export interface FileRoutesByFullPath {
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
+  '/api/calendar.ics': typeof ApiCalendarDoticsRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
+  '/api/telegram/link': typeof ApiTelegramLinkRoute
+  '/api/telegram/test': typeof ApiTelegramTestRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +145,11 @@ export interface FileRoutesByTo {
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
+  '/api/calendar.ics': typeof ApiCalendarDoticsRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
+  '/api/telegram/link': typeof ApiTelegramLinkRoute
+  '/api/telegram/test': typeof ApiTelegramTestRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +165,11 @@ export interface FileRoutesById {
   '/sprint': typeof SprintRoute
   '/stewards': typeof StewardsRoute
   '/weekend': typeof WeekendRoute
+  '/api/calendar.ics': typeof ApiCalendarDoticsRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
+  '/api/telegram/link': typeof ApiTelegramLinkRoute
+  '/api/telegram/test': typeof ApiTelegramTestRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +186,11 @@ export interface FileRouteTypes {
     | '/sprint'
     | '/stewards'
     | '/weekend'
+    | '/api/calendar.ics'
+    | '/api/cron/reminders'
+    | '/api/telegram/link'
+    | '/api/telegram/test'
+    | '/api/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +205,11 @@ export interface FileRouteTypes {
     | '/sprint'
     | '/stewards'
     | '/weekend'
+    | '/api/calendar.ics'
+    | '/api/cron/reminders'
+    | '/api/telegram/link'
+    | '/api/telegram/test'
+    | '/api/telegram/webhook'
   id:
     | '__root__'
     | '/'
@@ -169,6 +224,11 @@ export interface FileRouteTypes {
     | '/sprint'
     | '/stewards'
     | '/weekend'
+    | '/api/calendar.ics'
+    | '/api/cron/reminders'
+    | '/api/telegram/link'
+    | '/api/telegram/test'
+    | '/api/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +244,11 @@ export interface RootRouteChildren {
   SprintRoute: typeof SprintRoute
   StewardsRoute: typeof StewardsRoute
   WeekendRoute: typeof WeekendRoute
+  ApiCalendarDoticsRoute: typeof ApiCalendarDoticsRoute
+  ApiCronRemindersRoute: typeof ApiCronRemindersRoute
+  ApiTelegramLinkRoute: typeof ApiTelegramLinkRoute
+  ApiTelegramTestRoute: typeof ApiTelegramTestRoute
+  ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +337,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WeekendRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/calendar.ics': {
+      id: '/api/calendar.ics'
+      path: '/api/calendar.ics'
+      fullPath: '/api/calendar.ics'
+      preLoaderRoute: typeof ApiCalendarDoticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/reminders': {
+      id: '/api/cron/reminders'
+      path: '/api/cron/reminders'
+      fullPath: '/api/cron/reminders'
+      preLoaderRoute: typeof ApiCronRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/link': {
+      id: '/api/telegram/link'
+      path: '/api/telegram/link'
+      fullPath: '/api/telegram/link'
+      preLoaderRoute: typeof ApiTelegramLinkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/test': {
+      id: '/api/telegram/test'
+      path: '/api/telegram/test'
+      fullPath: '/api/telegram/test'
+      preLoaderRoute: typeof ApiTelegramTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/webhook': {
+      id: '/api/telegram/webhook'
+      path: '/api/telegram/webhook'
+      fullPath: '/api/telegram/webhook'
+      preLoaderRoute: typeof ApiTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,6 +388,11 @@ const rootRouteChildren: RootRouteChildren = {
   SprintRoute: SprintRoute,
   StewardsRoute: StewardsRoute,
   WeekendRoute: WeekendRoute,
+  ApiCalendarDoticsRoute: ApiCalendarDoticsRoute,
+  ApiCronRemindersRoute: ApiCronRemindersRoute,
+  ApiTelegramLinkRoute: ApiTelegramLinkRoute,
+  ApiTelegramTestRoute: ApiTelegramTestRoute,
+  ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

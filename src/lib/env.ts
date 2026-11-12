@@ -6,9 +6,15 @@ const warned = new Set<string>();
 export type ServerEnvName =
   | "SUPABASE_URL"
   | "SUPABASE_SERVICE_ROLE_KEY"
+  | "SUPABASE_PUBLISHABLE_KEY"
   | "CRON_SECRET"
   | "VAPID_PUBLIC_KEY"
-  | "VITE_VAPID_PUBLIC_KEY";
+  | "VITE_VAPID_PUBLIC_KEY"
+  | "TELEGRAM_BOT_TOKEN"
+  | "TELEGRAM_BOT_USERNAME"
+  | "TELEGRAM_WEBHOOK_SECRET"
+  | "TELEGRAM_LEAGUE_CHAT_ID"
+  | "APP_URL";
 
 export function readServerEnv(name: ServerEnvName): string | null {
   if (typeof process === "undefined" || !process?.env) return null;

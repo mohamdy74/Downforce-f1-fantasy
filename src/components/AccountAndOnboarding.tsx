@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { LegalDialog } from "@/components/LegalModal";
+import { TelegramSettings } from "@/components/TelegramSettings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -317,6 +318,10 @@ export function AccountAndOnboarding() {
                   Save
                 </Button>
               </div>
+            </div>
+
+            <div className="border-t border-border/60 pt-3">
+              <TelegramSettings />
             </div>
 
             <div className="border-t border-border/60 pt-3">

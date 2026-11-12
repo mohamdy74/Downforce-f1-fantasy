@@ -177,18 +177,67 @@ export type Database = {
           created_at: string;
           display_name: string;
           id: string;
+          notify_telegram: boolean;
+          telegram_chat_id: number | null;
+          telegram_linked: boolean;
+          telegram_linked_at: string | null;
+          telegram_link_token: string | null;
+          telegram_token_expires_at: string | null;
+          telegram_username: string | null;
         };
         Insert: {
           avatar_url?: string | null;
           created_at?: string;
           display_name?: string;
           id: string;
+          notify_telegram?: boolean;
+          telegram_chat_id?: number | null;
+          telegram_linked_at?: string | null;
+          telegram_link_token?: string | null;
+          telegram_token_expires_at?: string | null;
+          telegram_username?: string | null;
         };
         Update: {
           avatar_url?: string | null;
           created_at?: string;
           display_name?: string;
           id?: string;
+          notify_telegram?: boolean;
+          telegram_chat_id?: number | null;
+          telegram_linked_at?: string | null;
+          telegram_link_token?: string | null;
+          telegram_token_expires_at?: string | null;
+          telegram_username?: string | null;
+        };
+        Relationships: [];
+      };
+      reminder_deliveries: {
+        Row: {
+          id: string;
+          race_id: string;
+          sent_at: string;
+          session_type: string;
+          target_type: string;
+          user_id: string | null;
+          window_key: string;
+        };
+        Insert: {
+          id?: string;
+          race_id: string;
+          sent_at?: string;
+          session_type: string;
+          target_type: string;
+          user_id?: string | null;
+          window_key: string;
+        };
+        Update: {
+          id?: string;
+          race_id?: string;
+          sent_at?: string;
+          session_type?: string;
+          target_type?: string;
+          user_id?: string | null;
+          window_key?: string;
         };
         Relationships: [];
       };
