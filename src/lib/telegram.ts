@@ -129,9 +129,7 @@ export function buildCalendarIcs(input: {
   ];
 
   for (const race of input.races) {
-    const sessions: Array<{ type: SessionType; at: string }> = [
-      { type: "gp", at: race.race_at },
-    ];
+    const sessions: Array<{ type: SessionType; at: string }> = [{ type: "gp", at: race.race_at }];
     if (race.has_sprint && race.sprint_at) sessions.push({ type: "sprint", at: race.sprint_at });
 
     for (const session of sessions) {
@@ -139,7 +137,9 @@ export function buildCalendarIcs(input: {
       if (Number.isNaN(start.getTime()) || start.getTime() <= now.getTime()) continue;
       const end = new Date(start.getTime() + 30 * 60_000);
       const place = [race.circuit, race.locality, race.country].filter(Boolean).join(", ");
-      const summary = icsEscape(`DOWNFORCE - ${race.name} - ${sessionLabel(session.type)} picks lock`);
+      const summary = icsEscape(
+        `DOWNFORCE - ${race.name} - ${sessionLabel(session.type)} picks lock`,
+      );
       const description = icsEscape(
         `${place ? `${place} - ` : ""}lock your picks: ${input.appUrl}/predict`,
       );

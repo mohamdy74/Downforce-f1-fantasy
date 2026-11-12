@@ -14,7 +14,9 @@ export const Route = createFileRoute("/api/calendar.ics")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data, error } = await supabaseAdmin
           .from("races")
-          .select("id, round, name, circuit, locality, country, race_at, qualifying_at, has_sprint, sprint_at")
+          .select(
+            "id, round, name, circuit, locality, country, race_at, qualifying_at, has_sprint, sprint_at",
+          )
           .eq("season", SEASON)
           .order("round", { ascending: true });
 

@@ -46,13 +46,20 @@ export const Route = createFileRoute("/api/telegram/webhook")({
         const text = update.message?.text ?? "";
         if (!chatId) return jsonResponse({ ok: true });
 
-        const { sendTelegramMessage, linkTelegramFromToken, describeUserStatus, setNotify, formatStatusText } =
-          await import("@/lib/telegram.server");
+        const {
+          sendTelegramMessage,
+          linkTelegramFromToken,
+          describeUserStatus,
+          setNotify,
+          formatStatusText,
+        } = await import("@/lib/telegram.server");
 
         let reply: string;
         if (text.startsWith("/start")) {
           const token = text.slice("/start".length).trim();
-          const linked = token ? await linkTelegramFromToken(token, chatId, update.message?.from?.username ?? null) : null;
+          const linked = token
+            ? await linkTelegramFromToken(token, chatId, update.message?.from?.username ?? null)
+            : null;
           reply = linked?.ok
             ? "Linked! You'll get a reminder before every Grand Prix and Sprint lock. 🏁"
             : "That link is invalid or expired. Open DOWNFORCE → Account → Telegram and generate a fresh one.";

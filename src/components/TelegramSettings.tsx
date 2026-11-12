@@ -1,13 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CalendarPlus,
-  Check,
-  Copy,
-  Link2,
-  Send,
-  Trash2,
-  Unplug,
-} from "lucide-react";
+import { CalendarPlus, Check, Copy, Link2, Send, Trash2, Unplug } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -132,7 +124,11 @@ function CalendarBlock({ host }: { host: string }) {
           onClick={copy}
           aria-live="polite"
         >
-          {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+          {copied ? (
+            <Check className="size-4" aria-hidden />
+          ) : (
+            <Copy className="size-4" aria-hidden />
+          )}
           {copied ? "تم النسخ" : "نسخ الرابط"}
         </Button>
       </div>
@@ -249,14 +245,20 @@ export function TelegramSettings() {
   const isLinked = phase === "linked" || linked;
 
   return (
-    <section className="carbon-panel rounded-lg border-l-4 p-4" style={{ borderLeftColor: "var(--gold)" }}>
+    <section
+      className="carbon-panel rounded-lg border-l-4 p-4"
+      style={{ borderLeftColor: "var(--gold)" }}
+    >
       <div className="flex items-center gap-2">
         <Send className="size-4 shrink-0 text-gold" aria-hidden />
         <h3 className="text-sm font-semibold">تنبيهات تيليجرام</h3>
       </div>
 
       {error && (
-        <div role="alert" className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+        <div
+          role="alert"
+          className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
+        >
           <p>{error}</p>
           <Button
             type="button"
@@ -421,7 +423,10 @@ export function TelegramCallout({ onOpen }: { onOpen: () => void }) {
   if (!user || dismissed || data?.telegram_linked) return null;
 
   return (
-    <div className="carbon-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border-l-4 px-4 py-3" style={{ borderLeftColor: "var(--gold)" }}>
+    <div
+      className="carbon-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border-l-4 px-4 py-3"
+      style={{ borderLeftColor: "var(--gold)" }}
+    >
       <span className="text-xs font-medium">
         فعّل تذكيرات تيليجرام قبل إغلاق التوقعات ولا تخسر 25 نقطة.
       </span>

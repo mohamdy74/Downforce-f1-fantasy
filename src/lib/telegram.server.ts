@@ -16,9 +16,7 @@ const API_BASE = "https://api.telegram.org";
 
 type AdminClient = (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"];
 
-export type SendResult =
-  | { ok: true }
-  | { ok: false; status: number; description: string };
+export type SendResult = { ok: true } | { ok: false; status: number; description: string };
 
 function botToken(): string | null {
   return readServerEnv("TELEGRAM_BOT_TOKEN");
@@ -237,7 +235,10 @@ export async function describeUserStatus(chatId: number): Promise<UserStatus> {
 
 export async function setNotify(chatId: number, notify: boolean): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.from("profiles").update({ notify_telegram: notify }).eq("telegram_chat_id", chatId);
+  await supabaseAdmin
+    .from("profiles")
+    .update({ notify_telegram: notify })
+    .eq("telegram_chat_id", chatId);
 }
 
 type SweepRace = {
@@ -313,7 +314,10 @@ export async function runTelegramReminderSweep(): Promise<{
       .not("telegram_chat_id", "is", null)
       .eq("notify_telegram", true),
     supabaseAdmin.from("predictions").select("race_id, user_id, top10").in("race_id", raceIds),
-    supabaseAdmin.from("sprint_predictions").select("race_id, user_id, top8").in("race_id", raceIds),
+    supabaseAdmin
+      .from("sprint_predictions")
+      .select("race_id, user_id, top8")
+      .in("race_id", raceIds),
     supabaseAdmin
       .from("reminder_deliveries")
       .select("race_id, session_type, window_key, target_type, user_id")
@@ -331,7 +335,8 @@ export async function runTelegramReminderSweep(): Promise<{
       }
     } else {
       for (const row of sprintRes.data ?? []) {
-        if (Array.isArray(row.top8) && row.top8.length > 0) set.add(`${row.race_id}:${row.user_id}`);
+        if (Array.isArray(row.top8) && row.top8.length > 0)
+          set.add(`${row.race_id}:${row.user_id}`);
       }
     }
     return set;
@@ -366,10 +371,7 @@ export async function runTelegramReminderSweep(): Promise<{
 
     // Per-user reminders.
     const pending = missing.filter(
-      (u) =>
-        !delivered.has(
-          `${entry.race.id}:${entry.session}:${entry.windowKey}:user:${u.id}`,
-        ),
+      (u) => !delivered.has(`${entry.race.id}:${entry.session}:${entry.windowKey}:user:${u.id}`),
     );
 
     const BATCH = 25;
@@ -452,7 +454,10 @@ export async function runTelegramReminderSweep(): Promise<{
   }
 
   if (toMute.size) {
-    await supabaseAdmin.from("profiles").update({ notify_telegram: false }).in("id", [...toMute]);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ notify_telegram: false })
+      .in("id", [...toMute]);
   }
 
   for (const row of inserts) {
