@@ -28,7 +28,11 @@ export const Route = createFileRoute("/api/telegram/test")({
         );
         if (!result.ok) {
           return jsonResponse(
-            { error: "telegram_send_failed", status: result.status, description: result.description },
+            {
+              error: "telegram_send_failed",
+              status: result.status,
+              description: result.description,
+            },
             502,
           );
         }

@@ -56,7 +56,10 @@ async function authedFetch(path: string, method: "POST" | "DELETE"): Promise<Res
 
 type Phase = "idle" | "linking" | "linked";
 
-function errorMessage(status: number, body: { error?: string; description?: string } | null): string {
+function errorMessage(
+  status: number,
+  body: { error?: string; description?: string } | null,
+): string {
   if (body?.error === "telegram_not_configured")
     return "Reminders aren't enabled on the server yet.";
   if (body?.error === "telegram_send_failed")
