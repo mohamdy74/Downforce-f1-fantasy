@@ -1,8 +1,7 @@
-const CACHE_NAME = "dfr:v3";
+const CACHE_NAME = "dfr:v4";
 const PRECACHE_ASSETS = [
   "/",
   "/favicon.svg",
-  // favicon.png doubles as the push-notification icon — cheap to keep cached.
   "/favicon.png",
   "/manifest.webmanifest",
   // NOTE: apple-touch-icon.png and the manifest icons (icon-192/icon-512) were
@@ -14,8 +13,8 @@ const PRECACHE_ASSETS = [
 // NOTE: fonts are intentionally NOT precached. Vite emits them content-hashed
 // under /assets/, so the v1 "/assets/fonts/<name>.woff2" paths never existed —
 // every one of them 404'd and the all-or-nothing addAll() aborted "install",
-// which silently broke SW registration, PWA install AND push subscriptions on
-// every device. Fonts still load via styles.css (font-display: swap) + HTTP cache.
+// which silently broke SW registration and PWA install on every device. Fonts
+// still load via styles.css (font-display: swap) + HTTP cache.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -60,58 +59,6 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       return cachedResponse || fetch(event.request);
-    }),
-  );
-});
-
-self.addEventListener("push", (event) => {
-  let data = {
-    title: "DOWNFORCE — Race Control",
-    body: "Lock in your predictions before the deadline!",
-    tag: "downforce-alert",
-    url: "/predict",
-  };
-
-  if (event.data) {
-    try {
-      const parsed = event.data.json();
-      data = { ...data, ...parsed };
-    } catch {
-      try {
-        data.body = event.data.text() || data.body;
-      } catch {}
-    }
-  }
-
-  const options = {
-    body: data.body,
-    icon: "/favicon.png",
-    badge: "/favicon.png",
-    tag: data.tag || "downforce-alert",
-    renotify: true,
-    requireInteraction: false,
-    vibrate: [200, 100, 200],
-    data: { url: data.url || "/predict" },
-  };
-
-  event.waitUntil(self.registration.showNotification(data.title, options));
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || "/predict";
-
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ("focus" in client) {
-          client.navigate(targetUrl).catch(() => {});
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
     }),
   );
 });

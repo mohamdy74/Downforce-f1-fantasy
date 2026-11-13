@@ -12,12 +12,7 @@ import {
   positionPoints,
   scorePrediction,
 } from "../src/lib/scoring.ts";
-import { cleanVapidKey, isCompleteTop10, parsePushSubscriptionKey } from "../src/lib/push-keys.ts";
-import {
-  buildReminderPayload,
-  computeActiveReminders,
-  REMINDER_WINDOWS,
-} from "../src/lib/reminder-windows.ts";
+import { isCompleteTop10 } from "../src/lib/push-keys.ts";
 
 function rows() {
   const results = [];
@@ -134,113 +129,12 @@ test("push-keys.ts: isCompleteTop10 accepts exactly 10 real driver ids", () => {
   assert.equal(isCompleteTop10("abc"), false);
 });
 
-test("push-keys.ts: cleanVapidKey strips quotes and whitespace", () => {
-  assert.equal(cleanVapidKey(undefined), "");
-  assert.equal(cleanVapidKey('  "abc"  '), "abc");
-  assert.equal(cleanVapidKey("'x'"), "x");
-  assert.equal(cleanVapidKey("plain"), "plain");
-});
-
-test("push-keys.ts: parsePushSubscriptionKey round-trip and rejects malformed", () => {
-  const key = 'push_sub:u1:{"endpoint":"https://e.example","keys":{"p256dh":"p256","auth":"a"}}';
-  const rec = parsePushSubscriptionKey(key);
-  assert.ok(rec);
-  assert.equal(rec.userId, "u1");
-  assert.equal(rec.endpoint, "https://e.example");
-  assert.equal(rec.p256dh, "p256");
-  assert.equal(rec.auth, "a");
-
-  assert.equal(parsePushSubscriptionKey("garbage"), null);
-  assert.equal(
-    parsePushSubscriptionKey('push_sub:u2:{"endpoint":"https://e.example"}'), // missing keys
-    null,
-  );
-});
-
-// ---- reminder-windows.ts: the pure reminder scheduling core ----
-
-test("reminder-windows.ts: window bands are the consolidated 2h (45-135m) and 30m (5-44m)", () => {
-  assert.equal(REMINDER_WINDOWS.length, 2);
-  assert.deepEqual(
-    REMINDER_WINDOWS.map((w) => [w.label, w.minMs, w.maxMs, w.text]),
-    [
-      ["2h", 45 * 60_000, 135 * 60_000, "in ~2 hours"],
-      ["30m", 5 * 60_000, 44 * 60_000, "in less than 30 minutes"],
-    ],
-  );
-});
-
-test("reminder-windows.ts: computeActiveReminders picks exactly the open band", () => {
-  const now = 1_700_000_000_000; // fixed clock
-  const MIN = 60_000;
-  const iso = (ms) => new Date(now + ms).toISOString();
-  const race = {
-    id: "r19",
-    name: "Mexico City Grand Prix",
-    qualifying_at: iso(90 * MIN), // pole in 90m -> 2h band only
-    race_at: iso(25 * MIN), // race in 25m -> 30m band only
-  };
-
-  const plan = computeActiveReminders([race], now);
-  assert.equal(plan.length, 2);
-  assert.deepEqual(
-    plan.map((e) => [e.type, e.window.label]),
-    [
-      ["pole", "2h"],
-      ["race", "30m"],
-    ],
-  );
-
-  // 180 minutes out: no band is open
-  const none = computeActiveReminders(
-    [{ ...race, qualifying_at: null, race_at: iso(180 * MIN) }],
-    now,
-  );
-  assert.equal(none.length, 0);
-
-  // exactly 2h before the race: the single race-2h entry
-  const two = computeActiveReminders(
-    [{ ...race, qualifying_at: null, race_at: iso(120 * MIN) }],
-    now,
-  );
-  assert.equal(two.length, 1);
-  assert.deepEqual([two[0].type, two[0].window.label], ["race", "2h"]);
-});
-
-test("reminder-windows.ts: buildReminderPayload keeps the exact tone, tags and url", () => {
-  const now = 1_700_000_000_000;
-  const iso = (ms) => new Date(now + ms).toISOString();
-  const race = {
-    id: "r19",
-    name: "Mexico City Grand Prix",
-    qualifying_at: null,
-    race_at: iso(25 * 60_000),
-  };
-
-  const finalCall = buildReminderPayload(computeActiveReminders([race], now)[0]);
-  assert.equal(finalCall.title, "\u{1F6A8} Mexico City Grand Prix \u2014 Final Call!");
-  assert.ok(finalCall.body.includes("\u221225 penalty"));
-  assert.equal(finalCall.tag, "downforce-r19-race-30m");
-  assert.equal(finalCall.url, "/predict");
-
-  const qRace = {
-    id: "r19",
-    name: "Mexico City Grand Prix",
-    qualifying_at: iso(90 * 60_000),
-    race_at: null,
-  };
-  const pole = buildReminderPayload(computeActiveReminders([qRace], now)[0]);
-  assert.equal(pole.title, "\u23F0 Mexico City Grand Prix \u2014 Lock Alert!");
-  assert.equal(pole.body, "Qualifying starts in ~2 hours! Lock in your Pole Position pick now.");
-  assert.equal(pole.tag, "downforce-r19-pole-2h");
-});
-
 // ---- pwa: manifest, service worker and root preloads (regression) ----
 // Rebuilt on main from Mohamed's local b75ea35 (Oct 31): the manifest once
 // declared favicon.png (64x64) as 192x192 and apple-touch-icon.png (180x180)
 // as 512x512, sw v1 precached nonexistent /assets/fonts/* paths with an
 // all-or-nothing addAll() (one 404 aborted the install and silently broke
-// PWA install and push subscriptions), and __root.tsx once hardcoded font
+// PWA install), and __root.tsx once hardcoded font
 // preload hrefs under /assets/fonts/* that never matched Vite's output.
 // Comments are stripped before assertions so explanatory notes about the
 // old paths are not mistaken for markup.
@@ -308,3 +202,4 @@ test("pwa root: font preloads go through hashed ?url imports, not hardcoded path
   // __root.tsx once hardcoded /assets/fonts/<name>.woff2 preload hrefs.
   assert.ok(!root.includes('"/assets/fonts/'));
 });
+

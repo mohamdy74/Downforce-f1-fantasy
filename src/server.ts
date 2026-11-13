@@ -27,11 +27,6 @@ function bridgeRuntimeEnvToProcess(env: unknown) {
       }
     }
   }
-  if (process.env["VAPID_PUBLIC_KEY"] && !process.env["VITE_VAPID_PUBLIC_KEY"]) {
-    process.env["VITE_VAPID_PUBLIC_KEY"] = process.env["VAPID_PUBLIC_KEY"];
-  } else if (process.env["VITE_VAPID_PUBLIC_KEY"] && !process.env["VAPID_PUBLIC_KEY"]) {
-    process.env["VAPID_PUBLIC_KEY"] = process.env["VITE_VAPID_PUBLIC_KEY"];
-  }
 }
 
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
@@ -74,3 +69,4 @@ export default {
     }
   },
 };
+

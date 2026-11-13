@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import {
-  Bell,
   CheckCircle2,
   FileText,
   ShieldAlert,
@@ -20,8 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { VAPID_PUBLIC_KEY as PUBLIC_VAPID, urlBase64ToUint8Array } from "@/lib/push-keys";
-import { deleteMyAccount, savePushSubscription, updateMyProfile } from "@/lib/stewards.functions";
+import { deleteMyAccount, updateMyProfile } from "@/lib/stewards.functions";
 
 export function AccountAndOnboarding() {
   const { user, signOut } = useAuth();
@@ -120,52 +118,6 @@ export function AccountAndOnboarding() {
     }
   }
 
-  async function handleEnableAlerts() {
-    setBusy(true);
-    try {
-      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-        toast.error("Push alerts are not supported on this browser.");
-        setStep(3);
-        return;
-      }
-      const perm = await Notification.requestPermission();
-      if (perm === "granted") {
-        await navigator.serviceWorker.register("/sw.js");
-        const readyReg = await navigator.serviceWorker.ready;
-        let sub = await readyReg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await readyReg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID),
-          });
-        }
-        const json = sub.toJSON();
-        if (json.endpoint && json.keys?.["p256dh"] && json.keys?.["auth"]) {
-          await savePushSubscription({
-            data: {
-              endpoint: json.endpoint,
-              p256dh: json.keys["p256dh"],
-              auth: json.keys["auth"],
-            },
-          });
-        }
-        readyReg
-          .showNotification("🏎️ DOWNFORCE Alerts Active!", {
-            body: "You will be notified 2h & 30m before Qualifying and Race lock.",
-            icon: "/favicon.png",
-          })
-          .catch((error) => {
-            console.error("[AccountAndOnboarding] localStorage write failed:", error);
-          });
-        toast.success("Race alerts enabled!");
-      }
-      setStep(3);
-    } catch {
-      setStep(3);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function handleDeleteAccount() {
     setBusy(true);
@@ -251,15 +203,11 @@ export function AccountAndOnboarding() {
             {step === 2 && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Enable instant phone notifications so we alert you <strong>2 hours</strong> and{" "}
-                  <strong>30 minutes</strong> before Qualifying and Race lock if you haven&apos;t
-                  submitted yet.
+                  Connect Telegram and we&apos;ll alert you before Qualifying and Race lock if you
+                  haven&apos;t submitted yet — no more −25 penalties.
                 </p>
-                <div className="flex gap-2 pt-2">
-                  <Button className="flex-1 gap-2" disabled={busy} onClick={handleEnableAlerts}>
-                    <Bell className="h-4 w-4 text-gold" />
-                    Enable Race Alerts 🔔
-                  </Button>
+                <TelegramSettings />
+                <div className="flex justify-end pt-1">
                   <Button variant="ghost" onClick={() => setStep(3)}>
                     Later
                   </Button>
@@ -428,3 +376,4 @@ export function AccountAndOnboarding() {
     </>
   );
 }
+

@@ -84,8 +84,6 @@ export interface StewardDashboardResult {
     fastest_lap: boolean;
     pole: boolean;
   }>;
-  pushUserIds: string[];
-  vapidPublicKey: string;
 }
 
 export interface PaginatedStewardDashboardResult extends StewardDashboardResult {
@@ -104,7 +102,6 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
       { data: preds },
       { data: scores },
       { data: results },
-      { data: subRows },
     ] = await Promise.all([
       sb.from("profiles").select("id, display_name, created_at").order("display_name"),
       sb
@@ -118,26 +115,13 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
         .from("race_results")
         .select("driver_id, position, finished, fastest_lap, pole")
         .eq("race_id", data.raceId),
-      sb.from("sync_state").select("key").like("key", "push_sub:%"),
     ]);
 
-    const pushUserIds = Array.from(
-      new Set(
-        (subRows ?? [])
-          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
-          .filter((x): x is string => !!x),
-      ),
-    );
-
-    const { resolveServerVapidKeys } = await import("./webpush-native");
-    const { publicKey: vapidPublicKey } = await resolveServerVapidKeys();
     return {
       profiles: profiles ?? [],
       preds: preds ?? [],
       scores: scores ?? [],
       results: results ?? [],
-      pushUserIds,
-      vapidPublicKey,
     } as StewardDashboardResult;
   });
 
@@ -157,7 +141,6 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
       { data: preds },
       { data: scores },
       { data: results },
-      { data: subRows },
       { count: totalCount },
     ] = await Promise.all([
       sb
@@ -176,7 +159,6 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
         .from("race_results")
         .select("driver_id, position, finished, fastest_lap, pole")
         .eq("race_id", data.raceId),
-      sb.from("sync_state").select("key").like("key", "push_sub:%"),
       sb.from("profiles").select("*", { head: true, count: "exact" }),
     ]);
 
@@ -185,17 +167,6 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
         `Unable to load profiles: ${profilesError instanceof Error ? profilesError.message : String(profilesError)}`,
       );
     }
-
-    const pushUserIds = Array.from(
-      new Set(
-        (subRows ?? [])
-          .map((r) => /^push_sub:([^:]+):/.exec(r.key)?.[1])
-          .filter((x): x is string => !!x),
-      ),
-    );
-
-    const { resolveServerVapidKeys } = await import("./webpush-native");
-    const { publicKey: vapidPublicKey } = await resolveServerVapidKeys();
 
     const hasMore = (profiles?.length ?? 0) > effectiveLimit;
     const resultProfiles = hasMore ? (profiles ?? []).slice(0, -1) : (profiles ?? []);
@@ -208,8 +179,6 @@ export const getStewardsDashboardPaginated = createServerFn({ method: "POST" })
       preds: preds ?? [],
       scores: scores ?? [],
       results: results ?? [],
-      pushUserIds,
-      vapidPublicKey,
       nextCursor,
       hasMore,
       totalCount: totalCount ?? 0,
@@ -228,9 +197,7 @@ export const executeStewardAction = createServerFn({ method: "POST" })
         | "shift_deadline"
         | "set_exact_deadline"
         | "override_picks"
-        | "manual_results"
-        | "nudge_missing_push"
-        | "test_my_push";
+        | "manual_results";
       raceId?: string | undefined;
       userId?: string | undefined;
       points?: number | undefined;
@@ -245,7 +212,6 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       dnfs?: string[] | undefined;
       title?: string | undefined;
       body?: string | undefined;
-      clientSub?: { endpoint: string; p256dh: string; auth: string } | undefined;
     }) => d,
   )
   .handler(async ({ data: d, context }) => {
@@ -498,136 +464,6 @@ export const executeStewardAction = createServerFn({ method: "POST" })
       };
     }
 
-    if (d.action === "test_my_push") {
-      const { sendNativeWebPush } = await import("./webpush-native");
-      if (d.clientSub?.endpoint && d.clientSub?.p256dh && d.clientSub?.auth) {
-        const prefix = `push_sub:${context.userId}:`;
-        await sb.from("sync_state").delete().like("key", `${prefix}%`);
-        const newKey = `${prefix}${JSON.stringify(d.clientSub)}`;
-        await sb
-          .from("sync_state")
-          .upsert({ key: newKey, synced_at: new Date().toISOString() }, { onConflict: "key" });
-      }
-      const { data: subRows } = await sb
-        .from("sync_state")
-        .select("key")
-        .like("key", `push_sub:${context.userId}:%`);
-      if (!subRows?.length) {
-        return {
-          ok: false,
-          msg: "Could not register browser subscription (enable notifications in Brave browser settings and tap Test My Phone again).",
-        };
-      }
-      let sent = 0;
-      let lastError = "";
-      const deadSubKeys: string[] = [];
-      for (const r of subRows) {
-        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-        if (!m) continue;
-        const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-        const res = await sendNativeWebPush(sub, {
-          title: "🏎️ Stewards Test Alert",
-          body: "Push notifications are 100% working on your device!",
-          tag: "dfr-test-" + Date.now(),
-          url: "/stewards",
-        });
-        if (res.ok) {
-          sent++;
-        } else {
-          if (res.error) lastError = res.error;
-          if (
-            res.status === 401 ||
-            res.status === 403 ||
-            res.status === 404 ||
-            res.status === 410
-          ) {
-            deadSubKeys.push(r.key);
-          }
-        }
-      }
-      // One batched cleanup instead of a delete per dead subscription.
-      if (deadSubKeys.length) {
-        await sb.from("sync_state").delete().in("key", deadSubKeys);
-      }
-      if (sent === 0) {
-        return {
-          ok: false,
-          msg: lastError
-            ? `Test push failed: ${lastError}`
-            : "Test push delivered to 0 devices (tap Test My Phone again to re-sync your browser key).",
-        };
-      }
-      return { ok: true, msg: `Test push delivered to ${sent} of your device(s)!` };
-    }
-
-    if (d.action === "nudge_missing_push" && d.raceId) {
-      const { sendNativeWebPush } = await import("./webpush-native");
-      const [{ data: subRows }, { data: preds }, { data: profiles }] = await Promise.all([
-        sb.from("sync_state").select("key").like("key", "push_sub:%"),
-        sb.from("predictions").select("user_id, top10").eq("race_id", d.raceId),
-        sb.from("profiles").select("id, display_name"),
-      ]);
-
-      const completedUsers = new Set(
-        (preds ?? [])
-          .filter((p) => (p.top10 ?? []).filter((x) => x && x !== "__none__").length === 10)
-          .map((p) => p.user_id),
-      );
-
-      const missingUsers = (profiles ?? []).filter((p) => !completedUsers.has(p.id));
-      const payloadObj = {
-        title: d.title || "⏰ DOWNFORCE — Picks Reminder!",
-        body: d.body || "Lock in your Top 10 before the deadline to avoid the -25 penalty!",
-        tag: "dfr-stewards-" + Date.now(),
-        url: "/predict",
-      };
-
-      const reachedUserIds = new Set<string>();
-      const deadKeys: string[] = [];
-
-      const tasks = (subRows ?? []).map(async (r) => {
-        const m = /^push_sub:([^:]+):(.+)$/.exec(r.key);
-        if (!m) return;
-        const uid = m[1]!;
-        if (completedUsers.has(uid)) return;
-        try {
-          const sub = JSON.parse(m[2]!) as { endpoint: string; p256dh: string; auth: string };
-          const res = await sendNativeWebPush(sub, payloadObj);
-          if (res.ok) {
-            reachedUserIds.add(uid);
-          } else if (res.status === 404 || res.status === 410) {
-            deadKeys.push(r.key);
-          }
-        } catch {
-          /* individual push failures are tolerated; dead keys cleaned below */
-        }
-      });
-
-      await Promise.allSettled(tasks);
-      if (deadKeys.length > 0) {
-        await sb.from("sync_state").delete().in("key", deadKeys);
-      }
-
-      const reachedNames = missingUsers
-        .filter((u) => reachedUserIds.has(u.id))
-        .map((u) => u.display_name || "Player");
-      const unsubscribedNames = missingUsers
-        .filter((u) => !reachedUserIds.has(u.id))
-        .map((u) => u.display_name || "Player");
-
-      const parts: string[] = [];
-      if (reachedNames.length > 0) {
-        parts.push(`Sent to: ${reachedNames.join(", ")}`);
-      }
-      if (unsubscribedNames.length > 0) {
-        parts.push(`No Push enabled on phone yet: ${unsubscribedNames.join(", ")}`);
-      }
-      return {
-        ok: true,
-        msg: parts.join(" | ") || "All players have already locked in!",
-      };
-    }
-
     return { ok: false, msg: "Unknown action" };
   });
 
@@ -713,3 +549,4 @@ export const exportLeagueBackup = createServerFn({ method: "POST" })
       },
     };
   });
+

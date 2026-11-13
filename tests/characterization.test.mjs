@@ -251,36 +251,7 @@ function computeLeaderboardEntries(profiles, scores, raceRows) {
   return list;
 }
 
-// 5. Push keys & F1 parsers contract
-function parsePushSubscriptionKey(key) {
-  const m = /^push_sub:([^:]+):(.+)$/.exec(key);
-  if (!m) return null;
-  try {
-    const raw = JSON.parse(m[2]);
-    const p256dh = raw.keys?.p256dh ?? raw.p256dh;
-    const auth = raw.keys?.auth ?? raw.auth;
-    if (!raw.endpoint || !p256dh || !auth) return null;
-    return { userId: m[1], endpoint: raw.endpoint, p256dh, auth, rawKey: key };
-  } catch {
-    return null;
-  }
-}
-
-function findStalePushKeysForEndpoint(existingKeys, userId, endpoint) {
-  const prefix = `push_sub:${userId}:`;
-  const stale = [];
-  for (const key of existingKeys) {
-    if (!key.startsWith(prefix)) continue;
-    try {
-      const parsed = JSON.parse(key.slice(prefix.length));
-      if (parsed.endpoint === endpoint) stale.push(key);
-    } catch {
-      stale.push(key);
-    }
-  }
-  return stale;
-}
-
+// 5. F1 parsers contract
 function toIso(session) {
   if (!session?.date) return null;
   const d = new Date(`${session.date}T${session.time ?? "12:00:00Z"}`);
@@ -458,18 +429,7 @@ test("Characterization 4: computeLeaderboardEntries filters R14+, strips zero-on
   assert.equal(board[1].change, -1);
 });
 
-test("Characterization 5: push-keys and f1-parsers preserve exact string and regex semantics", () => {
-  const key = 'push_sub:u123:{"endpoint":"https://fcm.googleapis.com/1","p256dh":"k","auth":"a"}';
-  const parsed = parsePushSubscriptionKey(key);
-  assert.equal(parsed?.userId, "u123");
-  assert.equal(parsed?.endpoint, "https://fcm.googleapis.com/1");
-
-  const stale = findStalePushKeysForEndpoint(
-    [key, "push_sub:u123:corrupt-json", 'push_sub:u123:{"endpoint":"https://other"}'],
-    "u123",
-    "https://fcm.googleapis.com/1",
-  );
-  assert.deepEqual(stale, [key, "push_sub:u123:corrupt-json"]);
+test("Characterization 5: f1-parsers preserve exact string and regex semantics", () => {
   assert.equal(toIso({ date: "2026-10-25", time: "19:00:00Z" }), "2026-10-25T19:00:00.000Z");
   assert.equal(isClassifiedFinishStatus("Finished"), true);
   assert.equal(isClassifiedFinishStatus("+1 Lap"), true);
@@ -820,3 +780,4 @@ test("Characterization 8: Race-Day End-to-End Safeguards (buildLiveOrderFromPosi
   const weekendRouteSrc = fs.readFileSync("src/routes/weekend.tsx", "utf8");
   assert.ok(weekendRouteSrc.includes("Live Grand Prix Telemetry"));
 });
+

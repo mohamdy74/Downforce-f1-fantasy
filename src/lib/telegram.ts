@@ -106,9 +106,11 @@ function foldLine(line: string): string {
 }
 
 /**
- * Whole-season feed. One VEVENT per (race, session); UIDs are derived from the
- * season/round/session so a schedule refresh updates the same events in a
- * subscriber's calendar instead of duplicating them.
+ * Whole-season feed: every race of the season (past and future) gets its
+ * events, so a fresh subscribe always shows the complete calendar. One VEVENT
+ * per (race, session); UIDs are derived from the season/round/session so a
+ * schedule refresh updates the same events in a subscriber's calendar instead
+ * of duplicating them. Each event carries 1-hour and 30-minute alarms.
  */
 export function buildCalendarIcs(input: {
   races: IcsRace[];
@@ -134,7 +136,9 @@ export function buildCalendarIcs(input: {
 
     for (const session of sessions) {
       const start = new Date(session.at);
-      if (Number.isNaN(start.getTime()) || start.getTime() <= now.getTime()) continue;
+      // Every race of the season stays in the feed (only unparseable dates are
+      // skipped), so a fresh subscribe shows the complete calendar.
+      if (Number.isNaN(start.getTime())) continue;
       const end = new Date(start.getTime() + 30 * 60_000);
       const place = [race.circuit, race.locality, race.country].filter(Boolean).join(", ");
       const summary = icsEscape(
@@ -152,7 +156,7 @@ export function buildCalendarIcs(input: {
         `SUMMARY:${summary}`,
         `DESCRIPTION:${description}`,
         "BEGIN:VALARM",
-        "TRIGGER:-PT3H",
+        "TRIGGER:-PT1H",
         "ACTION:DISPLAY",
         `DESCRIPTION:${summary}`,
         "END:VALARM",
@@ -169,3 +173,4 @@ export function buildCalendarIcs(input: {
   lines.push("END:VCALENDAR");
   return lines.map(foldLine).join("\r\n") + "\r\n";
 }
+

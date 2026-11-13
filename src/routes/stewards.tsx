@@ -2,8 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Shield,
-  Bell,
-  BellOff,
   RefreshCw,
   Clock,
   Trophy,
@@ -22,11 +20,6 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { DriverPicker, EMPTY } from "@/components/DriverPicker";
-import {
-  getLastPushSyncError,
-  getLastSyncedSub,
-  syncBrowserSubscription,
-} from "@/components/PushOptIn";
 import { SprintGrid } from "@/components/SprintGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedSearch";
@@ -254,24 +247,7 @@ function StewardsPage() {
   async function runAction(payload: Parameters<typeof executeStewardAction>[0]["data"]) {
     setBusy(true);
     try {
-      let finalPayload = payload;
-      if (payload.action === "test_my_push" && typeof window !== "undefined") {
-        if ("Notification" in window && Notification.permission === "default") {
-          await Notification.requestPermission().catch(() => {});
-        }
-        const ok = await syncBrowserSubscription(dash?.vapidPublicKey);
-        const clientSub = getLastSyncedSub();
-        if (!ok || !clientSub) {
-          toast.error(
-            getLastPushSyncError() ||
-              "Browser could not subscribe to Push Alerts (check Brave Notification permissions).",
-            { duration: 8000 },
-          );
-          return;
-        }
-        finalPayload = { ...payload, clientSub };
-      }
-      const res = await executeStewardAction({ data: finalPayload });
+      const res = await executeStewardAction({ data: payload });
       if (res.ok === false) {
         toast.error(res.msg, { duration: 7000 });
       } else {
@@ -291,7 +267,6 @@ function StewardsPage() {
 
   const predByUser = new Map((dash?.preds ?? []).map((p) => [p.user_id, p]));
   const scoreByUser = new Map((dash?.scores ?? []).map((s) => [s.user_id, s.points]));
-  const pushUserSet = new Set(dash?.pushUserIds ?? []);
   const sortedDrivers = sortByTeam(drivers);
   const driverById = new Map(drivers.map((d) => [d.id, d.code ?? d.full_name]));
   const activeUpdates = raceUpdates.filter((u) => u.race_id === activeRace?.id);
@@ -496,104 +471,53 @@ function StewardsPage() {
         onToggle={toggleSection}
         icon={<CheckCircle2 className="h-4 w-4 text-gold" />}
         title="Live Pick Status Radar"
-        subtitle={`See who locked in for ${activeRace?.name ?? "this round"} and check each player's Push status`}
+        subtitle={`See who locked in for ${activeRace?.name ?? "this round"}`}
         badge={
           <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] font-bold text-gold">
             {lockedPlayers}/{totalPlayers} Locked
           </span>
         }
       >
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="flex-1 sm:flex-initial"
-              disabled={busy || !activeRace}
-              onClick={() =>
-                runAction({
-                  action: "nudge_missing_push",
-                  raceId: activeRace!.id,
-                  title: `⏰ ${activeRace!.name} Picks Reminder!`,
-                  body: "You still haven't locked in your Top 10! Tap here to submit before the -25 penalty.",
-                })
-              }
-            >
-              <Bell className="mr-1.5 h-3.5 w-3.5 text-gold" />
-              Send Push Alert to Missing Players
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => runAction({ action: "test_my_push" })}
-            >
-              Test My Phone 🔔
-            </Button>
-          </div>
-
-          <div className="divide-y divide-border">
-            {(dash?.profiles ?? []).map((p) => {
-              const pr = predByUser.get(p.id);
-              const hasPole = !!pr?.pole_driver_id;
-              const topCount = (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length;
-              const pts = scoreByUser.get(p.id);
-              const hasPush = pushUserSet.has(p.id);
-              return (
-                <div
-                  key={p.id}
-                  className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-display font-bold italic uppercase">
-                      {p.display_name}
-                    </span>
-                    <span
-                      title={
-                        hasPush
-                          ? "Subscribed to Web Push on phone/browser"
-                          : "Has not tapped Enable Alerts on phone yet"
-                      }
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-[11px]",
-                        hasPush ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {hasPush ? (
-                        <Bell className="h-2.5 w-2.5" />
-                      ) : (
-                        <BellOff className="h-2.5 w-2.5" />
-                      )}
-                      {hasPush ? "Push ON" : "No Push"}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5",
-                        hasPole
-                          ? "bg-success/20 text-success"
-                          : "bg-destructive/20 text-destructive",
-                      )}
-                    >
-                      Pole {hasPole ? "✓" : "✗"}
-                    </span>
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5",
-                        topCount === 10
-                          ? "bg-success/20 text-success"
-                          : "bg-destructive/20 text-destructive",
-                      )}
-                    >
-                      {topCount}/10
-                    </span>
-                    {pts != null && <span className="font-bold text-gold">{pts}p</span>}
-                  </div>
+        <div className="divide-y divide-border">
+          {(dash?.profiles ?? []).map((p) => {
+            const pr = predByUser.get(p.id);
+            const hasPole = !!pr?.pole_driver_id;
+            const topCount = (pr?.top10 ?? []).filter((x) => x && x !== "__none__").length;
+            const pts = scoreByUser.get(p.id);
+            return (
+              <div
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-display font-bold italic uppercase">
+                    {p.display_name}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5",
+                      hasPole ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive",
+                    )}
+                  >
+                    Pole {hasPole ? "✓" : "✗"}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5",
+                      topCount === 10
+                        ? "bg-success/20 text-success"
+                        : "bg-destructive/20 text-destructive",
+                    )}
+                  >
+                    {topCount}/10
+                  </span>
+                  {pts != null && <span className="font-bold text-gold">{pts}p</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </StewardAccordionCard>
 
@@ -1174,3 +1098,4 @@ function StewardsPage() {
     </main>
   );
 }
+

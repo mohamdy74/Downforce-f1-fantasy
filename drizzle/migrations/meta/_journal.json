@@ -162,6 +162,14 @@
       "when": 1794076800001,
       "tag": "0022_constrain_web_vitals_insert",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794076800002,
+      "tag": "0023_telegram_links_and_reminder_deliveries",
+      "breakpoints": true
     }
   ]
 }
+

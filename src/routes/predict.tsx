@@ -8,7 +8,6 @@ import { DriverPicker, EMPTY } from "@/components/DriverPicker";
 import { SprintContent } from "@/components/SprintPredict";
 import { SprintGrid } from "@/components/SprintGrid";
 import { LightsOut } from "@/components/LightsOut";
-import { MissingPlayers } from "@/components/MissingPlayers";
 import { Skeleton } from "@/components/LoadingSkeleton";
 import { assertDeadlineOpen, logPredAudit } from "@/lib/prediction.functions";
 import { SharePicks } from "@/components/SharePicks";
@@ -576,8 +575,6 @@ function Predict() {
             </div>
           )}
 
-          <MissingPlayers race={race} />
-
           <section
             id="pole-section"
             className="carbon-panel mt-6 scroll-mt-[calc(var(--header-h)+12px)] rounded-lg border-l-4 p-4 sm:p-5"
@@ -819,3 +816,4 @@ function TrackStatus({ target }: { target: string }) {
     </div>
   );
 }
+

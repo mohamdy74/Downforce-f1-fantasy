@@ -1,11 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { syncBrowserSubscription } from "@/components/PushOptIn";
 import { supabase } from "@/integrations/supabase/client";
 import { syncF1Data } from "@/lib/f1-sync.functions";
 import { getSyncJobStatus } from "@/lib/jobs.functions";
-import { checkAndSendRaceReminders } from "@/lib/push.functions";
 
 const MIN_GAP_MS = 10 * 60 * 1000;
 const BG_SYNC_LAST_KEY = "dfr:bg-sync:last-run";
@@ -23,21 +21,6 @@ export function BackgroundSync() {
     }
     let running = false;
 
-    if (
-      typeof window !== "undefined" &&
-      "Notification" in window &&
-      Notification.permission === "granted"
-    ) {
-      supabase.auth
-        .getSession()
-        .then(({ data }) => {
-          if (data.session) {
-            syncBrowserSubscription().catch(() => {});
-          }
-        })
-        .catch(() => {});
-    }
-
     const run = async () => {
       if (document.visibilityState !== "visible") return;
       if (running || Date.now() - last < MIN_GAP_MS) return;
@@ -51,22 +34,10 @@ export function BackgroundSync() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) return;
-        if (
-          typeof window !== "undefined" &&
-          "Notification" in window &&
-          Notification.permission === "granted"
-        ) {
-          await syncBrowserSubscription().catch(() => {});
-        }
-        const settled = await Promise.allSettled([
-          syncF1Data({ data: {} }),
-          checkAndSendRaceReminders({ data: {} }),
-        ]);
-        const syncSettled = settled[0];
-        const jobId =
-          syncSettled.status === "fulfilled"
-            ? (syncSettled.value as { jobId?: string | null }).jobId
-            : null;
+        const res = (await syncF1Data({ data: {} }).catch(() => null)) as
+          | { jobId?: string | null }
+          | null;
+        const jobId = res?.jobId ?? null;
         if (jobId) {
           // Poll the queued sync (each poll also drives the queue worker)
           // until it settles or we give up — never blocks the UI.

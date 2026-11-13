@@ -22,7 +22,7 @@ export const Route = createFileRoute("/reminders")({
     // handler compiles server-only — that is the only place the server-only
     // request API may be imported from (route files ship to the browser).
     if (typeof process === "undefined") return;
-    const { runRemindersCronWarmUp } = await import("@/lib/push.functions");
+    const { runRemindersCronWarmUp } = await import("@/lib/cron.functions");
     await runRemindersCronWarmUp({ data: {} }).catch(() => null);
   },
   component: Reminders,
@@ -107,3 +107,4 @@ function Reminders() {
     </main>
   );
 }
+

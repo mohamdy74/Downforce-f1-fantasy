@@ -15,7 +15,6 @@ import { useState } from "react";
 
 import { AccountAndOnboarding } from "@/components/AccountAndOnboarding";
 import { LogoHorizontal, LogoMark } from "@/components/Logo";
-import { PushOptIn } from "@/components/PushOptIn";
 import { UpdatesFeed } from "@/components/UpdatesFeed";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -243,9 +242,6 @@ export function SiteHeader() {
           )}
         </nav>
       </div>
-      <div className="hidden">
-        <PushOptIn />
-      </div>
       <div className="kerb-strip" />
     </header>
   );
@@ -296,3 +292,4 @@ export function FahlBadge() {
     </span>
   );
 }
+

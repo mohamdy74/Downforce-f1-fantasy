@@ -7,14 +7,31 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      # x-cron-secret: optional shared secret. Once CRON_SECRET is set in BOTH
-      # GitHub repo secrets AND Lovable Secrets, only authenticated pings may
-      # trigger the server-side reminder sweep (empty secret = open, as today).
-      # The secret goes through env indirection — injecting ${{ secrets.* }}
-      # straight into the shell line breaks the command if the value contains
-      # quotes, backticks or $ characters (suspected cause of the #97-#111
-      # failure streak). Diagnostics land as annotations; raw logs need auth.
-      - name: Ping /reminders (cron warm-up)
+      # Drives the Telegram reminder sweep through the authenticated cron route,
+      # then warms up the season-sync queue on /reminders. CRON_SECRET must be
+      # set in BOTH GitHub repo secrets AND Lovable Secrets; the cron route
+      # rejects requests without the matching Bearer token. The secret goes
+      # through env indirection — injecting ${{ secrets.* }} straight into the
+      # shell line breaks the command if the value contains quotes, backticks
+      # or $ characters (suspected cause of the #97-#111 failure streak).
+      - name: POST /api/cron/reminders (Telegram sweep)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+          out=$(curl -4 -sS -L --max-time 150 \
+            -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -o /tmp/cron.out -w "%{http_code} %{time_total}" \
+            https://downforce.lovable.app/api/cron/reminders 2>/tmp/cron.err)
+          status=$?
+          echo "curl exit=${status} http+time=${out}"
+          if [ $status -ne 0 ]; then
+            echo "::error::REMINDERS-CRON: curl exit ${status} — http+time ${out} — $(head -c 180 /tmp/cron.err)"
+            exit 1
+          fi
+
+      - name: Ping /reminders (season-sync warm-up)
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -26,6 +43,6 @@ jobs:
           status=$?
           echo "curl exit=${status} http+time=${out}"
           if [ $status -ne 0 ]; then
-            echo "::error::REMINDERS-PING: curl exit ${status} — http+time ${out} — $(head -c 180 /tmp/curl.err)"
+            echo "::error::REMINDERS-WARMUP: curl exit ${status} — http+time ${out} — $(head -c 180 /tmp/curl.err)"
             exit 1
           fi

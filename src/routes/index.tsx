@@ -3,13 +3,10 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Flag, Timer, Trophy, Users } from "lucide-react";
 
 import { Countdown } from "@/components/Countdown";
-import { MissingPlayers } from "@/components/MissingPlayers";
 import { PickStatus } from "@/components/PickStatus";
-import { TelegramCallout, TelegramSettings } from "@/components/TelegramSettings";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { lastRace, leaderboardQuery, nextRace, racesQuery } from "@/lib/queries";
-import { useState } from "react";
 
 export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
@@ -42,7 +39,6 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { data: races } = useSuspenseQuery(racesQuery);
   const { user } = useAuth();
-  const [showTelegram, setShowTelegram] = useState(false);
   // The league table is only readable by signed-in players; asking for it anonymously just fails.
   const { data: board } = useQuery({ ...leaderboardQuery, enabled: !!user });
 
@@ -108,13 +104,6 @@ function Home() {
           </div>
         </div>
         {upcoming && <PickStatus race={upcoming} />}
-        {user && (
-          <div className="mb-6">
-            <TelegramCallout onOpen={() => setShowTelegram(true)} />
-            {showTelegram && <TelegramSettings />}
-          </div>
-        )}
-        {upcoming && <MissingPlayers race={upcoming} />}
         <Link
           to="/paddock"
           className="carbon-panel mt-3 flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold"
@@ -228,3 +217,4 @@ function StartLights() {
     </div>
   );
 }
+

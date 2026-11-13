@@ -1,15 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, Check, Copy, Link2, Send, Trash2, Unplug } from "lucide-react";
+import { CalendarPlus, Check, ChevronDown, Copy, Link2, Send, Trash2, Unplug } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const POLL_MS = 3_000;
 const LINK_TIMEOUT_MS = 120_000;
-const DISMISS_KEY = "downforce:telegram-callout-dismissed";
 const STATUS_KEY = "telegram-status";
 
 type TelegramProfile = {
@@ -34,7 +34,7 @@ async function readStatus(userId: string): Promise<TelegramProfile> {
   };
 }
 
-/** Shared by the settings card and the home-screen callout. */
+/** Shared by the settings card and the pick-status inline row. */
 function useTelegramStatus(userId: string | undefined, poll = false) {
   const query = useQuery({
     queryKey: [STATUS_KEY, userId],
@@ -87,7 +87,8 @@ function CalendarBlock({ host }: { host: string }) {
     <div className="mt-4 border-t border-border/60 pt-4">
       <p className="text-sm font-medium">Subscribe to season calendar</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Grand Prix and Sprint lock times on your calendar, updated automatically.
+        Every Grand Prix and Sprint lock on your calendar with 1h &amp; 30m alarms, updated
+        automatically.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -138,7 +139,12 @@ function CalendarBlock({ host }: { host: string }) {
   );
 }
 
-export function TelegramSettings() {
+/**
+ * All Telegram link state + actions. Shared by the account-settings card and
+ * the compact inline row on the pick-status card, so connecting from either
+ * place drives the same flow.
+ */
+function useTelegramLink() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -147,7 +153,7 @@ export function TelegramSettings() {
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [host, setHost] = useState("");
-  const deadline = useRef<number>(0);
+  const deadline = useRef(0);
 
   useEffect(() => {
     setHost(window.location.host);
@@ -171,10 +177,10 @@ export function TelegramSettings() {
     }
   }, [phase, status.dataUpdatedAt]);
 
-  if (!user) return null;
-  const userId = user.id;
+  const userId = user?.id;
 
   async function startLink() {
+    if (!userId) return;
     setBusy(true);
     setError(null);
     try {
@@ -196,6 +202,7 @@ export function TelegramSettings() {
   }
 
   async function unlink() {
+    if (!userId) return;
     setBusy(true);
     setError(null);
     try {
@@ -234,6 +241,7 @@ export function TelegramSettings() {
   }
 
   async function toggleNotify(next: boolean) {
+    if (!userId) return;
     setError(null);
     const { error: updateError } = await supabase
       .from("profiles")
@@ -248,30 +256,46 @@ export function TelegramSettings() {
 
   const isLinked = phase === "linked" || linked;
 
-  return (
-    <section
-      className="carbon-panel rounded-lg border-l-4 p-4"
-      style={{ borderLeftColor: "var(--gold)" }}
-    >
-      <div className="flex items-center gap-2">
-        <Send className="size-4 shrink-0 text-gold" aria-hidden />
-        <h3 className="text-sm font-semibold">Telegram alerts</h3>
-      </div>
+  return {
+    phase,
+    setPhase,
+    error,
+    setError,
+    busy,
+    confirmUnlink,
+    setConfirmUnlink,
+    showCalendar,
+    setShowCalendar,
+    host,
+    status,
+    isLinked,
+    startLink,
+    unlink,
+    sendTest,
+    toggleNotify,
+  };
+}
 
-      {error && (
+type TelegramLink = ReturnType<typeof useTelegramLink>;
+
+/** The management UI without any outer card chrome — shared by both wrappers. */
+function TelegramPanel({ t }: { t: TelegramLink }) {
+  return (
+    <>
+      {t.error && (
         <div
           role="alert"
           className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
         >
-          <p>{error}</p>
+          <p>{t.error}</p>
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="mt-2 min-h-[44px]"
             onClick={() => {
-              setError(null);
-              setPhase("idle");
+              t.setError(null);
+              t.setPhase("idle");
             }}
           >
             Try again
@@ -279,7 +303,7 @@ export function TelegramSettings() {
         </div>
       )}
 
-      {!isLinked && phase !== "linking" && (
+      {!t.isLinked && t.phase !== "linking" && (
         <>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             Get a Telegram alert before Grand Prix and Sprint picks lock, so you never lose 25
@@ -289,9 +313,9 @@ export function TelegramSettings() {
             <Button
               type="button"
               className="min-h-[44px]"
-              onClick={startLink}
-              disabled={busy}
-              aria-busy={busy}
+              onClick={t.startLink}
+              disabled={t.busy}
+              aria-busy={t.busy}
             >
               <Link2 className="size-4" aria-hidden />
               Connect Telegram
@@ -300,8 +324,8 @@ export function TelegramSettings() {
               type="button"
               variant="secondary"
               className="min-h-[44px]"
-              onClick={() => setShowCalendar((v) => !v)}
-              aria-expanded={showCalendar}
+              onClick={() => t.setShowCalendar((v) => !v)}
+              aria-expanded={t.showCalendar}
             >
               <CalendarPlus className="size-4" aria-hidden />
               Subscribe to season calendar
@@ -310,7 +334,7 @@ export function TelegramSettings() {
         </>
       )}
 
-      {phase === "linking" && (
+      {t.phase === "linking" && (
         <div className="mt-3">
           <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
             Waiting for Telegram… open the chat and tap Start.
@@ -320,8 +344,8 @@ export function TelegramSettings() {
               type="button"
               variant="secondary"
               className="min-h-[44px]"
-              onClick={startLink}
-              disabled={busy}
+              onClick={t.startLink}
+              disabled={t.busy}
             >
               Reopen link
             </Button>
@@ -329,7 +353,7 @@ export function TelegramSettings() {
               type="button"
               variant="ghost"
               className="min-h-[44px]"
-              onClick={() => setPhase("idle")}
+              onClick={() => t.setPhase("idle")}
             >
               Cancel
             </Button>
@@ -337,11 +361,11 @@ export function TelegramSettings() {
         </div>
       )}
 
-      {isLinked && phase !== "linking" && (
+      {t.isLinked && t.phase !== "linking" && (
         <>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span dir="ltr" className="font-mono text-sm">
-              @{status.data?.telegram_username ?? "telegram"}
+              @{t.status.data?.telegram_username ?? "telegram"}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
               <span className="size-1.5 rounded-full bg-success" aria-hidden />
@@ -354,8 +378,8 @@ export function TelegramSettings() {
             <input
               type="checkbox"
               className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              checked={status.data?.notify_telegram ?? true}
-              onChange={(e) => toggleNotify(e.target.checked)}
+              checked={t.status.data?.notify_telegram ?? true}
+              onChange={(e) => t.toggleNotify(e.target.checked)}
             />
           </label>
 
@@ -364,20 +388,20 @@ export function TelegramSettings() {
               type="button"
               variant="secondary"
               className="min-h-[44px]"
-              onClick={sendTest}
-              disabled={busy}
+              onClick={t.sendTest}
+              disabled={t.busy}
             >
               <Send className="size-4" aria-hidden />
               Send test message
             </Button>
 
-            {!confirmUnlink ? (
+            {!t.confirmUnlink ? (
               <Button
                 type="button"
                 variant="ghost"
                 className="min-h-[44px]"
-                onClick={() => setConfirmUnlink(true)}
-                disabled={busy}
+                onClick={() => t.setConfirmUnlink(true)}
+                disabled={t.busy}
               >
                 <Unplug className="size-4" aria-hidden />
                 Disconnect
@@ -389,8 +413,8 @@ export function TelegramSettings() {
                   type="button"
                   variant="destructive"
                   className="min-h-[44px]"
-                  onClick={unlink}
-                  disabled={busy}
+                  onClick={t.unlink}
+                  disabled={t.busy}
                 >
                   <Trash2 className="size-4" aria-hidden />
                   Confirm
@@ -399,7 +423,7 @@ export function TelegramSettings() {
                   type="button"
                   variant="ghost"
                   className="min-h-[44px]"
-                  onClick={() => setConfirmUnlink(false)}
+                  onClick={() => t.setConfirmUnlink(false)}
                 >
                   Cancel
                 </Button>
@@ -409,49 +433,100 @@ export function TelegramSettings() {
         </>
       )}
 
-      {host && (showCalendar || isLinked) && <CalendarBlock host={host} />}
+      {t.host && (t.showCalendar || t.isLinked) && <CalendarBlock host={t.host} />}
+    </>
+  );
+}
+
+/** Full settings card: account modal + onboarding step 2. */
+export function TelegramSettings() {
+  const t = useTelegramLink();
+  return (
+    <section
+      className="carbon-panel rounded-lg border-l-4 p-4"
+      style={{ borderLeftColor: "var(--gold)" }}
+    >
+      <div className="flex items-center gap-2">
+        <Send className="size-4 shrink-0 text-gold" aria-hidden />
+        <h3 className="text-sm font-semibold">Telegram alerts</h3>
+      </div>
+      <TelegramPanel t={t} />
     </section>
   );
 }
 
-export function TelegramCallout({ onOpen }: { onOpen: () => void }) {
+/**
+ * Always-visible compact row for the pick-status card. The row never
+ * disappears: once linked it shows the Connected state with the username, and
+ * the chevron expands the full management panel (reminder toggle, test send,
+ * disconnect and the season-calendar subscribe block).
+ */
+export function TelegramInline() {
   const { user } = useAuth();
-  const [dismissed, setDismissed] = useState(true);
+  const t = useTelegramLink();
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setDismissed(window.localStorage.getItem(DISMISS_KEY) === "1");
-  }, []);
-
-  const { data } = useTelegramStatus(user?.id);
-
-  if (!user || dismissed || data?.telegram_linked) return null;
+  if (!user) return null;
+  const linked = t.isLinked;
+  const username = t.status.data?.telegram_username ?? null;
 
   return (
-    <div
-      className="carbon-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border-l-4 px-4 py-3"
-      style={{ borderLeftColor: "var(--gold)" }}
-    >
-      <span className="text-xs font-medium">
-        Turn on Telegram reminders before picks lock and never lose 25 points.
-      </span>
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" className="min-h-[44px] text-xs font-bold" onClick={onOpen}>
-          Connect
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="min-h-[44px] text-xs"
-          onClick={() => {
-            window.localStorage.setItem(DISMISS_KEY, "1");
-            setDismissed(true);
-          }}
-        >
-          Dismiss
-        </Button>
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Send className="size-4 shrink-0 text-gold" aria-hidden />
+          <span className="text-sm font-semibold">Telegram reminders</span>
+          {linked ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+              <span className="size-1.5 rounded-full bg-success" aria-hidden />
+              Connected
+              {username && (
+                <span dir="ltr" className="font-mono">
+                  @{username}
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Not connected</span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!linked && (
+            <Button
+              type="button"
+              size="sm"
+              className="min-h-[36px] text-xs font-bold"
+              disabled={t.busy}
+              aria-busy={t.busy}
+              onClick={() => {
+                setOpen(true);
+                void t.startLink();
+              }}
+            >
+              <Link2 className="size-3.5" aria-hidden />
+              Connect
+            </Button>
+          )}
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={open ? "Hide Telegram settings" : "Show Telegram settings"}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+          >
+            <ChevronDown
+              className={cn("size-4 transition-transform", open && "rotate-180")}
+              aria-hidden
+            />
+          </button>
+        </div>
       </div>
+
+      {open && (
+        <div className="mt-3 border-t border-border/60 pt-3">
+          <TelegramPanel t={t} />
+        </div>
+      )}
     </div>
   );
 }
