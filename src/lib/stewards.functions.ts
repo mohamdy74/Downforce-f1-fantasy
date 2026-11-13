@@ -97,25 +97,21 @@ export const getStewardsDashboard = createServerFn({ method: "POST" })
   .inputValidator((d: { raceId: string }) => d)
   .handler(async ({ data, context }) => {
     const sb = await requireSteward(context);
-    const [
-      { data: profiles },
-      { data: preds },
-      { data: scores },
-      { data: results },
-    ] = await Promise.all([
-      sb.from("profiles").select("id, display_name, created_at").order("display_name"),
-      sb
-        .from("predictions")
-        .select(
-          "id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at",
-        )
-        .eq("race_id", data.raceId),
-      sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
-      sb
-        .from("race_results")
-        .select("driver_id, position, finished, fastest_lap, pole")
-        .eq("race_id", data.raceId),
-    ]);
+    const [{ data: profiles }, { data: preds }, { data: scores }, { data: results }] =
+      await Promise.all([
+        sb.from("profiles").select("id, display_name, created_at").order("display_name"),
+        sb
+          .from("predictions")
+          .select(
+            "id, user_id, top10, pole_driver_id, fastest_lap_driver_id, dnf_driver_id, updated_at",
+          )
+          .eq("race_id", data.raceId),
+        sb.from("scores").select("user_id, points, breakdown").eq("race_id", data.raceId),
+        sb
+          .from("race_results")
+          .select("driver_id, position, finished, fastest_lap, pole")
+          .eq("race_id", data.raceId),
+      ]);
 
     return {
       profiles: profiles ?? [],
@@ -549,4 +545,3 @@ export const exportLeagueBackup = createServerFn({ method: "POST" })
       },
     };
   });
-

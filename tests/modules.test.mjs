@@ -202,4 +202,3 @@ test("pwa root: font preloads go through hashed ?url imports, not hardcoded path
   // __root.tsx once hardcoded /assets/fonts/<name>.woff2 preload hrefs.
   assert.ok(!root.includes('"/assets/fonts/'));
 });
-

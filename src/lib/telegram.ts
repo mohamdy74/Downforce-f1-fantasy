@@ -173,4 +173,3 @@ export function buildCalendarIcs(input: {
   lines.push("END:VCALENDAR");
   return lines.map(foldLine).join("\r\n") + "\r\n";
 }
-

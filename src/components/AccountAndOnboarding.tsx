@@ -118,7 +118,6 @@ export function AccountAndOnboarding() {
     }
   }
 
-
   async function handleDeleteAccount() {
     setBusy(true);
     try {
@@ -376,4 +375,3 @@ export function AccountAndOnboarding() {
     </>
   );
 }
-

@@ -34,9 +34,9 @@ export function BackgroundSync() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) return;
-        const res = (await syncF1Data({ data: {} }).catch(() => null)) as
-          | { jobId?: string | null }
-          | null;
+        const res = (await syncF1Data({ data: {} }).catch(() => null)) as {
+          jobId?: string | null;
+        } | null;
         const jobId = res?.jobId ?? null;
         if (jobId) {
           // Poll the queued sync (each poll also drives the queue worker)

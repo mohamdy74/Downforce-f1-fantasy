@@ -490,9 +490,7 @@ function StewardsPage() {
                 className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm"
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-display font-bold italic uppercase">
-                    {p.display_name}
-                  </span>
+                  <span className="font-display font-bold italic uppercase">{p.display_name}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
                   <span
@@ -1098,4 +1096,3 @@ function StewardsPage() {
     </main>
   );
 }
-

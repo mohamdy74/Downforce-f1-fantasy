@@ -780,4 +780,3 @@ test("Characterization 8: Race-Day End-to-End Safeguards (buildLiveOrderFromPosi
   const weekendRouteSrc = fs.readFileSync("src/routes/weekend.tsx", "utf8");
   assert.ok(weekendRouteSrc.includes("Live Grand Prix Telemetry"));
 });
-

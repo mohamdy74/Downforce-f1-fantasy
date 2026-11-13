@@ -292,4 +292,3 @@ export function FahlBadge() {
     </span>
   );
 }
-
