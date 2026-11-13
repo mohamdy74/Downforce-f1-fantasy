@@ -20,7 +20,7 @@ import {
   resolveDriver,
   type DriverRef,
 } from "./f1-live-sources";
-import { isCompleteTop10, parsePushSubscriptionKey } from "./push-keys";
+import { isCompleteTop10 } from "./push-keys";
 import {
   buildLiveOrderFromPositions,
   hasChequeredFlag,
@@ -28,7 +28,6 @@ import {
   type OpenF1PositionEntry,
   type OpenF1RaceControlMessage,
 } from "./liveStandings";
-import { buildReminderPayload, computeActiveReminders } from "./reminder-windows";
 import { requireSteward } from "./stewards.functions";
 
 const API = "https://api.jolpi.ca/ergast/f1";
@@ -373,116 +372,6 @@ export async function runSeasonSync(
   }
 }
 
-export async function checkAndSendPushReminders(
-  supabaseAdmin: (typeof import("@/integrations/supabase/client.server"))["supabaseAdmin"],
-) {
-  const now = Date.now();
-  // The upcoming-races window and the push-subscription keys are independent
-  // reads — fetch them together.
-  const [{ data: upcomingRaces }, { data: subRows }] = await Promise.all([
-    supabaseAdmin
-      .from("races")
-      .select("id, name, qualifying_at, race_at")
-      .eq("season", SEASON)
-      .gte("race_at", new Date(now - 30 * 60_000).toISOString())
-      .lte("race_at", new Date(now + 4 * 24 * 3600_000).toISOString()),
-    supabaseAdmin.from("sync_state").select("key").like("key", "push_sub:%"),
-  ]);
-
-  if (!upcomingRaces?.length) return 0;
-  if (!subRows?.length) return 0;
-
-  let totalSent = 0;
-
-  // The pure reminder-windows module owns the bands and payload copy, so this
-  // sweep only handles dedup, batching and dead-subscription cleanup.
-  const entries = computeActiveReminders(upcomingRaces, now);
-  if (!entries.length) return 0;
-
-  // One sweep-wide read of dedup state and submissions instead of a pair of
-  // queries per reminder window (query count constant, not 2 per window).
-  const sweepRaceIds = [...new Set(entries.map((e) => e.race.id))];
-  const [{ data: remindedRows }, { data: sweepPreds }] = await Promise.all([
-    supabaseAdmin.from("sync_state").select("key").like("key", "reminded:%"),
-    supabaseAdmin
-      .from("predictions")
-      .select("race_id, user_id, top10, pole_driver_id")
-      .in("race_id", sweepRaceIds),
-  ]);
-  const remindedKeys = new Set((remindedRows ?? []).map((r) => r.key));
-  type SweepPred = NonNullable<typeof sweepPreds>[number];
-  const predsByRace = new Map<string, SweepPred[]>();
-  for (const p of sweepPreds ?? []) {
-    const arr = predsByRace.get(p.race_id) ?? [];
-    arr.push(p);
-    predsByRace.set(p.race_id, arr);
-  }
-
-  const deadKeys: string[] = [];
-  const dedupWrites: Array<{ key: string; synced_at: string }> = [];
-
-  for (const entry of entries) {
-    const { race, type: t, window: w } = entry;
-
-    // Per-user dedup (replaces the old per-race global window key) so players
-    // who enable push mid-window still get their reminder and a partially
-    // failed sweep retries on the next pass.
-    const keyPrefix = `reminded:${race.id}:${t}:${w.label}:`;
-    const preds = predsByRace.get(race.id) ?? [];
-    const doneUsers = new Set(
-      preds
-        .filter((p) => (t === "pole" ? !!p.pole_driver_id : isCompleteTop10(p.top10)))
-        .map((p) => p.user_id),
-    );
-
-    const payloadObj = buildReminderPayload(entry);
-
-    const { sendNativeWebPush } = await import("./webpush-native");
-    const pendingSubs = subRows.flatMap((r) => {
-      const parsed = parsePushSubscriptionKey(r.key);
-      if (!parsed || doneUsers.has(parsed.userId)) return [];
-      if (remindedKeys.has(keyPrefix + parsed.userId)) return [];
-      return [parsed];
-    });
-    const BATCH_SIZE = 25;
-    const newlyNotified = new Set<string>();
-    for (let i = 0; i < pendingSubs.length; i += BATCH_SIZE) {
-      const batch = pendingSubs.slice(i, i + BATCH_SIZE);
-      await Promise.allSettled(
-        batch.map(async (sub) => {
-          try {
-            const res = await sendNativeWebPush(sub, payloadObj);
-            if (res.ok) {
-              totalSent++;
-              newlyNotified.add(sub.userId);
-            } else if (
-              res.status === 401 ||
-              res.status === 403 ||
-              res.status === 404 ||
-              res.status === 410
-            ) {
-              deadKeys.push(sub.rawKey);
-            }
-          } catch (error) {
-            console.error("[f1-sync.functions] Push notification failed:", error);
-          }
-        }),
-      );
-    }
-    const stamp = new Date().toISOString();
-    for (const uid of newlyNotified) {
-      dedupWrites.push({ key: keyPrefix + uid, synced_at: stamp });
-    }
-  }
-
-  if (deadKeys.length > 0) {
-    await supabaseAdmin.from("sync_state").delete().in("key", deadKeys);
-  }
-  if (dedupWrites.length > 0) {
-    await supabaseAdmin.from("sync_state").upsert(dedupWrites, { onConflict: "key" });
-  }
-  return totalSent;
-}
 async function scoreAllRaces(targetRaceIds?: Set<string>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -846,3 +735,4 @@ async function syncSprintResults(roundToId: Map<number, string>, sprintTargetRou
     await supabaseAdmin.from("sprint_results").upsert(rows, { onConflict: "race_id,driver_id" });
   }
 }
+
