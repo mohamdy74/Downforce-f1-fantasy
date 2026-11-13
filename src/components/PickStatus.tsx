@@ -38,7 +38,7 @@ export function PickStatus({ race }: { race: Race }) {
   const locked = new Date(race.race_at).getTime() <= getTrustedNow();
 
   // "Remind me" goes straight to Google Calendar and subscribes to the season
-  // feed: every Grand Prix and Sprint lock lands in the calendar with 1-hour
+  // feed: every Grand Prix and Sprint lock lands in the calendar with 90-minute
   // and 30-minute alarms ready — no file download, no per-race setup.
   const gcalHref = host
     ? `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(`webcal://${host}/api/calendar.ics`)}`

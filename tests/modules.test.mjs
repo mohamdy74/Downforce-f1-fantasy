@@ -13,6 +13,7 @@ import {
   scorePrediction,
 } from "../src/lib/scoring.ts";
 import { isCompleteTop10 } from "../src/lib/push-keys.ts";
+import { buildCalendarIcs } from "../src/lib/telegram.ts";
 
 function rows() {
   const results = [];
@@ -127,6 +128,57 @@ test("push-keys.ts: isCompleteTop10 accepts exactly 10 real driver ids", () => {
   assert.equal(isCompleteTop10(null), false);
   assert.equal(isCompleteTop10(undefined), false);
   assert.equal(isCompleteTop10("abc"), false);
+});
+
+test("calendar feed: race and sprint events carry 90-minute and 30-minute alerts", () => {
+  const calendar = buildCalendarIcs({
+    races: [
+      {
+        id: "race-1",
+        round: 1,
+        name: "Australian Grand Prix",
+        circuit: "Albert Park",
+        locality: "Melbourne",
+        country: "Australia",
+        race_at: "2026-03-08T04:00:00.000Z",
+        qualifying_at: null,
+        has_sprint: true,
+        sprint_at: "2026-03-07T04:00:00.000Z",
+      },
+    ],
+    season: 2026,
+    appUrl: "https://downforce.lovable.app",
+    now: new Date("2026-01-01T00:00:00.000Z"),
+  });
+
+  assert.equal((calendar.match(/TRIGGER:-PT90M/g) ?? []).length, 2);
+  assert.equal((calendar.match(/TRIGGER:-PT30M/g) ?? []).length, 2);
+  assert.ok(!calendar.includes("TRIGGER:-PT1H"));
+});
+
+test("calendar feed: event times retain the scheduled UTC instants", () => {
+  const calendar = buildCalendarIcs({
+    races: [
+      {
+        id: "race-1",
+        round: 1,
+        name: "Australian Grand Prix",
+        circuit: null,
+        locality: null,
+        country: null,
+        race_at: "2026-03-08T04:00:00.000Z",
+        qualifying_at: null,
+        has_sprint: false,
+        sprint_at: null,
+      },
+    ],
+    season: 2026,
+    appUrl: "https://downforce.lovable.app",
+    now: new Date("2026-01-01T00:00:00.000Z"),
+  });
+
+  assert.ok(calendar.includes("DTSTART:20260308T040000Z"));
+  assert.ok(calendar.includes("DTEND:20260308T043000Z"));
 });
 
 // ---- pwa: manifest, service worker and root preloads (regression) ----

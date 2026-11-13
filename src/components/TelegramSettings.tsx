@@ -92,8 +92,9 @@ function CalendarBlock({ host }: { host: string }) {
     <div className="mt-4 border-t border-border/60 pt-4">
       <p className="text-sm font-medium">Subscribe to season calendar</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Every Grand Prix and Sprint lock on your calendar with 1h &amp; 30m alarms, updated
-        automatically.
+        Every Grand Prix and Sprint start on your calendar with 90-minute &amp; 30-minute alerts,
+        using each event's scheduled start time. Google Calendar may use its own notification
+        settings for subscribed calendars.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">

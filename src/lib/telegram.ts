@@ -110,7 +110,7 @@ function foldLine(line: string): string {
  * events, so a fresh subscribe always shows the complete calendar. One VEVENT
  * per (race, session); UIDs are derived from the season/round/session so a
  * schedule refresh updates the same events in a subscriber's calendar instead
- * of duplicating them. Each event carries 1-hour and 30-minute alarms.
+ * of duplicating them. Each event carries 90-minute and 30-minute alarms.
  */
 export function buildCalendarIcs(input: {
   races: IcsRace[];
@@ -156,7 +156,7 @@ export function buildCalendarIcs(input: {
         `SUMMARY:${summary}`,
         `DESCRIPTION:${description}`,
         "BEGIN:VALARM",
-        "TRIGGER:-PT1H",
+        "TRIGGER:-PT90M",
         "ACTION:DISPLAY",
         `DESCRIPTION:${summary}`,
         "END:VALARM",
