@@ -27,7 +27,10 @@ export const Route = createFileRoute("/api/telegram/test")({
           "DOWNFORCE test message — your deadline reminders are wired up. 🏁",
         );
         if (!result.ok) {
-          return jsonResponse({ error: "telegram_send_failed", status: result.status }, 502);
+          return jsonResponse(
+            { error: "telegram_send_failed", status: result.status, description: result.description },
+            502,
+          );
         }
         return jsonResponse({ ok: true });
       },

@@ -56,9 +56,11 @@ async function authedFetch(path: string, method: "POST" | "DELETE"): Promise<Res
 
 type Phase = "idle" | "linking" | "linked";
 
-function errorMessage(status: number, body: { error?: string } | null): string {
+function errorMessage(status: number, body: { error?: string; description?: string } | null): string {
   if (body?.error === "telegram_not_configured")
     return "Reminders aren't enabled on the server yet.";
+  if (body?.error === "telegram_send_failed")
+    return "Telegram couldn't deliver the message. If it keeps failing, the bot token isn't set on the server yet.";
   if (status === 401) return "Your session expired. Please sign in again.";
   if (status === 400 || body?.error === "not_linked")
     return "This account isn't linked to Telegram.";
@@ -228,7 +230,10 @@ function useTelegramLink() {
     try {
       const res = await authedFetch("/api/telegram/test", "POST");
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          description?: string;
+        } | null;
         toast.error(errorMessage(res.status, body));
         return;
       }
