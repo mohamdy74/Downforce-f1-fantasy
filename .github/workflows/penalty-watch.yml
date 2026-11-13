@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Restore seen-messages state
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: state
           key: penalty-seen-${{ github.run_id }}
