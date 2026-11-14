@@ -156,7 +156,7 @@ test("calendar feed: race and sprint events carry 90-minute and 30-minute alerts
   assert.ok(!calendar.includes("TRIGGER:-PT1H"));
 });
 
-test("calendar feed: event times retain the scheduled UTC instants", () => {
+test("calendar feed: race events use race titles, venue, and session duration", () => {
   const calendar = buildCalendarIcs({
     races: [
       {
@@ -178,7 +178,10 @@ test("calendar feed: event times retain the scheduled UTC instants", () => {
   });
 
   assert.ok(calendar.includes("DTSTART:20260308T040000Z"));
-  assert.ok(calendar.includes("DTEND:20260308T043000Z"));
+  assert.ok(calendar.includes("DTEND:20260308T060000Z"));
+  assert.ok(calendar.includes("SUMMARY:🏁 FORMULA 1 Australian Grand Prix 2026 - Grand Prix"));
+  assert.ok(calendar.includes("LOCATION:Australia"));
+  assert.ok(calendar.includes("DOWNFORCE picks lock at session start."));
 });
 
 // ---- pwa: manifest, service worker and root preloads (regression) ----
