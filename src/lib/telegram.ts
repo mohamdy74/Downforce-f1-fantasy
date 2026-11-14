@@ -145,7 +145,9 @@ export function buildCalendarIcs(input: {
       if (Number.isNaN(start.getTime())) continue;
       const end = new Date(start.getTime() + session.durationMinutes * 60_000);
       const place = [race.circuit, race.locality, race.country].filter(Boolean).join(", ");
-      const summary = icsEscape(`🏁 FORMULA 1 ${race.name} ${input.season} - ${sessionLabel(session.type)}`);
+      const summary = icsEscape(
+        `🏁 FORMULA 1 ${race.name} ${input.season} - ${sessionLabel(session.type)}`,
+      );
       const description = icsEscape(
         `${place ? `${place} - ` : ""}DOWNFORCE picks lock at session start. Submit your picks: ${input.appUrl}/predict`,
       );
