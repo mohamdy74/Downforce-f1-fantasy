@@ -131,21 +131,23 @@ export function buildCalendarIcs(input: {
   ];
 
   for (const race of input.races) {
-    const sessions: Array<{ type: SessionType; at: string }> = [{ type: "gp", at: race.race_at }];
-    if (race.has_sprint && race.sprint_at) sessions.push({ type: "sprint", at: race.sprint_at });
+    const sessions: Array<{ type: SessionType; at: string; durationMinutes: number }> = [
+      { type: "gp", at: race.race_at, durationMinutes: 120 },
+    ];
+    if (race.has_sprint && race.sprint_at) {
+      sessions.push({ type: "sprint", at: race.sprint_at, durationMinutes: 60 });
+    }
 
     for (const session of sessions) {
       const start = new Date(session.at);
       // Every race of the season stays in the feed (only unparseable dates are
       // skipped), so a fresh subscribe shows the complete calendar.
       if (Number.isNaN(start.getTime())) continue;
-      const end = new Date(start.getTime() + 30 * 60_000);
+      const end = new Date(start.getTime() + session.durationMinutes * 60_000);
       const place = [race.circuit, race.locality, race.country].filter(Boolean).join(", ");
-      const summary = icsEscape(
-        `DOWNFORCE - ${race.name} - ${sessionLabel(session.type)} picks lock`,
-      );
+      const summary = icsEscape(`🏁 FORMULA 1 ${race.name} ${input.season} - ${sessionLabel(session.type)}`);
       const description = icsEscape(
-        `${place ? `${place} - ` : ""}lock your picks: ${input.appUrl}/predict`,
+        `${place ? `${place} - ` : ""}DOWNFORCE picks lock at session start. Submit your picks: ${input.appUrl}/predict`,
       );
       lines.push(
         "BEGIN:VEVENT",
@@ -154,6 +156,7 @@ export function buildCalendarIcs(input: {
         `DTSTART:${icsUtcStamp(start)}`,
         `DTEND:${icsUtcStamp(end)}`,
         `SUMMARY:${summary}`,
+        ...(race.country ? [`LOCATION:${icsEscape(race.country)}`] : []),
         `DESCRIPTION:${description}`,
         "BEGIN:VALARM",
         "TRIGGER:-PT90M",
