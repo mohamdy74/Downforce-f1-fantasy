@@ -245,33 +245,6 @@ export type Database = {
           },
         ];
       };
-      push_subscriptions: {
-        Row: {
-          auth: string;
-          endpoint: string;
-          id: string;
-          p256dh: string;
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          auth: string;
-          endpoint: string;
-          id?: string;
-          p256dh: string;
-          updated_at?: string;
-          user_id: string;
-        };
-        Update: {
-          auth?: string;
-          endpoint?: string;
-          id?: string;
-          p256dh?: string;
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
       race_debriefs: {
         Row: {
           content: string;

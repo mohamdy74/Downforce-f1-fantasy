@@ -457,7 +457,6 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       supabaseAdmin.from("predictions").delete().eq("user_id", uid),
       supabaseAdmin.from("sprint_predictions").delete().eq("user_id", uid),
       supabaseAdmin.from("prediction_logs").delete().eq("user_id", uid),
-      supabaseAdmin.from("sync_state").delete().like("key", `push_sub:${uid}:%`),
     ]);
     await supabaseAdmin.from("profiles").delete().eq("id", uid);
     await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => undefined);

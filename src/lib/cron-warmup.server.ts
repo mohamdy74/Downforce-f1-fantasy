@@ -1,8 +1,7 @@
-// Server-only /reminders warm-up: season-sync warm-up (the Telegram reminder
-// sweep itself runs from the authenticated /api/cron/reminders route). Only
-// ever imported from server-function handler code (cron.functions.ts) — route
-// files must not import it, because their component ships to the browser and
-// the request API below is server-only.
+// Server-only /reminders warm-up: the Telegram reminder sweep + the season-sync
+// warm-up. Only ever imported from server-function handler code (cron.functions.ts)
+// — route files must not import it, because their component ships to the browser
+// and the request API below is server-only.
 import { cronRequestAuthorized, readServerEnv } from "./env";
 
 export async function runRemindersWarmUp(): Promise<void> {
@@ -19,6 +18,12 @@ export async function runRemindersWarmUp(): Promise<void> {
     headerSecret = null;
   }
   if (!cronRequestAuthorized(headerSecret)) return;
+
+  // The Telegram sweep used to be reachable only at POST /api/cron/reminders,
+  // which no scheduler calls (the GitHub workflow pings /reminders). Run it
+  // here so the 10-minute ping is the real trigger.
+  const { runTelegramReminderSweep } = await import("./telegram.server");
+  await runTelegramReminderSweep().catch(() => null);
 
   // Season sync runs as a queue job: enqueue (dedup coalesces with any active
   // job), then process everything due inline — the cron curl waits long enough

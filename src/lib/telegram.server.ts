@@ -2,7 +2,7 @@
 // (see the convention in cron-warmup.server.ts) so nothing here leaks into the
 // browser bundle.
 import { readServerEnv } from "@/lib/env";
-import { isCompleteTop10 } from "@/lib/push-keys";
+import { isCompleteTop10 } from "@/lib/picks";
 import {
   activeWindowKey,
   buildReminderMessage,

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { TelegramInline } from "@/components/TelegramSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { isCompleteTop10 } from "@/lib/push-keys";
+import { isCompleteTop10 } from "@/lib/picks";
 import { getTrustedNow, type Race } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 

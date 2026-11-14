@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { isCompleteTop10 } from "@/lib/push-keys";
+import { isCompleteTop10 } from "@/lib/picks";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type PaginatedResult } from "@/lib/pagination";
 
 export interface ReminderStatsResult {

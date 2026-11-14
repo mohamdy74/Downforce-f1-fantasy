@@ -12,7 +12,7 @@ import {
   positionPoints,
   scorePrediction,
 } from "../src/lib/scoring.ts";
-import { isCompleteTop10 } from "../src/lib/push-keys.ts";
+import { isCompleteTop10 } from "../src/lib/picks.ts";
 import { buildCalendarIcs } from "../src/lib/telegram.ts";
 
 function rows() {
@@ -119,7 +119,7 @@ test("scoring.ts: only the first 10 slots score", () => {
   assert.equal(b.perfectTop10, false);
 });
 
-test("push-keys.ts: isCompleteTop10 accepts exactly 10 real driver ids", () => {
+test("picks.ts: isCompleteTop10 accepts exactly 10 real driver ids", () => {
   const ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
   assert.equal(isCompleteTop10(ids), true);
   assert.equal(isCompleteTop10(ids.slice(0, 9)), false);

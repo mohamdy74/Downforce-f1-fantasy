@@ -20,7 +20,7 @@ import {
   resolveDriver,
   type DriverRef,
 } from "./f1-live-sources";
-import { isCompleteTop10 } from "./push-keys";
+import { isCompleteTop10 } from "./picks";
 import {
   buildLiveOrderFromPositions,
   hasChequeredFlag,
