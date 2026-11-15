@@ -182,6 +182,12 @@ test("calendar feed: race events use race titles, venue, and session duration", 
   assert.ok(calendar.includes("SUMMARY:🏁 FORMULA 1 Australian Grand Prix 2026 - Grand Prix"));
   assert.ok(calendar.includes("LOCATION:Australia"));
   assert.ok(calendar.includes("DOWNFORCE picks lock at session start."));
+  const unfolded = calendar.replace(/\r\n[ \t]/g, "");
+  assert.ok(
+    unfolded.includes(
+      "Google Calendar subscribers: add event notifications for 1 hour 30 minutes and 30 minutes before in calendar settings.",
+    ),
+  );
 });
 
 // ---- pwa: manifest, service worker and root preloads (regression) ----

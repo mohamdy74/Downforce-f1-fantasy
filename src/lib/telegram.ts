@@ -149,7 +149,7 @@ export function buildCalendarIcs(input: {
         `🏁 FORMULA 1 ${race.name} ${input.season} - ${sessionLabel(session.type)}`,
       );
       const description = icsEscape(
-        `${place ? `${place} - ` : ""}DOWNFORCE picks lock at session start. Submit your picks: ${input.appUrl}/predict`,
+        `${place ? `${place} - ` : ""}DOWNFORCE picks lock at session start. Submit your picks: ${input.appUrl}/predict. Google Calendar subscribers: add event notifications for 1 hour 30 minutes and 30 minutes before in calendar settings.`,
       );
       lines.push(
         "BEGIN:VEVENT",
