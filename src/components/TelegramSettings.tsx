@@ -92,10 +92,13 @@ function CalendarBlock({ host }: { host: string }) {
     <div className="mt-4 border-t border-border/60 pt-4">
       <p className="text-sm font-medium">Subscribe to season calendar</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Every Grand Prix and Sprint uses its scheduled start time. Google Calendar may ignore alerts
-        included with subscribed calendars. After subscribing, open that calendar&apos;s settings and
-        add event notifications for 90 minutes and 30 minutes before.
+        Every Grand Prix and Sprint uses its scheduled start time. Google Calendar may not import
+        alerts from a subscribed calendar, so add them once in its settings:
       </p>
+      <ol className="mt-2 list-inside list-decimal space-y-1 text-xs text-muted-foreground">
+        <li>Open Google Calendar Settings and select DOWNFORCE F1 Fantasy.</li>
+        <li>Under Event notifications, add alerts for 1 hour 30 minutes and 30 minutes before.</li>
+      </ol>
 
       <div className="mt-3 flex flex-wrap gap-2">
         <a

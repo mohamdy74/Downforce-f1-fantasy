@@ -129,6 +129,12 @@ export function PickStatus({ race }: { race: Race }) {
               Add calendar
             </Button>
           ))}
+        {!locked && (
+          <p className="basis-full text-xs text-muted-foreground">
+            Google Calendar may not import alerts automatically. After subscribing, set this
+            calendar&apos;s notifications to 1 hour 30 minutes and 30 minutes before.
+          </p>
+        )}
         <Button asChild size="sm" variant={ok ? "secondary" : "default"}>
           <Link to="/predict">{ok ? "Review" : "Predict"}</Link>
         </Button>
