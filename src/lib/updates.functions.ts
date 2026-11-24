@@ -15,7 +15,7 @@ export const postRaceUpdate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
-      raceId?: string;
+      raceId?: string | null;
       type?: string;
       driverId?: string | null;
       title?: string;

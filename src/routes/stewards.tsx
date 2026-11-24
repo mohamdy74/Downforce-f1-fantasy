@@ -311,7 +311,7 @@ function StewardsPage() {
       };
       const res = updEditId
         ? await updateRaceUpdate({ data: { id: updEditId, raceId: updRaceId || null, ...payload } })
-        : await postRaceUpdate({ data: { raceId: updRaceId || undefined, ...payload } });
+        : await postRaceUpdate({ data: { raceId: updRaceId || null, ...payload } });
       if (res.ok === false) {
         toast.error(res.msg, { duration: 7000 });
       } else {

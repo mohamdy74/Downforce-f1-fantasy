@@ -369,7 +369,7 @@ export type Database = {
           created_at?: string;
           driver_id?: string | null;
           id?: string;
-          race_id?: string;
+          race_id?: string | null;
           title?: string;
           type?: string;
         };
