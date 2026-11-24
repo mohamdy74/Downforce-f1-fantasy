@@ -210,6 +210,8 @@ function StewardsPage() {
   const [updBody, setUpdBody] = useState("");
   const [updBusy, setUpdBusy] = useState(false);
   const [updEditId, setUpdEditId] = useState<string | null>(null);
+  // "" = general league news (not bound to a round); otherwise a races.id
+  const [updRaceId, setUpdRaceId] = useState("");
 
   if (loading || isSteward === undefined)
     return (
@@ -269,7 +271,12 @@ function StewardsPage() {
   const scoreByUser = new Map((dash?.scores ?? []).map((s) => [s.user_id, s.points]));
   const sortedDrivers = sortByTeam(drivers);
   const driverById = new Map(drivers.map((d) => [d.id, d.code ?? d.full_name]));
-  const activeUpdates = raceUpdates.filter((u) => u.race_id === activeRace?.id);
+  const activeUpdates = raceUpdates.filter((u) =>
+    updRaceId === "" ? u.race_id == null : u.race_id === updRaceId,
+  );
+  const raceLabelById = new Map(
+    races.map((r) => [r.id, `R${r.round} · ${r.name.replace("Grand Prix", "GP")}`]),
+  );
 
   function resetUpdateForm() {
     setUpdEditId(null);
@@ -277,18 +284,20 @@ function StewardsPage() {
     setUpdBody("");
     setUpdDriver(EMPTY);
     setUpdType("penalty");
+    setUpdRaceId("");
   }
 
   function startEditUpdate(u: RaceUpdate) {
     setUpdEditId(u.id);
     setUpdType(u.type);
     setUpdDriver(u.driver_id ?? EMPTY);
+    setUpdRaceId(u.race_id ?? "");
     setUpdTitle(u.title);
     setUpdBody(u.body ?? "");
   }
 
   async function postUpdate() {
-    if (!activeRace || !updTitle.trim()) {
+    if (!updTitle.trim()) {
       toast.error("A title is required.");
       return;
     }
@@ -301,8 +310,8 @@ function StewardsPage() {
         body: updBody,
       };
       const res = updEditId
-        ? await updateRaceUpdate({ data: { id: updEditId, ...payload } })
-        : await postRaceUpdate({ data: { raceId: activeRace.id, ...payload } });
+        ? await updateRaceUpdate({ data: { id: updEditId, raceId: updRaceId || null, ...payload } })
+        : await postRaceUpdate({ data: { raceId: updRaceId || undefined, ...payload } });
       if (res.ok === false) {
         toast.error(res.msg, { duration: 7000 });
       } else {
@@ -539,6 +548,24 @@ function StewardsPage() {
           <div className="grid gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                Target Round
+              </label>
+              <select
+                value={updRaceId}
+                onChange={(e) => setUpdRaceId(e.target.value)}
+                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 font-mono text-xs font-bold"
+              >
+                <option value="">General — league news (no round)</option>
+                {races.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    R{r.round} · {r.name.replace("Grand Prix", "GP")}{" "}
+                    {r.has_results ? "(Scored ✓)" : "(Upcoming)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 Update Type
               </label>
               <select
@@ -580,7 +607,7 @@ function StewardsPage() {
             <Button
               size="sm"
               className="flex-1"
-              disabled={updBusy || !activeRace || !updTitle.trim()}
+              disabled={updBusy || !updTitle.trim()}
               onClick={postUpdate}
             >
               <Megaphone className="mr-1.5 h-3.5 w-3.5 text-gold" />
@@ -593,15 +620,17 @@ function StewardsPage() {
             )}
           </div>
 
-          {activeUpdates.length > 0 && (
+          {raceUpdates.length > 0 && (
             <div className="divide-y divide-border rounded-lg border border-border/70">
-              {activeUpdates.map((u) => (
+              {raceUpdates.map((u) => (
                 <div key={u.id} className="flex items-start justify-between gap-2 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-foreground">{u.title}</p>
                     <p className="mt-0.5 font-mono text-[11px] uppercase text-muted-foreground">
                       {u.type.replace("_", " ")}
                       {u.driver_id ? ` · ${driverById.get(u.driver_id) ?? u.driver_id}` : ""}
+                      {" · "}
+                      {u.race_id ? (raceLabelById.get(u.race_id) ?? "Round") : "General"}
                     </p>
                   </div>
                   <div className="mt-0.5 flex shrink-0 items-center gap-1">

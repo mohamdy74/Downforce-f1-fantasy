@@ -354,7 +354,7 @@ export function lastRace(races: Race[]): Race | null {
 
 export type RaceUpdate = {
   id: string;
-  race_id: string;
+  race_id: string | null;
   type: "penalty" | "grid_change" | "investigation" | "general";
   driver_id: string | null;
   title: string;

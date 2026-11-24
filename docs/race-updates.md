@@ -7,17 +7,19 @@ header.
 
 ## How it works
 
-- **Data**: the `race_updates` table (migration `0018_race_updates.sql`).
+- **Data**: the `race_updates` table (`0018_race_updates.sql` +
+  `0024_race_updates_optional_race.sql`, which makes `race_id` optional).
   RLS allows `SELECT` for signed-in players only; there are deliberately no
   write policies — inserts and deletes happen exclusively through
   `src/lib/updates.functions.ts` server functions gated by
   `requireSupabaseAuth` + `requireSteward` (service role).
 - **Publishing**: Stewards Room (`/stewards`) → "Race Updates & News" card.
-  Pick the target round, the update type (Penalty / Grid Change /
-  Investigation / General News), optionally the affected driver, a title
-  (max 140 chars) and details (max 500 chars), then Publish to League.
-  Posted updates for the selected round are listed with delete buttons for
-  corrections.
+  Pick a target — a specific round, or "General — league news (no round)" for
+  announcements that are not tied to any Grand Prix — the update type (Penalty /
+  Grid Change / Investigation / General News), optionally the affected driver,
+  a title (max 140 chars) and details (max 500 chars), then Publish to League.
+  Every posted update is listed (with its target round) and can be edited or
+  deleted for corrections.
 - **Reading**: the header Megaphone button opens a drawer with the latest 50
   updates (query key `["race-updates"]`, 1-minute stale time). The button
   shows an unread badge; the per-device read position is stored in

@@ -169,6 +169,13 @@
       "when": 1794076800002,
       "tag": "0023_telegram_links_and_reminder_deliveries",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794076800003,
+      "tag": "0024_race_updates_optional_race",
+      "breakpoints": true
     }
   ]
 }

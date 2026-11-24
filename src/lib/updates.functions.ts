@@ -31,7 +31,6 @@ export const postRaceUpdate = createServerFn({ method: "POST" })
     const title = (data.title ?? "").trim();
     const body = (data.body ?? "").trim();
 
-    if (!raceId) return { ok: false, msg: "Pick a target round first." };
     if (!RACE_UPDATE_TYPES.includes(type)) return { ok: false, msg: "Unknown update type." };
     if (!title) return { ok: false, msg: "A title is required." };
     if (title.length > TITLE_MAX) {
@@ -42,7 +41,7 @@ export const postRaceUpdate = createServerFn({ method: "POST" })
     }
 
     const { error } = await sb.from("race_updates").insert({
-      race_id: raceId,
+      race_id: raceId || null,
       type,
       driver_id: driverId || null,
       title,
@@ -70,6 +69,7 @@ export const updateRaceUpdate = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
       id?: string;
+      raceId?: string | null;
       type?: string;
       driverId?: string | null;
       title?: string;
@@ -80,6 +80,7 @@ export const updateRaceUpdate = createServerFn({ method: "POST" })
     const sb = await requireSteward(context);
 
     const id = (data.id ?? "").trim();
+    const raceId = (data.raceId ?? "").trim();
     const type = (data.type ?? "").trim() as RaceUpdateType;
     const driverId = (data.driverId ?? "").trim();
     const title = (data.title ?? "").trim();
@@ -95,15 +96,21 @@ export const updateRaceUpdate = createServerFn({ method: "POST" })
       return { ok: false, msg: `Details must be ${BODY_MAX} characters or less.` };
     }
 
-    const { error } = await sb
-      .from("race_updates")
-      .update({
-        type,
-        driver_id: driverId || null,
-        title,
-        body: body || null,
-      })
-      .eq("id", id);
+    const updatePayload: {
+      race_id?: string | null;
+      type: string;
+      driver_id: string | null;
+      title: string;
+      body: string | null;
+    } = {
+      type,
+      driver_id: driverId || null,
+      title,
+      body: body || null,
+    };
+    if (data.raceId !== undefined) updatePayload.race_id = raceId || null;
+
+    const { error } = await sb.from("race_updates").update(updatePayload).eq("id", id);
     if (error) return { ok: false, msg: `Could not save changes: ${error.message}` };
     return { ok: true, msg: "Update edited." };
   });

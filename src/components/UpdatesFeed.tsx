@@ -149,7 +149,7 @@ export function UpdatesFeed() {
                         </p>
                       )}
                       <p className="mt-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                        {raceLabel.get(u.race_id) ?? "League news"}
+                        {(u.race_id ? raceLabel.get(u.race_id) : null) ?? "League news"}
                       </p>
                     </li>
                   );
